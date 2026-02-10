@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+jwt:
+  secret: zqXW_v-Y0R2j8M5k7P3n9L2b1V4c6X8Z0A2S4D6F8G0H1J3K5L7M9N1B3V5C7X9
+  access-expiration: 3600000
+  refresh-expiration: 1209600000
+
+google:
+  client-id: test-client-id
