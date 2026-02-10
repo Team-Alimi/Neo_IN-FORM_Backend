@@ -43,28 +43,20 @@ class SchoolArticleControllerTest {
     }
 
     @Test
-    @DisplayName("공지사항 상세 조회 시 ApiResponse 구조로 응답한다.")
-    @WithMockUser // 인증 건너뛰기
-    void getSchoolArticleDetail_ShouldReturnApiResponse() throws Exception {
+    @DisplayName("존재하지 않는 공지사항 상세 조회 시 INVALID_REQUEST 에러를 반환한다.")
+    @WithMockUser
+    void getSchoolArticleDetail_NotFound_ShouldReturnError() throws Exception {
         // given
-        Integer articleId = 105;
-        SchoolArticleDetailResponse response = SchoolArticleDetailResponse.builder()
-                .article_id(articleId)
-                .title("테스트 제목")
-                .status("OPEN")
-                .vendors(List.of())
-                .attachments(List.of())
-                .build();
-
-        given(schoolArticleService.getSchoolArticleDetail(articleId)).willReturn(response);
+        Integer articleId = 999;
+        given(schoolArticleService.getSchoolArticleDetail(articleId))
+                .willThrow(new IllegalArgumentException("존재하지 않는 공지사항입니다."));
 
         // when & then
         mockMvc.perform(get("/api/v1/school_articles/" + articleId)
                         .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.article_id").value(articleId))
-                .andExpect(jsonPath("$.data.title").value("테스트 제목"))
-                .andExpect(jsonPath("$.data.status").value("OPEN"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.error.message").value("존재하지 않는 공지사항입니다."));
     }
 }
