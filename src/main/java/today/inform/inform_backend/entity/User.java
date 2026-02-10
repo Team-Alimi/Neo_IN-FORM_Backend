@@ -29,6 +29,10 @@ public class User extends BaseCreatedTimeEntity { // createdAt만 상속
         this.name = name;
     }
 
+    public void updateMajor(Vendor major) {
+        this.major = major;
+    }
+
     public static void validateInhaDomain(String email) {
         if (email == null || (!email.endsWith("@inha.edu") && !email.endsWith("@inha.ac.kr"))) {
             throw new IllegalArgumentException("학교 이메일(@inha.edu/@inha.ac.kr)로만 로그인할 수 있습니다.");
