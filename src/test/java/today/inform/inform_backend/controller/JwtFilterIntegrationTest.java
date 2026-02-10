@@ -94,17 +94,18 @@ class JwtFilterIntegrationTest {
     }
 
     @Test
-    @DisplayName("변조된 토큰으로 인증이 필요한 API 호출 시 403 에러가 발생한다.")
-    void access_WithInvalidToken_Fail() throws Exception {
+    @DisplayName("타인의 ID로 전공 변경을 시도하면 400 에러가 발생한다.")
+    void updateMajor_OtherUser_Fail() throws Exception {
         // given
-        String invalidToken = "invalid.token.string";
+        String accessToken = jwtProvider.createAccessToken(testUserId, "test@inha.edu");
+        Integer otherUserId = testUserId + 999;
 
         // when & then
-        mockMvc.perform(patch("/api/v1/users/" + testUserId + "/major")
-                        .header("Authorization", "Bearer " + invalidToken)
+        mockMvc.perform(patch("/api/v1/users/" + otherUserId + "/major")
+                        .header("Authorization", "Bearer " + accessToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"majorId\": " + testMajorId + "}"))
                 .andDo(print())
-                .andExpect(status().isForbidden());
+                .andExpect(status().isBadRequest());
     }
 }
