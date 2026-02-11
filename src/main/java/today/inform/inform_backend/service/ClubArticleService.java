@@ -58,10 +58,25 @@ public class ClubArticleService {
 
     @Transactional(readOnly = true)
     public ClubArticleListResponse getClubArticles(Integer page, Integer size, Integer vendorId) {
-        Pageable pageable = PageRequest.of(page - 1, size);
+        // 보안/최적화: 최대 페이지 사이즈 제한 (예: 50)
+        int cappedSize = Math.min(size, 50);
+        Pageable pageable = PageRequest.of(page - 1, cappedSize);
         Page<ClubArticle> articlePage = clubArticleRepository.findAllWithFilters(vendorId, pageable);
 
         List<ClubArticle> articles = articlePage.getContent();
+        
+        // 최적화: 게시글이 없으면 첨부파일 쿼리 생략
+        if (articles.isEmpty()) {
+            return ClubArticleListResponse.builder()
+                    .page_info(ClubArticleListResponse.PageInfo.builder()
+                            .current_page(page)
+                            .total_pages(articlePage.getTotalPages())
+                            .total_articles(articlePage.getTotalElements())
+                            .build())
+                    .club_articles(List.of())
+                    .build();
+        }
+
         List<Integer> articleIds = articles.stream()
                 .map(ClubArticle::getArticleId)
                 .collect(Collectors.toList());
