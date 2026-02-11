@@ -17,6 +17,7 @@ public class SchoolArticleDetailResponse {
     private String status;
     private LocalDateTime created_at;
     private LocalDateTime updated_at;
+    private Boolean is_bookmarked;
     private List<VendorResponse> vendors;
     private CategoryResponse categories;
     private List<AttachmentResponse> attachments;

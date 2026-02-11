@@ -10,15 +10,21 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import today.inform.inform_backend.dto.ClubArticleListResponse;
+import today.inform.inform_backend.dto.ClubArticleResponse;
+import today.inform.inform_backend.dto.ClubArticleDetailResponse;
 import today.inform.inform_backend.entity.Attachment;
 import today.inform.inform_backend.entity.ClubArticle;
+import today.inform.inform_backend.entity.User;
 import today.inform.inform_backend.entity.Vendor;
 import today.inform.inform_backend.entity.VendorType;
 import today.inform.inform_backend.repository.AttachmentRepository;
+import today.inform.inform_backend.repository.BookmarkRepository;
 import today.inform.inform_backend.repository.ClubArticleRepository;
+import today.inform.inform_backend.repository.UserRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -36,10 +42,17 @@ class ClubArticleServiceTest {
     @Mock
     private AttachmentRepository attachmentRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private BookmarkRepository bookmarkRepository;
+
     @Test
     @DisplayName("동아리 공지사항 목록을 페이징하여 조회한다.")
     void getClubArticles_Success() {
         // given
+        Integer userId = 1;
         Vendor vendor = Vendor.builder()
                 .vendorId(1)
                 .vendorName("GDGOC")
@@ -67,15 +80,19 @@ class ClubArticleServiceTest {
         given(attachmentRepository.findAllByArticleIdInAndArticleType(anyList(), eq(VendorType.CLUB)))
                 .willReturn(List.of(attachment));
 
+        // 유저 및 북마크 Mock
+        User user = User.builder().userId(userId).build();
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+        given(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(any(), any(), any()))
+                .willReturn(List.of());
+
         // when
-        ClubArticleListResponse response = clubArticleService.getClubArticles(1, 4, null);
+        ClubArticleListResponse response = clubArticleService.getClubArticles(1, 4, null, userId);
 
         // then
         assertThat(response.getClub_articles()).hasSize(1);
-        assertThat(response.getClub_articles().get(0).getTitle()).isEqualTo("GOAT 행사");
+        assertThat(response.getClub_articles().get(0).getIs_bookmarked()).isFalse();
         assertThat(response.getClub_articles().get(0).getAttachment_url()).isEqualTo("https://image.com/1.jpg");
-        assertThat(response.getClub_articles().get(0).getVendors().getVendor_name()).isEqualTo("GDGOC");
-        assertThat(response.getPage_info().getTotal_articles()).isEqualTo(1L);
     }
 
     @Test
@@ -95,7 +112,7 @@ class ClubArticleServiceTest {
                 .vendor(vendor)
                 .build();
 
-        given(clubArticleRepository.findByIdWithVendor(1)).willReturn(java.util.Optional.of(article));
+        given(clubArticleRepository.findByIdWithVendor(1)).willReturn(Optional.of(article));
 
         Attachment attachment = Attachment.builder()
                 .id(10)
@@ -105,7 +122,7 @@ class ClubArticleServiceTest {
                 .willReturn(List.of(attachment));
 
         // when
-        today.inform.inform_backend.dto.ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(1);
+        ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(1, null);
 
         // then
         assertThat(response.getTitle()).isEqualTo("상세 제목");

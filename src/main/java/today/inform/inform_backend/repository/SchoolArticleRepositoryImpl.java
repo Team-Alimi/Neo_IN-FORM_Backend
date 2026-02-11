@@ -26,6 +26,35 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     private final JPAQueryFactory queryFactory;
 
     @Override
+    public Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
+            List<Integer> articleIds,
+            LocalDate today,
+            LocalDate upcomingLimit,
+            LocalDate endingSoonLimit,
+            Pageable pageable
+    ) {
+        List<SchoolArticle> content = queryFactory
+                .selectFrom(schoolArticle)
+                .leftJoin(schoolArticle.category, category).fetchJoin()
+                .where(schoolArticle.articleId.in(articleIds))
+                .orderBy(
+                        createStatusOrder(today, upcomingLimit, endingSoonLimit),
+                        schoolArticle.createdAt.desc()
+                )
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(schoolArticle.count())
+                .from(schoolArticle)
+                .where(schoolArticle.articleId.in(articleIds))
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+    @Override
     public Page<SchoolArticle> findAllWithFiltersAndSorting(
             Integer categoryId,
             String keyword,

@@ -6,6 +6,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
 import today.inform.inform_backend.dto.SchoolArticleListResponse;
 import today.inform.inform_backend.dto.SchoolArticleResponse;
@@ -28,15 +30,22 @@ public class SchoolArticleService {
     private final SchoolArticleRepository schoolArticleRepository;
     private final SchoolArticleVendorRepository schoolArticleVendorRepository;
     private final AttachmentRepository attachmentRepository;
+    private final today.inform.inform_backend.repository.BookmarkRepository bookmarkRepository;
+    private final today.inform.inform_backend.repository.UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public SchoolArticleDetailResponse getSchoolArticleDetail(Integer articleId) {
+    public SchoolArticleDetailResponse getSchoolArticleDetail(Integer articleId, Integer userId) {
         SchoolArticle article = schoolArticleRepository.findById(articleId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 공지사항입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+        today.inform.inform_backend.entity.User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        boolean isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
 
         List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticle(article);
         var attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
-        LocalDate today = LocalDate.now();
+        LocalDate todayDate = LocalDate.now();
 
         return SchoolArticleDetailResponse.builder()
                 .article_id(article.getArticleId())
@@ -44,9 +53,10 @@ public class SchoolArticleService {
                 .content(article.getContent())
                 .start_date(article.getStartDate())
                 .due_date(article.getDueDate())
-                .status(determineStatus(article, today))
+                .status(determineStatus(article, todayDate))
                 .created_at(article.getCreatedAt())
                 .updated_at(article.getUpdatedAt())
+                .is_bookmarked(isBookmarked)
                 .categories(article.getCategory() == null ? null : SchoolArticleDetailResponse.CategoryResponse.builder()
                         .category_id(article.getCategory().getCategoryId())
                         .category_name(article.getCategory().getCategoryName())
@@ -69,22 +79,18 @@ public class SchoolArticleService {
     }
 
     @Transactional(readOnly = true)
-    public SchoolArticleListResponse getSchoolArticles(Integer page, Integer size, Integer categoryId, String keyword) {
-        // 보안/최적화: 최대 페이지 사이즈 제한
+    public SchoolArticleListResponse getSchoolArticlesByIds(List<Integer> articleIds, Integer page, Integer size, Integer userId) {
         int cappedSize = Math.min(size, 50);
-        
-        LocalDate today = LocalDate.now();
-        LocalDate upcomingLimit = today.plusDays(5);
-        LocalDate endingSoonLimit = today.plusDays(5);
+        LocalDate todayDate = LocalDate.now();
+        LocalDate upcomingLimit = todayDate.plusDays(5);
+        LocalDate endingSoonLimit = todayDate.plusDays(5);
 
         Pageable pageable = PageRequest.of(page - 1, cappedSize);
-        Page<SchoolArticle> articlePage = schoolArticleRepository.findAllWithFiltersAndSorting(
-                categoryId, keyword, today, upcomingLimit, endingSoonLimit, pageable
+        Page<SchoolArticle> articlePage = schoolArticleRepository.findAllByIdsWithFiltersAndSorting(
+                articleIds, todayDate, upcomingLimit, endingSoonLimit, pageable
         );
 
         List<SchoolArticle> articles = articlePage.getContent();
-        
-        // 최적화: 게시글이 없으면 벤더 조회 생략
         if (articles.isEmpty()) {
             return SchoolArticleListResponse.builder()
                     .page_info(SchoolArticleListResponse.PageInfo.builder()
@@ -97,13 +103,25 @@ public class SchoolArticleService {
                     .build();
         }
 
-        // 벤더 정보 일괄 조회
+        // 북마크 여부 일괄 확인 (여기서는 당연히 다 true이겠지만 로직 일관성을 위해 유지)
+        java.util.Set<Integer> bookmarkedIdsResult = new java.util.HashSet<>();
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                bookmarkedIdsResult = bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(user, VendorType.SCHOOL, articleIds)
+                        .stream()
+                        .map(today.inform.inform_backend.entity.Bookmark::getArticleId)
+                        .collect(java.util.stream.Collectors.toSet());
+            }
+        }
+        final java.util.Set<Integer> finalBookmarkedIds = bookmarkedIdsResult;
+
         List<SchoolArticleVendor> savs = schoolArticleVendorRepository.findAllByArticleIn(articles);
         Map<Integer, List<SchoolArticleVendor>> vendorMap = savs.stream()
                 .collect(Collectors.groupingBy(sav -> sav.getArticle().getArticleId()));
 
         List<SchoolArticleResponse> responseList = articles.stream()
-                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), today))
+                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId())))
                 .collect(Collectors.toList());
 
         return SchoolArticleListResponse.builder()
@@ -117,7 +135,73 @@ public class SchoolArticleService {
                 .build();
     }
 
-    private SchoolArticleResponse convertToResponse(SchoolArticle article, List<SchoolArticleVendor> vendors, LocalDate today) {
+    @Transactional(readOnly = true)
+    public SchoolArticleListResponse getSchoolArticles(Integer page, Integer size, Integer categoryId, String keyword, Integer userId) {
+        // 보안/최적화: 최대 페이지 사이즈 제한
+        int cappedSize = Math.min(size, 50);
+        
+        LocalDate todayDate = LocalDate.now();
+        LocalDate upcomingLimit = todayDate.plusDays(5);
+        LocalDate endingSoonLimit = todayDate.plusDays(5);
+
+        Pageable pageable = PageRequest.of(page - 1, cappedSize);
+        Page<SchoolArticle> articlePage = schoolArticleRepository.findAllWithFiltersAndSorting(
+                categoryId, keyword, todayDate, upcomingLimit, endingSoonLimit, pageable
+        );
+
+        List<SchoolArticle> articles = articlePage.getContent();
+        
+        // 최적화: 게시글이 없으면 빈 응답
+        if (articles.isEmpty()) {
+            return SchoolArticleListResponse.builder()
+                    .page_info(SchoolArticleListResponse.PageInfo.builder()
+                            .current_page(page)
+                            .total_pages(articlePage.getTotalPages())
+                            .total_articles(articlePage.getTotalElements())
+                            .has_next(articlePage.hasNext())
+                            .build())
+                    .school_articles(List.of())
+                    .build();
+        }
+
+        List<Integer> articleIds = articles.stream()
+                .map(SchoolArticle::getArticleId)
+                .collect(Collectors.toList());
+
+        // 북마크 여부 일괄 확인
+        java.util.Set<Integer> bookmarkedIdsResult = new java.util.HashSet<>();
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                bookmarkedIdsResult = bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(user, VendorType.SCHOOL, articleIds)
+                        .stream()
+                        .map(today.inform.inform_backend.entity.Bookmark::getArticleId)
+                        .collect(java.util.stream.Collectors.toSet());
+            }
+        }
+        final java.util.Set<Integer> finalBookmarkedIds = bookmarkedIdsResult;
+
+        // 벤더 정보 일괄 조회
+        List<SchoolArticleVendor> savs = schoolArticleVendorRepository.findAllByArticleIn(articles);
+        Map<Integer, List<SchoolArticleVendor>> vendorMap = savs.stream()
+                .collect(Collectors.groupingBy(sav -> sav.getArticle().getArticleId()));
+
+        List<SchoolArticleResponse> responseList = articles.stream()
+                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId())))
+                .collect(Collectors.toList());
+
+        return SchoolArticleListResponse.builder()
+                .page_info(SchoolArticleListResponse.PageInfo.builder()
+                        .current_page(page)
+                        .total_pages(articlePage.getTotalPages())
+                        .total_articles(articlePage.getTotalElements())
+                        .has_next(articlePage.hasNext())
+                        .build())
+                .school_articles(responseList)
+                .build();
+    }
+
+    private SchoolArticleResponse convertToResponse(SchoolArticle article, List<SchoolArticleVendor> vendors, LocalDate today, boolean isBookmarked) {
         return SchoolArticleResponse.builder()
                 .article_id(article.getArticleId())
                 .title(article.getTitle())
@@ -126,6 +210,7 @@ public class SchoolArticleService {
                 .status(determineStatus(article, today))
                 .created_at(article.getCreatedAt())
                 .updated_at(article.getUpdatedAt())
+                .is_bookmarked(isBookmarked)
                 .categories(article.getCategory() == null ? null : SchoolArticleResponse.CategoryResponse.builder()
                         .category_id(article.getCategory().getCategoryId())
                         .category_name(article.getCategory().getCategoryName())
