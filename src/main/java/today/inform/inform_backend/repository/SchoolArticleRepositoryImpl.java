@@ -52,6 +52,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     @Override
     public Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
             List<Integer> articleIds,
+            Integer categoryId,
+            String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
             LocalDate endingSoonLimit,
@@ -60,7 +62,11 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         List<SchoolArticle> content = queryFactory
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin()
-                .where(schoolArticle.articleId.in(articleIds))
+                .where(
+                        schoolArticle.articleId.in(articleIds),
+                        categoryEq(categoryId),
+                        titleContains(keyword)
+                )
                 .orderBy(
                         createStatusOrder(today, upcomingLimit, endingSoonLimit),
                         schoolArticle.createdAt.desc()
@@ -72,7 +78,11 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         Long total = queryFactory
                 .select(schoolArticle.count())
                 .from(schoolArticle)
-                .where(schoolArticle.articleId.in(articleIds))
+                .where(
+                        schoolArticle.articleId.in(articleIds),
+                        categoryEq(categoryId),
+                        titleContains(keyword)
+                )
                 .fetchOne();
 
         return new PageImpl<>(content, pageable, total != null ? total : 0L);

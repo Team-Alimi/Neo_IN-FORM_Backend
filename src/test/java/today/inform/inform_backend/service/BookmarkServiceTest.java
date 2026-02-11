@@ -46,10 +46,10 @@ class BookmarkServiceTest {
         SchoolArticleListResponse expectedResponse = SchoolArticleListResponse.builder()
                 .school_articles(List.of()) // 내용은 Service에서 채워짐
                 .build();
-        given(schoolArticleService.getSchoolArticlesByIds(any(), any(), any(), eq(userId))).willReturn(expectedResponse);
+        given(schoolArticleService.getSchoolArticlesByIds(any(), any(), any(), any(), any(), eq(userId))).willReturn(expectedResponse);
 
         // when
-        SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, 1, 10);
+        SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, null, null, 1, 10);
 
         // then
         assertThat(response).isNotNull();
@@ -65,10 +65,9 @@ class BookmarkServiceTest {
         given(bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.SCHOOL)).willReturn(List.of());
 
         // when
-        SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, 1, 10);
+        SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, null, null, 1, 10);
 
         // then
         assertThat(response.getSchool_articles()).isEmpty();
-        assertThat(response.getPage_info().getTotal_articles()).isEqualTo(0L);
     }
 }

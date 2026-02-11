@@ -118,7 +118,7 @@ public class SchoolArticleService {
     }
 
     @Transactional(readOnly = true)
-    public SchoolArticleListResponse getSchoolArticlesByIds(List<Integer> articleIds, Integer page, Integer size, Integer userId) {
+    public SchoolArticleListResponse getSchoolArticlesByIds(List<Integer> articleIds, Integer categoryId, String keyword, Integer page, Integer size, Integer userId) {
         int cappedSize = Math.min(size, 50);
         LocalDate todayDate = LocalDate.now();
         LocalDate upcomingLimit = todayDate.plusDays(5);
@@ -126,7 +126,7 @@ public class SchoolArticleService {
 
         Pageable pageable = PageRequest.of(page - 1, cappedSize);
         Page<SchoolArticle> articlePage = schoolArticleRepository.findAllByIdsWithFiltersAndSorting(
-                articleIds, todayDate, upcomingLimit, endingSoonLimit, pageable
+                articleIds, categoryId, keyword, todayDate, upcomingLimit, endingSoonLimit, pageable
         );
 
         List<SchoolArticle> articles = articlePage.getContent();
