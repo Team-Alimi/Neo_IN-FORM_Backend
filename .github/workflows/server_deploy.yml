@@ -1,0 +1,93 @@
+name: Server CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/inform-server:latest
+  CONTAINER_NAME: inform-server
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto' # amazoncorretto와 호환성 좋음
+
+      - name: Build with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew bootJar -x test
+
+      - name: Lowercase Image Name
+        run: echo "IMAGE_NAME=${IMAGE_NAME,,}" >> ${GITHUB_ENV}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_NAME }}
+
+      - name: Deploy to GCP VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST_IP }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          envs: IMAGE_NAME,CONTAINER_NAME
+          script: |
+            # 1. 환경변수 파일(.env) 생성
+            mkdir -p /home/${{ secrets.SSH_USER }}/inform-main
+            ENV_PATH="/home/${{ secrets.SSH_USER }}/inform-main/.env"
+            
+            rm -f $ENV_PATH
+
+            echo "SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}" > $ENV_PATH
+            echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DB_USER }}" >> $ENV_PATH
+            echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $ENV_PATH
+            echo "SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.mariadb.jdbc.Driver" >> $ENV_PATH
+            echo "SPRING_REDIS_HOST=${{ secrets.SDB_HOST }}" >> $ENV_PATH
+            echo "SPRING_REDIS_PORT=${{ secrets.SDB_PORT }}" >> $ENV_PATH
+            
+            # 2. GHCR 로그인
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # 3. 최신 이미지 다운로드
+            docker pull ${{ env.IMAGE_NAME }}
+            
+            # 4. 기존 컨테이너 중지 및 삭제
+            docker stop ${{ env.CONTAINER_NAME }} || true
+            docker rm ${{ env.CONTAINER_NAME }} || true
+            
+            # 5. 새 컨테이너 실행
+            docker run -d \
+              --name ${{ env.CONTAINER_NAME }} \
+              --env-file $ENV_PATH \
+              -p 8080:8080 \
+              -v /etc/localtime:/etc/localtime:ro \
+              --restart unless-stopped \
+              ${{ env.IMAGE_NAME }}
+            
+            # 6. 불필요한 이미지 정리
+            docker image prune -f
