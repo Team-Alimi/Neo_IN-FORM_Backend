@@ -39,3 +39,5 @@ out/
 ### Security Data ###
 application.yaml
 application.yml
+application-test.yaml
+application-test.yml

@@ -22,7 +22,7 @@ public class UserController {
     ) {
         // 보안 검증: 본인 확인
         if (!userId.equals(loginUserId)) {
-            throw new IllegalArgumentException("본인의 정보만 수정할 수 있습니다.");
+            throw new today.inform.inform_backend.common.exception.BusinessException("FORBIDDEN", "본인의 정보만 수정할 수 있습니다.");
         }
 
         userService.updateMajor(userId, request.getMajorId());
