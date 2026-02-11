@@ -70,7 +70,73 @@ public class ClubArticleService {
     }
 
     @Transactional(readOnly = true)
-    public ClubArticleListResponse getClubArticles(Integer page, Integer size, Integer vendorId) {
+    public ClubArticleListResponse getClubArticlesByIds(List<Integer> articleIds, Integer page, Integer size, Integer userId) {
+        int cappedSize = Math.min(size, 50);
+        Pageable pageable = PageRequest.of(page - 1, cappedSize);
+        Page<ClubArticle> articlePage = clubArticleRepository.findAllByIds(articleIds, pageable);
+
+        List<ClubArticle> articles = articlePage.getContent();
+        if (articles.isEmpty()) {
+            return ClubArticleListResponse.builder()
+                    .page_info(ClubArticleListResponse.PageInfo.builder()
+                            .current_page(page)
+                            .total_pages(articlePage.getTotalPages())
+                            .total_articles(articlePage.getTotalElements())
+                            .build())
+                    .club_articles(List.of())
+                    .build();
+        }
+
+        // 북마크 여부 일괄 확인
+        java.util.Set<Integer> bookmarkedIdsResult = new java.util.HashSet<>();
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                bookmarkedIdsResult = bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(user, VendorType.CLUB, articleIds)
+                        .stream()
+                        .map(today.inform.inform_backend.entity.Bookmark::getArticleId)
+                        .collect(java.util.stream.Collectors.toSet());
+            }
+        }
+        final java.util.Set<Integer> finalBookmarkedIds = bookmarkedIdsResult;
+
+        Map<Integer, String> firstAttachmentMap = attachmentRepository
+                .findAllByArticleIdInAndArticleType(articleIds, VendorType.CLUB)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        Attachment::getArticleId,
+                        Collectors.mapping(Attachment::getAttachmentUrl, Collectors.collectingAndThen(Collectors.toList(), list -> list.isEmpty() ? null : list.get(0)))
+                ));
+
+        List<ClubArticleResponse> responseList = articles.stream()
+                .map(article -> ClubArticleResponse.builder()
+                        .article_id(article.getArticleId())
+                        .title(article.getTitle())
+                        .start_date(article.getStartDate())
+                        .due_date(article.getDueDate())
+                        .created_at(article.getCreatedAt())
+                        .updated_at(article.getUpdatedAt())
+                        .attachment_url(firstAttachmentMap.get(article.getArticleId()))
+                        .is_bookmarked(finalBookmarkedIds.contains(article.getArticleId()))
+                        .vendors(ClubArticleResponse.VendorResponse.builder()
+                                .vendor_name(article.getVendor().getVendorName())
+                                .vendor_initial(article.getVendor().getVendorInitial())
+                                .build())
+                        .build())
+                .collect(Collectors.toList());
+
+        return ClubArticleListResponse.builder()
+                .page_info(ClubArticleListResponse.PageInfo.builder()
+                        .current_page(page)
+                        .total_pages(articlePage.getTotalPages())
+                        .total_articles(articlePage.getTotalElements())
+                        .build())
+                .club_articles(responseList)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public ClubArticleListResponse getClubArticles(Integer page, Integer size, Integer vendorId, Integer userId) {
         // 보안/최적화: 최대 페이지 사이즈 제한 (예: 50)
         int cappedSize = Math.min(size, 50);
         Pageable pageable = PageRequest.of(page - 1, cappedSize);
@@ -78,7 +144,7 @@ public class ClubArticleService {
 
         List<ClubArticle> articles = articlePage.getContent();
         
-        // 최적화: 게시글이 없으면 첨부파일 쿼리 생략
+        // 최적화: 게시글이 없으면 빈 응답
         if (articles.isEmpty()) {
             return ClubArticleListResponse.builder()
                     .page_info(ClubArticleListResponse.PageInfo.builder()
@@ -93,6 +159,19 @@ public class ClubArticleService {
         List<Integer> articleIds = articles.stream()
                 .map(ClubArticle::getArticleId)
                 .collect(Collectors.toList());
+
+        // 북마크 여부 일괄 확인 (로그인 시)
+        java.util.Set<Integer> bookmarkedIdsResult = new java.util.HashSet<>();
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                bookmarkedIdsResult = bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(user, VendorType.CLUB, articleIds)
+                        .stream()
+                        .map(today.inform.inform_backend.entity.Bookmark::getArticleId)
+                        .collect(java.util.stream.Collectors.toSet());
+            }
+        }
+        final java.util.Set<Integer> finalBookmarkedIds = bookmarkedIdsResult;
 
         // 각 게시글의 첫 번째 첨부파일만 가져오기 위한 로직 (N+1 방지)
         Map<Integer, String> firstAttachmentMap = attachmentRepository
@@ -112,6 +191,7 @@ public class ClubArticleService {
                         .created_at(article.getCreatedAt())
                         .updated_at(article.getUpdatedAt())
                         .attachment_url(firstAttachmentMap.get(article.getArticleId()))
+                        .is_bookmarked(finalBookmarkedIds.contains(article.getArticleId()))
                         .vendors(ClubArticleResponse.VendorResponse.builder()
                                 .vendor_name(article.getVendor().getVendorName())
                                 .vendor_initial(article.getVendor().getVendorInitial())

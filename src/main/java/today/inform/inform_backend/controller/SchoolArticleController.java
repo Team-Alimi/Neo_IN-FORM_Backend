@@ -20,9 +20,10 @@ public class SchoolArticleController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(required = false) Integer category_id,
-            @RequestParam(required = false) String keyword
+            @RequestParam(required = false) String keyword,
+            @AuthenticationPrincipal Integer userId
     ) {
-        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, category_id, keyword));
+        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, category_id, keyword, userId));
     }
 
     @GetMapping("/{articleId}")

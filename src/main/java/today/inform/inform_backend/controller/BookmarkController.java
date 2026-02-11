@@ -2,12 +2,11 @@ package today.inform.inform_backend.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import today.inform.inform_backend.common.response.ApiResponse;
 import today.inform.inform_backend.dto.BookmarkRequest;
+import today.inform.inform_backend.dto.ClubArticleListResponse;
+import today.inform.inform_backend.dto.SchoolArticleListResponse;
 import today.inform.inform_backend.service.BookmarkService;
 
 @RestController
@@ -16,6 +15,24 @@ import today.inform.inform_backend.service.BookmarkService;
 public class BookmarkController {
 
     private final BookmarkService bookmarkService;
+
+    @GetMapping("/school")
+    public ApiResponse<SchoolArticleListResponse> getBookmarkedSchoolArticles(
+            @AuthenticationPrincipal Integer userId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size
+    ) {
+        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, page, size));
+    }
+
+    @GetMapping("/club")
+    public ApiResponse<ClubArticleListResponse> getBookmarkedClubArticles(
+            @AuthenticationPrincipal Integer userId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size
+    ) {
+        return ApiResponse.success(bookmarkService.getBookmarkedClubArticles(userId, page, size));
+    }
 
     @PostMapping
     public ApiResponse<Boolean> toggleBookmark(

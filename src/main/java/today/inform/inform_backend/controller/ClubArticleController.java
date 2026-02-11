@@ -19,9 +19,10 @@ public class ClubArticleController {
     public ApiResponse<ClubArticleListResponse> getClubArticles(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "4") Integer size,
-            @RequestParam(required = false) Integer vendor_id
+            @RequestParam(required = false) Integer vendor_id,
+            @AuthenticationPrincipal Integer userId
     ) {
-        ClubArticleListResponse response = clubArticleService.getClubArticles(page, size, vendor_id);
+        ClubArticleListResponse response = clubArticleService.getClubArticles(page, size, vendor_id, userId);
         return ApiResponse.success(response);
     }
 

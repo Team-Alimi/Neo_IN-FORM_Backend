@@ -10,12 +10,27 @@ import today.inform.inform_backend.entity.Vendor;
 import today.inform.inform_backend.repository.UserRepository;
 import today.inform.inform_backend.repository.VendorRepository;
 
+import today.inform.inform_backend.dto.LoginResponse;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
     private final VendorRepository vendorRepository;
+
+    @Transactional(readOnly = true)
+    public LoginResponse.UserInfo getMyProfile(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        return LoginResponse.UserInfo.builder()
+                .userId(user.getUserId())
+                .email(user.getEmail())
+                .name(user.getName())
+                .majorId(user.getMajor() != null ? user.getMajor().getVendorId() : null)
+                .build();
+    }
 
     @Transactional
     public void updateMajor(Integer userId, Integer majorId) {

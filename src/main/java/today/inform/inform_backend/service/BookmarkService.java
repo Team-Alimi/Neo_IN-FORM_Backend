@@ -13,6 +13,7 @@ import today.inform.inform_backend.repository.ClubArticleRepository;
 import today.inform.inform_backend.repository.SchoolArticleRepository;
 import today.inform.inform_backend.repository.UserRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -23,6 +24,57 @@ public class BookmarkService {
     private final UserRepository userRepository;
     private final SchoolArticleRepository schoolArticleRepository;
     private final ClubArticleRepository clubArticleRepository;
+    private final SchoolArticleService schoolArticleService;
+    private final ClubArticleService clubArticleService;
+
+    @Transactional(readOnly = true)
+    public today.inform.inform_backend.dto.SchoolArticleListResponse getBookmarkedSchoolArticles(Integer userId, Integer page, Integer size) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        List<Integer> articleIds = bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.SCHOOL)
+                .stream()
+                .map(Bookmark::getArticleId)
+                .collect(java.util.stream.Collectors.toList());
+
+        if (articleIds.isEmpty()) {
+            return today.inform.inform_backend.dto.SchoolArticleListResponse.builder()
+                    .page_info(today.inform.inform_backend.dto.SchoolArticleListResponse.PageInfo.builder()
+                            .current_page(page)
+                            .total_pages(0)
+                            .total_articles(0L)
+                            .has_next(false)
+                            .build())
+                    .school_articles(List.of())
+                    .build();
+        }
+
+        return schoolArticleService.getSchoolArticlesByIds(articleIds, page, size, userId);
+    }
+
+    @Transactional(readOnly = true)
+    public today.inform.inform_backend.dto.ClubArticleListResponse getBookmarkedClubArticles(Integer userId, Integer page, Integer size) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        List<Integer> articleIds = bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.CLUB)
+                .stream()
+                .map(Bookmark::getArticleId)
+                .collect(java.util.stream.Collectors.toList());
+
+        if (articleIds.isEmpty()) {
+            return today.inform.inform_backend.dto.ClubArticleListResponse.builder()
+                    .page_info(today.inform.inform_backend.dto.ClubArticleListResponse.PageInfo.builder()
+                            .current_page(page)
+                            .total_pages(0)
+                            .total_articles(0L)
+                            .build())
+                    .club_articles(List.of())
+                    .build();
+        }
+
+        return clubArticleService.getClubArticlesByIds(articleIds, page, size, userId);
+    }
 
     @Transactional
     public boolean toggleBookmark(Integer userId, VendorType articleType, Integer articleId) {
