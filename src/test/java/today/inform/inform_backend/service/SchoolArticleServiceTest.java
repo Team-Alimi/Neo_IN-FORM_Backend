@@ -62,6 +62,7 @@ class SchoolArticleServiceTest {
         given(schoolArticleRepository.findById(articleId)).willReturn(Optional.of(article));
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
         given(bookmarkRepository.existsByUserAndArticleTypeAndArticleId(any(), any(), any())).willReturn(false);
+        given(bookmarkRepository.countByArticleIdAndArticleType(any(), any())).willReturn(5L);
         given(schoolArticleVendorRepository.findAllByArticle(article)).willReturn(List.of());
         given(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL))
                 .willReturn(List.of());
@@ -118,6 +119,7 @@ class SchoolArticleServiceTest {
         User user = User.builder().userId(userId).build();
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
         given(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(any(), any(), any())).willReturn(List.of());
+        given(bookmarkRepository.countByArticleIdsAndArticleType(any(), any())).willReturn(List.of());
 
         // when
         SchoolArticleListResponse response = schoolArticleService.getSchoolArticles(1, 10, null, null, userId);

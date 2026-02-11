@@ -42,6 +42,7 @@ public class SchoolArticleService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         boolean isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
+        long bookmarkCount = bookmarkRepository.countByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
 
         List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticle(article);
         var attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
@@ -57,6 +58,7 @@ public class SchoolArticleService {
                 .created_at(article.getCreatedAt())
                 .updated_at(article.getUpdatedAt())
                 .is_bookmarked(isBookmarked)
+                .bookmark_count(bookmarkCount)
                 .categories(article.getCategory() == null ? null : SchoolArticleDetailResponse.CategoryResponse.builder()
                         .category_id(article.getCategory().getCategoryId())
                         .category_name(article.getCategory().getCategoryName())
@@ -108,8 +110,10 @@ public class SchoolArticleService {
         Map<Integer, List<SchoolArticleVendor>> vendorMap = savs.stream()
                 .collect(Collectors.groupingBy(sav -> sav.getArticle().getArticleId()));
 
+        Map<Integer, Long> bookmarkCountMap = getBookmarkCountMap(articleIds);
+
         return articles.stream()
-                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId())))
+                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId()), bookmarkCountMap.get(article.getArticleId())))
                 .collect(Collectors.toList());
     }
 
@@ -138,7 +142,7 @@ public class SchoolArticleService {
                     .build();
         }
 
-        // 북마크 여부 일괄 확인 (여기서는 당연히 다 true이겠지만 로직 일관성을 위해 유지)
+        // 북마크 여부 일괄 확인
         java.util.Set<Integer> bookmarkedIdsResult = new java.util.HashSet<>();
         if (userId != null) {
             today.inform.inform_backend.entity.User user = userRepository.findById(userId).orElse(null);
@@ -155,8 +159,10 @@ public class SchoolArticleService {
         Map<Integer, List<SchoolArticleVendor>> vendorMap = savs.stream()
                 .collect(Collectors.groupingBy(sav -> sav.getArticle().getArticleId()));
 
+        Map<Integer, Long> bookmarkCountMap = getBookmarkCountMap(articleIds);
+
         List<SchoolArticleResponse> responseList = articles.stream()
-                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId())))
+                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId()), bookmarkCountMap.get(article.getArticleId())))
                 .collect(Collectors.toList());
 
         return SchoolArticleListResponse.builder()
@@ -221,8 +227,11 @@ public class SchoolArticleService {
         Map<Integer, List<SchoolArticleVendor>> vendorMap = savs.stream()
                 .collect(Collectors.groupingBy(sav -> sav.getArticle().getArticleId()));
 
+        // 북마크 개수 일괄 조회
+        Map<Integer, Long> bookmarkCountMap = getBookmarkCountMap(articleIds);
+
         List<SchoolArticleResponse> responseList = articles.stream()
-                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId())))
+                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId()), bookmarkCountMap.get(article.getArticleId())))
                 .collect(Collectors.toList());
 
         return SchoolArticleListResponse.builder()
@@ -236,7 +245,7 @@ public class SchoolArticleService {
                 .build();
     }
 
-    private SchoolArticleResponse convertToResponse(SchoolArticle article, List<SchoolArticleVendor> vendors, LocalDate today, boolean isBookmarked) {
+    private SchoolArticleResponse convertToResponse(SchoolArticle article, List<SchoolArticleVendor> vendors, LocalDate today, boolean isBookmarked, Long bookmarkCount) {
         return SchoolArticleResponse.builder()
                 .article_id(article.getArticleId())
                 .title(article.getTitle())
@@ -246,6 +255,7 @@ public class SchoolArticleService {
                 .created_at(article.getCreatedAt())
                 .updated_at(article.getUpdatedAt())
                 .is_bookmarked(isBookmarked)
+                .bookmark_count(bookmarkCount != null ? bookmarkCount : 0L)
                 .categories(article.getCategory() == null ? null : SchoolArticleResponse.CategoryResponse.builder()
                         .category_id(article.getCategory().getCategoryId())
                         .category_name(article.getCategory().getCategoryName())
@@ -265,5 +275,14 @@ public class SchoolArticleService {
         if (article.getStartDate() != null && article.getStartDate().isAfter(today)) return "UPCOMING";
         if (article.getDueDate() != null && !article.getDueDate().isAfter(today.plusDays(5))) return "ENDING_SOON";
         return "OPEN";
+    }
+
+    private Map<Integer, Long> getBookmarkCountMap(List<Integer> articleIds) {
+        return bookmarkRepository.countByArticleIdsAndArticleType(articleIds, VendorType.SCHOOL)
+                .stream()
+                .collect(Collectors.toMap(
+                        obj -> (Integer) obj[0],
+                        obj -> (Long) obj[1]
+                ));
     }
 }

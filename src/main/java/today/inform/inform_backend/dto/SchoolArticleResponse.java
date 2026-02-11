@@ -17,6 +17,7 @@ public class SchoolArticleResponse {
     private LocalDateTime created_at;
     private LocalDateTime updated_at;
     private Boolean is_bookmarked;
+    private Long bookmark_count;
     private List<VendorResponse> vendors;
     private CategoryResponse categories;
 
