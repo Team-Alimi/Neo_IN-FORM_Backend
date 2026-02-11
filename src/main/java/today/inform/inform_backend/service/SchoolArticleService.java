@@ -30,11 +30,18 @@ public class SchoolArticleService {
     private final SchoolArticleRepository schoolArticleRepository;
     private final SchoolArticleVendorRepository schoolArticleVendorRepository;
     private final AttachmentRepository attachmentRepository;
+    private final today.inform.inform_backend.repository.BookmarkRepository bookmarkRepository;
+    private final today.inform.inform_backend.repository.UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public SchoolArticleDetailResponse getSchoolArticleDetail(Integer articleId) {
+    public SchoolArticleDetailResponse getSchoolArticleDetail(Integer articleId, Integer userId) {
         SchoolArticle article = schoolArticleRepository.findById(articleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+        today.inform.inform_backend.entity.User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        boolean isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
 
         List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticle(article);
         var attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
@@ -49,6 +56,7 @@ public class SchoolArticleService {
                 .status(determineStatus(article, today))
                 .created_at(article.getCreatedAt())
                 .updated_at(article.getUpdatedAt())
+                .is_bookmarked(isBookmarked)
                 .categories(article.getCategory() == null ? null : SchoolArticleDetailResponse.CategoryResponse.builder()
                         .category_id(article.getCategory().getCategoryId())
                         .category_name(article.getCategory().getCategoryName())

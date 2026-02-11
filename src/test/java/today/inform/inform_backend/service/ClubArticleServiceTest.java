@@ -105,7 +105,7 @@ class ClubArticleServiceTest {
                 .willReturn(List.of(attachment));
 
         // when
-        today.inform.inform_backend.dto.ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(1);
+        today.inform.inform_backend.dto.ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(1, null);
 
         // then
         assertThat(response.getTitle()).isEqualTo("상세 제목");

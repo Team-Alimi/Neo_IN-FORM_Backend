@@ -1,0 +1,65 @@
+package today.inform.inform_backend.service;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
+import today.inform.inform_backend.entity.Bookmark;
+import today.inform.inform_backend.entity.User;
+import today.inform.inform_backend.entity.VendorType;
+import today.inform.inform_backend.repository.BookmarkRepository;
+import today.inform.inform_backend.repository.ClubArticleRepository;
+import today.inform.inform_backend.repository.SchoolArticleRepository;
+import today.inform.inform_backend.repository.UserRepository;
+
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class BookmarkService {
+
+    private final BookmarkRepository bookmarkRepository;
+    private final UserRepository userRepository;
+    private final SchoolArticleRepository schoolArticleRepository;
+    private final ClubArticleRepository clubArticleRepository;
+
+    @Transactional
+    public boolean toggleBookmark(Integer userId, VendorType articleType, Integer articleId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 1. 게시글 존재 여부 확인
+        validateArticleExists(articleType, articleId);
+
+        // 2. 이미 북마크가 있는지 확인
+        Optional<Bookmark> existingBookmark = bookmarkRepository.findByUserAndArticleTypeAndArticleId(user, articleType, articleId);
+
+        if (existingBookmark.isPresent()) {
+            // 있으면 삭제 (해제)
+            bookmarkRepository.delete(existingBookmark.get());
+            return false;
+        } else {
+            // 없으면 등록
+            Bookmark bookmark = Bookmark.builder()
+                    .user(user)
+                    .articleType(articleType)
+                    .articleId(articleId)
+                    .build();
+            bookmarkRepository.save(bookmark);
+            return true;
+        }
+    }
+
+    private void validateArticleExists(VendorType articleType, Integer articleId) {
+        if (articleType == VendorType.SCHOOL) {
+            if (!schoolArticleRepository.existsById(articleId)) {
+                throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
+            }
+        } else if (articleType == VendorType.CLUB) {
+            if (!clubArticleRepository.existsById(articleId)) {
+                throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
+            }
+        }
+    }
+}

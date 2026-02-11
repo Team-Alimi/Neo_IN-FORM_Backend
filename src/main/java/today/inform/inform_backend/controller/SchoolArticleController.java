@@ -2,6 +2,7 @@ package today.inform.inform_backend.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import today.inform.inform_backend.common.response.ApiResponse;
 import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
 import today.inform.inform_backend.dto.SchoolArticleListResponse;
@@ -25,7 +26,10 @@ public class SchoolArticleController {
     }
 
     @GetMapping("/{articleId}")
-    public ApiResponse<SchoolArticleDetailResponse> getSchoolArticleDetail(@PathVariable Integer articleId) {
-        return ApiResponse.success(schoolArticleService.getSchoolArticleDetail(articleId));
+    public ApiResponse<SchoolArticleDetailResponse> getSchoolArticleDetail(
+            @PathVariable Integer articleId,
+            @AuthenticationPrincipal Integer userId
+    ) {
+        return ApiResponse.success(schoolArticleService.getSchoolArticleDetail(articleId, userId));
     }
 }

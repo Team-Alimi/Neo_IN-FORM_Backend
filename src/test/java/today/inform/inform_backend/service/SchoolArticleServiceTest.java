@@ -32,6 +32,8 @@ class SchoolArticleServiceTest {
     @Mock private SchoolArticleRepository schoolArticleRepository;
     @Mock private SchoolArticleVendorRepository schoolArticleVendorRepository;
     @Mock private AttachmentRepository attachmentRepository;
+    @Mock private today.inform.inform_backend.repository.BookmarkRepository bookmarkRepository;
+    @Mock private today.inform.inform_backend.repository.UserRepository userRepository;
 
     @InjectMocks private SchoolArticleService schoolArticleService;
 
@@ -40,6 +42,7 @@ class SchoolArticleServiceTest {
     void getSchoolArticleDetail_Success() {
         // given
         Integer articleId = 105;
+        Integer userId = 1;
         LocalDate today = LocalDate.now();
         SchoolArticle article = SchoolArticle.builder()
                 .articleId(articleId)
@@ -49,13 +52,19 @@ class SchoolArticleServiceTest {
                 .dueDate(today.plusDays(5))
                 .build();
 
+        today.inform.inform_backend.entity.User user = today.inform.inform_backend.entity.User.builder()
+                .userId(userId)
+                .build();
+
         given(schoolArticleRepository.findById(articleId)).willReturn(Optional.of(article));
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+        given(bookmarkRepository.existsByUserAndArticleTypeAndArticleId(any(), any(), any())).willReturn(false);
         given(schoolArticleVendorRepository.findAllByArticle(article)).willReturn(List.of());
         given(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL))
                 .willReturn(List.of());
 
         // when
-        SchoolArticleDetailResponse result = schoolArticleService.getSchoolArticleDetail(articleId);
+        SchoolArticleDetailResponse result = schoolArticleService.getSchoolArticleDetail(articleId, userId);
 
         // then
         assertThat(result.getArticle_id()).isEqualTo(articleId);

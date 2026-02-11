@@ -27,11 +27,21 @@ public class ClubArticleService {
 
     private final ClubArticleRepository clubArticleRepository;
     private final AttachmentRepository attachmentRepository;
+    private final today.inform.inform_backend.repository.BookmarkRepository bookmarkRepository;
+    private final today.inform.inform_backend.repository.UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public ClubArticleDetailResponse getClubArticleDetail(Integer articleId) {
+    public ClubArticleDetailResponse getClubArticleDetail(Integer articleId, Integer userId) {
         ClubArticle article = clubArticleRepository.findByIdWithVendor(articleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+        boolean isBookmarked = false;
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.CLUB, articleId);
+            }
+        }
 
         List<Attachment> attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.CLUB);
 
@@ -44,6 +54,7 @@ public class ClubArticleService {
                 .due_date(article.getDueDate())
                 .created_at(article.getCreatedAt())
                 .updated_at(article.getUpdatedAt())
+                .is_bookmarked(isBookmarked)
                 .attachments(attachments.stream()
                         .map(att -> ClubArticleDetailResponse.AttachmentResponse.builder()
                                 .file_id(att.getId())
