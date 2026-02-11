@@ -41,7 +41,7 @@ class BookmarkServiceTest {
         Bookmark bookmark = Bookmark.builder().articleId(105).articleType(VendorType.SCHOOL).build();
 
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(bookmarkRepository.findAllByUserAndArticleType(user, VendorType.SCHOOL)).willReturn(List.of(bookmark));
+        given(bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.SCHOOL)).willReturn(List.of(bookmark));
         
         SchoolArticleListResponse expectedResponse = SchoolArticleListResponse.builder()
                 .school_articles(List.of()) // 내용은 Service에서 채워짐
@@ -62,7 +62,7 @@ class BookmarkServiceTest {
         Integer userId = 1;
         User user = User.builder().userId(userId).build();
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(bookmarkRepository.findAllByUserAndArticleType(user, VendorType.SCHOOL)).willReturn(List.of());
+        given(bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.SCHOOL)).willReturn(List.of());
 
         // when
         SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, 1, 10);

@@ -9,6 +9,5 @@ import java.util.Optional;
 
 public interface ClubArticleRepositoryCustom {
     Page<ClubArticle> findAllWithFilters(Integer vendorId, Pageable pageable);
-    Page<ClubArticle> findAllByIds(List<Integer> articleIds, Pageable pageable);
     Optional<ClubArticle> findByIdWithVendor(Integer articleId);
 }

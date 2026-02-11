@@ -19,19 +19,17 @@ public class ClubArticleController {
     public ApiResponse<ClubArticleListResponse> getClubArticles(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "4") Integer size,
-            @RequestParam(required = false) Integer vendor_id,
-            @AuthenticationPrincipal Integer userId
+            @RequestParam(required = false) Integer vendor_id
     ) {
-        ClubArticleListResponse response = clubArticleService.getClubArticles(page, size, vendor_id, userId);
+        ClubArticleListResponse response = clubArticleService.getClubArticles(page, size, vendor_id);
         return ApiResponse.success(response);
     }
 
     @GetMapping("/{articleId}")
     public ApiResponse<ClubArticleDetailResponse> getClubArticleDetail(
-            @PathVariable Integer articleId,
-            @AuthenticationPrincipal Integer userId
+            @PathVariable Integer articleId
     ) {
-        ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(articleId, userId);
+        ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(articleId);
         return ApiResponse.success(response);
     }
 }

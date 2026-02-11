@@ -15,7 +15,6 @@ public class ClubArticleResponse {
     private LocalDateTime created_at;
     private LocalDateTime updated_at;
     private String attachment_url;
-    private Boolean is_bookmarked;
     private VendorResponse vendors;
 
     @Getter

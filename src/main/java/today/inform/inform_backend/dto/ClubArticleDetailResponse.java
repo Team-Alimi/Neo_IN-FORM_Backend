@@ -17,7 +17,6 @@ public class ClubArticleDetailResponse {
     private LocalDate due_date;
     private LocalDateTime created_at;
     private LocalDateTime updated_at;
-    private Boolean is_bookmarked;
     private List<AttachmentResponse> attachments;
     private VendorResponse vendors;
 

@@ -25,15 +25,6 @@ public class BookmarkController {
         return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, page, size));
     }
 
-    @GetMapping("/club")
-    public ApiResponse<ClubArticleListResponse> getBookmarkedClubArticles(
-            @AuthenticationPrincipal Integer userId,
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size
-    ) {
-        return ApiResponse.success(bookmarkService.getBookmarkedClubArticles(userId, page, size));
-    }
-
     @PostMapping
     public ApiResponse<Boolean> toggleBookmark(
             @AuthenticationPrincipal Integer userId,

@@ -52,34 +52,15 @@ public class BookmarkService {
         return schoolArticleService.getSchoolArticlesByIds(articleIds, page, size, userId);
     }
 
-    @Transactional(readOnly = true)
-    public today.inform.inform_backend.dto.ClubArticleListResponse getBookmarkedClubArticles(Integer userId, Integer page, Integer size) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
-        List<Integer> articleIds = bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.CLUB)
-                .stream()
-                .map(Bookmark::getArticleId)
-                .collect(java.util.stream.Collectors.toList());
-
-        if (articleIds.isEmpty()) {
-            return today.inform.inform_backend.dto.ClubArticleListResponse.builder()
-                    .page_info(today.inform.inform_backend.dto.ClubArticleListResponse.PageInfo.builder()
-                            .current_page(page)
-                            .total_pages(0)
-                            .total_articles(0L)
-                            .build())
-                    .club_articles(List.of())
-                    .build();
-        }
-
-        return clubArticleService.getClubArticlesByIds(articleIds, page, size, userId);
-    }
-
     @Transactional
     public boolean toggleBookmark(Integer userId, VendorType articleType, Integer articleId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 보안: 학교 공지만 북마크 허용
+        if (articleType != VendorType.SCHOOL) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "학교 공지만 스크랩할 수 있습니다.");
+        }
 
         // 1. 게시글 존재 여부 확인
         validateArticleExists(articleType, articleId);
@@ -106,10 +87,6 @@ public class BookmarkService {
     private void validateArticleExists(VendorType articleType, Integer articleId) {
         if (articleType == VendorType.SCHOOL) {
             if (!schoolArticleRepository.existsById(articleId)) {
-                throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
-            }
-        } else if (articleType == VendorType.CLUB) {
-            if (!clubArticleRepository.existsById(articleId)) {
                 throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
             }
         }
