@@ -14,6 +14,8 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Integer> {
     List<Bookmark> findAllByUserAndArticleTypeAndArticleIdIn(User user, VendorType articleType, List<Integer> articleIds);
     List<Bookmark> findAllByUserAndArticleTypeOrderByCreatedAtDesc(User user, VendorType articleType);
     
+    void deleteAllByUserAndArticleType(User user, VendorType articleType);
+
     long countByArticleIdAndArticleType(Integer articleId, VendorType articleType);
 
     @org.springframework.data.jpa.repository.Query("SELECT b.articleId, COUNT(b) FROM Bookmark b WHERE b.articleId IN :articleIds AND b.articleType = :articleType GROUP BY b.articleId")

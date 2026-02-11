@@ -27,6 +27,14 @@ public class BookmarkController {
         return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, category_id, keyword, page, size));
     }
 
+    @DeleteMapping("/school/all")
+    public ApiResponse<Void> deleteAllBookmarkedSchoolArticles(
+            @AuthenticationPrincipal Integer userId
+    ) {
+        bookmarkService.deleteAllBookmarkedSchoolArticles(userId);
+        return ApiResponse.success(null);
+    }
+
     @PostMapping
     public ApiResponse<Boolean> toggleBookmark(
             @AuthenticationPrincipal Integer userId,

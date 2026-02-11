@@ -53,6 +53,14 @@ public class BookmarkService {
     }
 
     @Transactional
+    public void deleteAllBookmarkedSchoolArticles(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        bookmarkRepository.deleteAllByUserAndArticleType(user, VendorType.SCHOOL);
+    }
+
+    @Transactional
     public boolean toggleBookmark(Integer userId, VendorType articleType, Integer articleId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
