@@ -6,6 +6,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import today.inform.inform_backend.dto.ClubArticleDetailResponse;
 import today.inform.inform_backend.dto.ClubArticleListResponse;
 import today.inform.inform_backend.dto.ClubArticleResponse;
 import today.inform.inform_backend.entity.Attachment;
@@ -24,6 +25,36 @@ public class ClubArticleService {
 
     private final ClubArticleRepository clubArticleRepository;
     private final AttachmentRepository attachmentRepository;
+
+    @Transactional(readOnly = true)
+    public ClubArticleDetailResponse getClubArticleDetail(Integer articleId) {
+        ClubArticle article = clubArticleRepository.findByIdWithVendor(articleId)
+                .orElseThrow(() -> new today.inform.inform_backend.common.exception.BusinessException("ARTICLE_NOT_FOUND", "존재하지 않는 동아리 공지사항입니다."));
+
+        List<Attachment> attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.CLUB);
+
+        return ClubArticleDetailResponse.builder()
+                .article_id(article.getArticleId())
+                .title(article.getTitle())
+                .content(article.getContent())
+                .original_url(article.getOriginalUrl())
+                .start_date(article.getStartDate())
+                .due_date(article.getDueDate())
+                .created_at(article.getCreatedAt())
+                .updated_at(article.getUpdatedAt())
+                .attachments(attachments.stream()
+                        .map(att -> ClubArticleDetailResponse.AttachmentResponse.builder()
+                                .file_id(att.getId())
+                                .file_url(att.getAttachmentUrl())
+                                .build())
+                        .collect(Collectors.toList()))
+                .vendors(ClubArticleDetailResponse.VendorResponse.builder()
+                        .vendor_id(article.getVendor().getVendorId())
+                        .vendor_name(article.getVendor().getVendorName())
+                        .vendor_initial(article.getVendor().getVendorInitial())
+                        .build())
+                .build();
+    }
 
     @Transactional(readOnly = true)
     public ClubArticleListResponse getClubArticles(Integer page, Integer size, Integer vendorId) {

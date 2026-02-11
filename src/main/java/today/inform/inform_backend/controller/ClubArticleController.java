@@ -1,11 +1,9 @@
 package today.inform.inform_backend.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import today.inform.inform_backend.common.response.ApiResponse;
+import today.inform.inform_backend.dto.ClubArticleDetailResponse;
 import today.inform.inform_backend.dto.ClubArticleListResponse;
 import today.inform.inform_backend.service.ClubArticleService;
 
@@ -23,6 +21,12 @@ public class ClubArticleController {
             @RequestParam(required = false) Integer vendor_id
     ) {
         ClubArticleListResponse response = clubArticleService.getClubArticles(page, size, vendor_id);
+        return ApiResponse.success(response);
+    }
+
+    @GetMapping("/{articleId}")
+    public ApiResponse<ClubArticleDetailResponse> getClubArticleDetail(@PathVariable Integer articleId) {
+        ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(articleId);
         return ApiResponse.success(response);
     }
 }

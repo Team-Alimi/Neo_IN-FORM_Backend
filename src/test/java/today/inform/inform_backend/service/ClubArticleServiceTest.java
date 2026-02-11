@@ -77,4 +77,41 @@ class ClubArticleServiceTest {
         assertThat(response.getClub_articles().get(0).getVendors().getVendor_name()).isEqualTo("GDGOC");
         assertThat(response.getPage_info().getTotal_articles()).isEqualTo(1L);
     }
+
+    @Test
+    @DisplayName("동아리 공지사항 상세 내용을 조회한다.")
+    void getClubArticleDetail_Success() {
+        // given
+        Vendor vendor = Vendor.builder()
+                .vendorId(1)
+                .vendorName("GDGOC")
+                .vendorInitial("cl_gdgoc")
+                .build();
+
+        ClubArticle article = ClubArticle.builder()
+                .articleId(1)
+                .title("상세 제목")
+                .content("상세 내용")
+                .vendor(vendor)
+                .build();
+
+        given(clubArticleRepository.findByIdWithVendor(1)).willReturn(java.util.Optional.of(article));
+
+        Attachment attachment = Attachment.builder()
+                .id(10)
+                .attachmentUrl("https://image.com/detail.jpg")
+                .build();
+        given(attachmentRepository.findAllByArticleIdAndArticleType(1, VendorType.CLUB))
+                .willReturn(List.of(attachment));
+
+        // when
+        today.inform.inform_backend.dto.ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(1);
+
+        // then
+        assertThat(response.getTitle()).isEqualTo("상세 제목");
+        assertThat(response.getContent()).isEqualTo("상세 내용");
+        assertThat(response.getAttachments()).hasSize(1);
+        assertThat(response.getAttachments().get(0).getFile_url()).isEqualTo("https://image.com/detail.jpg");
+        assertThat(response.getVendors().getVendor_name()).isEqualTo("GDGOC");
+    }
 }
