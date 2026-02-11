@@ -52,6 +52,7 @@ public class SecurityConfig {
 
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll() // 로그인 관련 API는 허용
+                .requestMatchers("/api/v1/club_articles/**").permitAll() // 동아리 공지사항은 비로그인 허용
                 .requestMatchers("/api/v1/users/**").hasRole("USER") // 사용자 관련 API는 인증 필요
                 .requestMatchers("/api/v1/school_articles").hasRole("USER") // 목록 조회 허용
                 .requestMatchers("/api/v1/school_articles/**").hasRole("USER") // 상세 조회 등 하위 경로 허용

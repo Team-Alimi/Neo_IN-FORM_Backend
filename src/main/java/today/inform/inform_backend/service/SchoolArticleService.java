@@ -70,18 +70,34 @@ public class SchoolArticleService {
 
     @Transactional(readOnly = true)
     public SchoolArticleListResponse getSchoolArticles(Integer page, Integer size, Integer categoryId, String keyword) {
+        // 보안/최적화: 최대 페이지 사이즈 제한
+        int cappedSize = Math.min(size, 50);
+        
         LocalDate today = LocalDate.now();
         LocalDate upcomingLimit = today.plusDays(5);
         LocalDate endingSoonLimit = today.plusDays(5);
 
-        Pageable pageable = PageRequest.of(page - 1, size);
+        Pageable pageable = PageRequest.of(page - 1, cappedSize);
         Page<SchoolArticle> articlePage = schoolArticleRepository.findAllWithFiltersAndSorting(
                 categoryId, keyword, today, upcomingLimit, endingSoonLimit, pageable
         );
 
         List<SchoolArticle> articles = articlePage.getContent();
         
-        // 벤더 정보 일괄 조회 (In-clause 활용으로 N+1 방지)
+        // 최적화: 게시글이 없으면 벤더 조회 생략
+        if (articles.isEmpty()) {
+            return SchoolArticleListResponse.builder()
+                    .page_info(SchoolArticleListResponse.PageInfo.builder()
+                            .current_page(page)
+                            .total_pages(articlePage.getTotalPages())
+                            .total_articles(articlePage.getTotalElements())
+                            .has_next(articlePage.hasNext())
+                            .build())
+                    .school_articles(List.of())
+                    .build();
+        }
+
+        // 벤더 정보 일괄 조회
         List<SchoolArticleVendor> savs = schoolArticleVendorRepository.findAllByArticleIn(articles);
         Map<Integer, List<SchoolArticleVendor>> vendorMap = savs.stream()
                 .collect(Collectors.groupingBy(sav -> sav.getArticle().getArticleId()));
