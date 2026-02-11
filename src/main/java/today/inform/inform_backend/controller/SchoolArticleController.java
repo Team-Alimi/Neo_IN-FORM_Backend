@@ -15,13 +15,13 @@ public class SchoolArticleController {
     private final SchoolArticleService schoolArticleService;
 
     @GetMapping
-    public SchoolArticleListResponse getSchoolArticles(
+    public ApiResponse<SchoolArticleListResponse> getSchoolArticles(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(required = false) Integer category_id,
             @RequestParam(required = false) String keyword
     ) {
-        return schoolArticleService.getSchoolArticles(page, size, category_id, keyword);
+        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, category_id, keyword));
     }
 
     @GetMapping("/{articleId}")
