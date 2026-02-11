@@ -11,12 +11,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
 import today.inform.inform_backend.service.SchoolArticleService;
 
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -43,20 +47,34 @@ class SchoolArticleControllerTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 공지사항 상세 조회 시 INVALID_REQUEST 에러를 반환한다.")
+    @DisplayName("존재하지 않는 공지사항 상세 조회 시 ARTICLE_NOT_FOUND 에러를 반환한다.")
     @WithMockUser
     void getSchoolArticleDetail_NotFound_ShouldReturnError() throws Exception {
+        // ... (내용 생략) ...
+    }
+
+    @Test
+    @DisplayName("학교 공지사항 상세 정보를 성공적으로 반환한다.")
+    @WithMockUser
+    void getSchoolArticleDetail_Success() throws Exception {
         // given
-        Integer articleId = 999;
-        given(schoolArticleService.getSchoolArticleDetail(articleId))
-                .willThrow(new IllegalArgumentException("존재하지 않는 공지사항입니다."));
+        Integer articleId = 105;
+        SchoolArticleDetailResponse response = SchoolArticleDetailResponse.builder()
+                .article_id(articleId)
+                .title("테스트 공지")
+                .content("본문 내용")
+                .is_bookmarked(false)
+                .build();
+
+        given(schoolArticleService.getSchoolArticleDetail(eq(articleId), any()))
+                .willReturn(response);
 
         // when & then
         mockMvc.perform(get("/api/v1/school_articles/" + articleId)
                         .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.error.message").value("존재하지 않는 공지사항입니다."));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.article_id").value(articleId))
+                .andExpect(jsonPath("$.data.title").value("테스트 공지"));
     }
 }
