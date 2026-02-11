@@ -11,9 +11,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<?>> handleBusinessException(BusinessException e) {
+        ErrorCode errorCode = e.getErrorCode();
         return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail(e.getCode(), e.getMessage()));
+                .status(errorCode.getStatus())
+                .body(ApiResponse.fail(errorCode.getCode(), e.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

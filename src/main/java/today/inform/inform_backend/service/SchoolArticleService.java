@@ -6,6 +6,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
 import today.inform.inform_backend.dto.SchoolArticleListResponse;
 import today.inform.inform_backend.dto.SchoolArticleResponse;
@@ -32,7 +34,7 @@ public class SchoolArticleService {
     @Transactional(readOnly = true)
     public SchoolArticleDetailResponse getSchoolArticleDetail(Integer articleId) {
         SchoolArticle article = schoolArticleRepository.findById(articleId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 공지사항입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
         List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticle(article);
         var attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);

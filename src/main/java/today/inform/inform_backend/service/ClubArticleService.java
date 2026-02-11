@@ -6,6 +6,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.ClubArticleDetailResponse;
 import today.inform.inform_backend.dto.ClubArticleListResponse;
 import today.inform.inform_backend.dto.ClubArticleResponse;
@@ -29,7 +31,7 @@ public class ClubArticleService {
     @Transactional(readOnly = true)
     public ClubArticleDetailResponse getClubArticleDetail(Integer articleId) {
         ClubArticle article = clubArticleRepository.findByIdWithVendor(articleId)
-                .orElseThrow(() -> new today.inform.inform_backend.common.exception.BusinessException("ARTICLE_NOT_FOUND", "존재하지 않는 동아리 공지사항입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
         List<Attachment> attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.CLUB);
 
