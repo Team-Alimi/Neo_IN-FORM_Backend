@@ -79,6 +79,41 @@ public class SchoolArticleService {
     }
 
     @Transactional(readOnly = true)
+    public List<SchoolArticleResponse> getHotSchoolArticles(Integer userId) {
+        LocalDate todayDate = LocalDate.now();
+        List<SchoolArticle> articles = schoolArticleRepository.findHotArticles(todayDate, 10);
+
+        if (articles.isEmpty()) {
+            return List.of();
+        }
+
+        List<Integer> articleIds = articles.stream()
+                .map(SchoolArticle::getArticleId)
+                .collect(Collectors.toList());
+
+        // 북마크 여부 일괄 확인
+        java.util.Set<Integer> bookmarkedIdsResult = new java.util.HashSet<>();
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                bookmarkedIdsResult = bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(user, VendorType.SCHOOL, articleIds)
+                        .stream()
+                        .map(today.inform.inform_backend.entity.Bookmark::getArticleId)
+                        .collect(java.util.stream.Collectors.toSet());
+            }
+        }
+        final java.util.Set<Integer> finalBookmarkedIds = bookmarkedIdsResult;
+
+        List<SchoolArticleVendor> savs = schoolArticleVendorRepository.findAllByArticleIn(articles);
+        Map<Integer, List<SchoolArticleVendor>> vendorMap = savs.stream()
+                .collect(Collectors.groupingBy(sav -> sav.getArticle().getArticleId()));
+
+        return articles.stream()
+                .map(article -> convertToResponse(article, vendorMap.get(article.getArticleId()), todayDate, finalBookmarkedIds.contains(article.getArticleId())))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public SchoolArticleListResponse getSchoolArticlesByIds(List<Integer> articleIds, Integer page, Integer size, Integer userId) {
         int cappedSize = Math.min(size, 50);
         LocalDate todayDate = LocalDate.now();

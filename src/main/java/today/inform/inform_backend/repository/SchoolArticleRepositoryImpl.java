@@ -19,11 +19,35 @@ import java.util.List;
 import static today.inform.inform_backend.entity.QCategory.category;
 import static today.inform.inform_backend.entity.QSchoolArticle.schoolArticle;
 
+import today.inform.inform_backend.entity.VendorType;
+import static today.inform.inform_backend.entity.QBookmark.bookmark;
+
 @Repository
 @RequiredArgsConstructor
 public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCustom {
 
     private final JPAQueryFactory queryFactory;
+
+    @Override
+    public List<SchoolArticle> findHotArticles(LocalDate today, int limit) {
+        return queryFactory
+                .selectFrom(schoolArticle)
+                .leftJoin(bookmark).on(
+                        bookmark.articleId.eq(schoolArticle.articleId)
+                        .and(bookmark.articleType.eq(VendorType.SCHOOL))
+                )
+                .leftJoin(schoolArticle.category, category).fetchJoin()
+                .where(
+                        schoolArticle.dueDate.goe(today).or(schoolArticle.dueDate.isNull()) // 마감되지 않은 글
+                )
+                .groupBy(schoolArticle.articleId)
+                .orderBy(
+                        bookmark.count().desc(),
+                        schoolArticle.createdAt.desc()
+                )
+                .limit(limit)
+                .fetch();
+    }
 
     @Override
     public Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(

@@ -24,4 +24,6 @@ public interface SchoolArticleRepositoryCustom {
             LocalDate endingSoonLimit,
             Pageable pageable
     );
+
+    List<SchoolArticle> findHotArticles(LocalDate today, int limit);
 }
