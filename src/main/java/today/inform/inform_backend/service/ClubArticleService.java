@@ -56,6 +56,7 @@ public class ClubArticleService {
                         .vendorId(article.getVendor().getVendorId())
                         .vendorName(article.getVendor().getVendorName())
                         .vendorInitial(article.getVendor().getVendorInitial())
+                        .vendorType(article.getVendor().getVendorType().name())
                         .build())
                 .build();
     }
@@ -104,8 +105,10 @@ public class ClubArticleService {
                         .updatedAt(article.getUpdatedAt())
                         .attachmentUrl(firstAttachmentMap.get(article.getArticleId()))
                         .vendors(ClubArticleResponse.VendorResponse.builder()
+                                .vendorId(article.getVendor().getVendorId())
                                 .vendorName(article.getVendor().getVendorName())
                                 .vendorInitial(article.getVendor().getVendorInitial())
+                                .vendorType(article.getVendor().getVendorType().name())
                                 .build())
                         .build())
                 .collect(Collectors.toList());

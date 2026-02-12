@@ -33,5 +33,6 @@ public class ClubArticleDetailResponse {
         private Integer vendorId;
         private String vendorName;
         private String vendorInitial;
+        private String vendorType;
     }
 }
