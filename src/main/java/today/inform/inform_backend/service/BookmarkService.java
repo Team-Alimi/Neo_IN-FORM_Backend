@@ -39,13 +39,13 @@ public class BookmarkService {
 
         if (articleIds.isEmpty()) {
             return today.inform.inform_backend.dto.SchoolArticleListResponse.builder()
-                    .page_info(today.inform.inform_backend.dto.SchoolArticleListResponse.PageInfo.builder()
-                            .current_page(page)
-                            .total_pages(0)
-                            .total_articles(0L)
-                            .has_next(false)
+                    .pageInfo(today.inform.inform_backend.dto.SchoolArticleListResponse.PageInfo.builder()
+                            .currentPage(page)
+                            .totalPages(0)
+                            .totalArticles(0L)
+                            .hasNext(false)
                             .build())
-                    .school_articles(List.of())
+                    .schoolArticles(List.of())
                     .build();
         }
 

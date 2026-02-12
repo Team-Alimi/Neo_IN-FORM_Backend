@@ -21,10 +21,10 @@ public class BookmarkController {
             @AuthenticationPrincipal Integer userId,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) Integer category_id,
+            @RequestParam(name = "category_id", required = false) Integer categoryId,
             @RequestParam(required = false) String keyword
     ) {
-        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, category_id, keyword, page, size));
+        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, categoryId, keyword, page, size));
     }
 
     @DeleteMapping("/school/all")
@@ -40,7 +40,7 @@ public class BookmarkController {
             @AuthenticationPrincipal Integer userId,
             @RequestBody BookmarkRequest request
     ) {
-        boolean isBookmarked = bookmarkService.toggleBookmark(userId, request.getArticle_type(), request.getArticle_id());
+        boolean isBookmarked = bookmarkService.toggleBookmark(userId, request.getArticleType(), request.getArticleId());
         return ApiResponse.success(isBookmarked);
     }
 }

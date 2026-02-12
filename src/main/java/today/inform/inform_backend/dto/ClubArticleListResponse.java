@@ -7,14 +7,14 @@ import java.util.List;
 @Getter
 @Builder
 public class ClubArticleListResponse {
-    private PageInfo page_info;
-    private List<ClubArticleResponse> club_articles;
+    private PageInfo pageInfo;
+    private List<ClubArticleResponse> clubArticles;
 
     @Getter
     @Builder
     public static class PageInfo {
-        private Integer current_page;
-        private Integer total_pages;
-        private Long total_articles;
+        private Integer currentPage;
+        private Integer totalPages;
+        private Long totalArticles;
     }
 }

@@ -1,7 +1,6 @@
 package today.inform.inform_backend.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import today.inform.inform_backend.common.response.ApiResponse;
@@ -23,11 +22,11 @@ public class SchoolArticleController {
     public ApiResponse<SchoolArticleListResponse> getSchoolArticles(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) Integer category_id,
+            @RequestParam(name = "category_id", required = false) Integer categoryId,
             @RequestParam(required = false) String keyword,
             @AuthenticationPrincipal Integer userId
     ) {
-        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, category_id, keyword, userId));
+        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryId, keyword, userId));
     }
 
     @GetMapping("/hot")

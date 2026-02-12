@@ -74,9 +74,9 @@ class ClubArticleServiceTest {
         ClubArticleListResponse response = clubArticleService.getClubArticles(1, 4, null);
 
         // then
-        assertThat(response.getClub_articles()).hasSize(1);
-        assertThat(response.getClub_articles().get(0).getTitle()).isEqualTo("GOAT 행사");
-        assertThat(response.getClub_articles().get(0).getAttachment_url()).isEqualTo("https://image.com/1.jpg");
+        assertThat(response.getClubArticles()).hasSize(1);
+        assertThat(response.getClubArticles().get(0).getTitle()).isEqualTo("GOAT 행사");
+        assertThat(response.getClubArticles().get(0).getAttachmentUrl()).isEqualTo("https://image.com/1.jpg");
     }
 
     @Test
@@ -112,7 +112,7 @@ class ClubArticleServiceTest {
         assertThat(response.getTitle()).isEqualTo("상세 제목");
         assertThat(response.getContent()).isEqualTo("상세 내용");
         assertThat(response.getAttachments()).hasSize(1);
-        assertThat(response.getAttachments().get(0).getFile_url()).isEqualTo("https://image.com/detail.jpg");
-        assertThat(response.getVendors().getVendor_name()).isEqualTo("GDGOC");
+        assertThat(response.getAttachments().get(0).getFileUrl()).isEqualTo("https://image.com/detail.jpg");
+        assertThat(response.getVendors().getVendorName()).isEqualTo("GDGOC");
     }
 }

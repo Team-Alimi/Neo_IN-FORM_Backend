@@ -71,7 +71,7 @@ class SchoolArticleServiceTest {
         SchoolArticleDetailResponse result = schoolArticleService.getSchoolArticleDetail(articleId, userId);
 
         // then
-        assertThat(result.getArticle_id()).isEqualTo(articleId);
+        assertThat(result.getArticleId()).isEqualTo(articleId);
         assertThat(result.getTitle()).isEqualTo("테스트 공지");
         assertThat(result.getStatus()).isEqualTo("UPCOMING");
     }
@@ -125,8 +125,8 @@ class SchoolArticleServiceTest {
         SchoolArticleListResponse response = schoolArticleService.getSchoolArticles(1, 10, null, null, userId);
 
         // then
-        List<SchoolArticleResponse> articles = response.getSchool_articles();
+        List<SchoolArticleResponse> articles = response.getSchoolArticles();
         assertThat(articles.get(0).getStatus()).isEqualTo("OPEN");
-        assertThat(articles.get(0).getIs_bookmarked()).isFalse();
+        assertThat(articles.get(0).getIsBookmarked()).isFalse();
     }
 }
