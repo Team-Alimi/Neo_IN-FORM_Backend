@@ -20,7 +20,9 @@ public class ClubArticleResponse {
     @Getter
     @Builder
     public static class VendorResponse {
+        private Integer vendorId;
         private String vendorName;
         private String vendorInitial;
+        private String vendorType;
     }
 }
