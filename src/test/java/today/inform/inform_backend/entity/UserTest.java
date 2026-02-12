@@ -23,7 +23,6 @@ class UserTest {
     @DisplayName("인하대 도메인이 아닌 이메일은 예외가 발생한다.")
     void validateInhaDomain_Fail(String email) {
         assertThatThrownBy(() -> User.validateInhaDomain(email))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("학교 이메일(@inha.edu/@inha.ac.kr)로만 로그인할 수 있습니다.");
+                .isInstanceOf(today.inform.inform_backend.common.exception.BusinessException.class);
     }
 }

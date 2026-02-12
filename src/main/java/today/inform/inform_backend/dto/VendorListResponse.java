@@ -9,4 +9,5 @@ public class VendorListResponse {
     private Integer vendorId;
     private String vendorName;
     private String vendorInitial;
+    private String vendorType;
 }
