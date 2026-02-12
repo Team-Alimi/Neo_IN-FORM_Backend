@@ -20,9 +20,19 @@ public class BookmarkController {
     public ApiResponse<SchoolArticleListResponse> getBookmarkedSchoolArticles(
             @AuthenticationPrincipal Integer userId,
             @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size
+            @RequestParam(defaultValue = "10") Integer size,
+            @RequestParam(required = false) Integer category_id,
+            @RequestParam(required = false) String keyword
     ) {
-        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, page, size));
+        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, category_id, keyword, page, size));
+    }
+
+    @DeleteMapping("/school/all")
+    public ApiResponse<Void> deleteAllBookmarkedSchoolArticles(
+            @AuthenticationPrincipal Integer userId
+    ) {
+        bookmarkService.deleteAllBookmarkedSchoolArticles(userId);
+        return ApiResponse.success(null);
     }
 
     @PostMapping
