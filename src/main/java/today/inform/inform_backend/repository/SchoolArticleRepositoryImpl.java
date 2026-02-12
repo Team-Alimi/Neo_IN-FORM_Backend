@@ -126,6 +126,67 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         return new PageImpl<>(content, pageable, total != null ? total : 0L);
     }
 
+    @Override
+    public List<SchoolArticle> findCalendarArticles(List<String> categoryNames, Integer userId, LocalDate startOfMonth, LocalDate endOfMonth) {
+        return queryFactory
+                .selectFrom(schoolArticle)
+                .leftJoin(schoolArticle.category, category).fetchJoin()
+                .where(
+                        calendarCategoryFilter(categoryNames, userId),
+                        schoolArticle.startDate.loe(endOfMonth),
+                        schoolArticle.dueDate.goe(startOfMonth)
+                )
+                .fetch();
+    }
+
+    @Override
+    public Page<SchoolArticle> findDailyCalendarArticles(LocalDate selectedDate, List<String> categoryNames, Integer userId, Pageable pageable) {
+        List<SchoolArticle> content = queryFactory
+                .selectFrom(schoolArticle)
+                .leftJoin(schoolArticle.category, category).fetchJoin()
+                .where(
+                        calendarCategoryFilter(categoryNames, userId),
+                        schoolArticle.startDate.loe(selectedDate),
+                        schoolArticle.dueDate.goe(selectedDate)
+                )
+                .orderBy(schoolArticle.createdAt.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(schoolArticle.count())
+                .from(schoolArticle)
+                .where(
+                        calendarCategoryFilter(categoryNames, userId),
+                        schoolArticle.startDate.loe(selectedDate),
+                        schoolArticle.dueDate.goe(selectedDate)
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+    private BooleanExpression calendarCategoryFilter(List<String> categoryNames, Integer userId) {
+        // MY 필터가 포함되어 있으면 다른 카테고리는 무시
+        if (categoryNames != null && categoryNames.contains("MY")) {
+            if (userId == null) return schoolArticle.articleId.eq(-1); // 로그인 안 했으면 결과 없음
+            return schoolArticle.articleId.in(
+                    queryFactory.select(bookmark.articleId)
+                            .from(bookmark)
+                            .where(bookmark.user.userId.eq(userId),
+                                   bookmark.articleType.eq(VendorType.SCHOOL))
+            );
+        }
+
+        // 일반 카테고리 필터링
+        if (categoryNames == null || categoryNames.isEmpty()) {
+            return category.categoryName.eq("대회•공모전");
+        }
+
+        return category.categoryName.in(categoryNames);
+    }
+
     // --- 조건절 메서드 (재사용 및 가독성 향상) ---
 
     private BooleanExpression categoryEq(Integer categoryId) {
