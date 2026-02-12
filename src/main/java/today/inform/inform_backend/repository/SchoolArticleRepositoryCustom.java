@@ -28,4 +28,18 @@ public interface SchoolArticleRepositoryCustom {
     );
 
     List<SchoolArticle> findHotArticles(LocalDate today, int limit);
+
+    List<SchoolArticle> findCalendarArticles(
+            List<String> categoryNames,
+            Integer userId,
+            LocalDate startOfMonth,
+            LocalDate endOfMonth
+    );
+
+    Page<SchoolArticle> findDailyCalendarArticles(
+            LocalDate selectedDate,
+            List<String> categoryNames,
+            Integer userId,
+            Pageable pageable
+    );
 }
