@@ -31,26 +31,6 @@ public class ClubArticleRepositoryImpl implements ClubArticleRepositoryCustom {
     }
 
     @Override
-    public Page<ClubArticle> findAllByIds(List<Integer> articleIds, Pageable pageable) {
-        List<ClubArticle> content = queryFactory
-                .selectFrom(clubArticle)
-                .leftJoin(clubArticle.vendor, vendor).fetchJoin()
-                .where(clubArticle.articleId.in(articleIds))
-                .orderBy(clubArticle.createdAt.desc())
-                .offset(pageable.getOffset())
-                .limit(pageable.getPageSize())
-                .fetch();
-
-        Long total = queryFactory
-                .select(clubArticle.count())
-                .from(clubArticle)
-                .where(clubArticle.articleId.in(articleIds))
-                .fetchOne();
-
-        return new PageImpl<>(content, pageable, total != null ? total : 0L);
-    }
-
-    @Override
     public Page<ClubArticle> findAllWithFilters(Integer vendorId, Pageable pageable) {
         List<ClubArticle> content = queryFactory
                 .selectFrom(clubArticle)

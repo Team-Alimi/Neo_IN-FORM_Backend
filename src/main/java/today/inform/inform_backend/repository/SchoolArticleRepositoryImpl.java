@@ -19,6 +19,9 @@ import java.util.List;
 import static today.inform.inform_backend.entity.QCategory.category;
 import static today.inform.inform_backend.entity.QSchoolArticle.schoolArticle;
 
+import today.inform.inform_backend.entity.VendorType;
+import static today.inform.inform_backend.entity.QBookmark.bookmark;
+
 @Repository
 @RequiredArgsConstructor
 public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCustom {
@@ -26,8 +29,31 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     private final JPAQueryFactory queryFactory;
 
     @Override
+    public List<SchoolArticle> findHotArticles(LocalDate today, int limit) {
+        return queryFactory
+                .selectFrom(schoolArticle)
+                .leftJoin(bookmark).on(
+                        bookmark.articleId.eq(schoolArticle.articleId)
+                        .and(bookmark.articleType.eq(VendorType.SCHOOL))
+                )
+                .leftJoin(schoolArticle.category, category).fetchJoin()
+                .where(
+                        schoolArticle.dueDate.goe(today).or(schoolArticle.dueDate.isNull()) // 마감되지 않은 글
+                )
+                .groupBy(schoolArticle.articleId)
+                .orderBy(
+                        bookmark.count().desc(),
+                        schoolArticle.createdAt.desc()
+                )
+                .limit(limit)
+                .fetch();
+    }
+
+    @Override
     public Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
             List<Integer> articleIds,
+            Integer categoryId,
+            String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
             LocalDate endingSoonLimit,
@@ -36,7 +62,11 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         List<SchoolArticle> content = queryFactory
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin()
-                .where(schoolArticle.articleId.in(articleIds))
+                .where(
+                        schoolArticle.articleId.in(articleIds),
+                        categoryEq(categoryId),
+                        titleContains(keyword)
+                )
                 .orderBy(
                         createStatusOrder(today, upcomingLimit, endingSoonLimit),
                         schoolArticle.createdAt.desc()
@@ -48,7 +78,11 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         Long total = queryFactory
                 .select(schoolArticle.count())
                 .from(schoolArticle)
-                .where(schoolArticle.articleId.in(articleIds))
+                .where(
+                        schoolArticle.articleId.in(articleIds),
+                        categoryEq(categoryId),
+                        titleContains(keyword)
+                )
                 .fetchOne();
 
         return new PageImpl<>(content, pageable, total != null ? total : 0L);

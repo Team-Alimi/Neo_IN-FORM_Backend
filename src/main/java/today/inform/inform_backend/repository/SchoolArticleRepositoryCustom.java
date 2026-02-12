@@ -19,9 +19,13 @@ public interface SchoolArticleRepositoryCustom {
 
     Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
             List<Integer> articleIds,
+            Integer categoryId,
+            String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
             LocalDate endingSoonLimit,
             Pageable pageable
     );
+
+    List<SchoolArticle> findHotArticles(LocalDate today, int limit);
 }

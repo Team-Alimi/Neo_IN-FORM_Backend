@@ -9,29 +9,30 @@ import java.util.List;
 @Getter
 @Builder
 public class SchoolArticleResponse {
-    private Integer article_id;
+    private Integer articleId;
     private String title;
-    private LocalDate start_date;
-    private LocalDate due_date;
+    private LocalDate startDate;
+    private LocalDate dueDate;
     private String status;
-    private LocalDateTime created_at;
-    private LocalDateTime updated_at;
-    private Boolean is_bookmarked;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Boolean isBookmarked;
+    private Long bookmarkCount;
     private List<VendorResponse> vendors;
     private CategoryResponse categories;
 
     @Getter
     @Builder
     public static class VendorResponse {
-        private String vendor_name;
-        private String vendor_initial;
-        private String vendor_type;
+        private String vendorName;
+        private String vendorInitial;
+        private String vendorType;
     }
 
     @Getter
     @Builder
     public static class CategoryResponse {
-        private Integer category_id;
-        private String category_name;
+        private Integer categoryId;
+        private String categoryName;
     }
 }

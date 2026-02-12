@@ -47,23 +47,16 @@ class SchoolArticleControllerTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 공지사항 상세 조회 시 ARTICLE_NOT_FOUND 에러를 반환한다.")
-    @WithMockUser
-    void getSchoolArticleDetail_NotFound_ShouldReturnError() throws Exception {
-        // ... (내용 생략) ...
-    }
-
-    @Test
     @DisplayName("학교 공지사항 상세 정보를 성공적으로 반환한다.")
     @WithMockUser
     void getSchoolArticleDetail_Success() throws Exception {
         // given
         Integer articleId = 105;
         SchoolArticleDetailResponse response = SchoolArticleDetailResponse.builder()
-                .article_id(articleId)
+                .articleId(articleId)
                 .title("테스트 공지")
                 .content("본문 내용")
-                .is_bookmarked(false)
+                .isBookmarked(false)
                 .build();
 
         given(schoolArticleService.getSchoolArticleDetail(eq(articleId), any()))

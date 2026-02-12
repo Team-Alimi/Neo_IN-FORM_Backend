@@ -7,15 +7,15 @@ import java.util.List;
 @Getter
 @Builder
 public class SchoolArticleListResponse {
-    private PageInfo page_info;
-    private List<SchoolArticleResponse> school_articles;
+    private PageInfo pageInfo;
+    private List<SchoolArticleResponse> schoolArticles;
 
     @Getter
     @Builder
     public static class PageInfo {
-        private Integer current_page;
-        private Integer total_pages;
-        private Long total_articles;
-        private Boolean has_next;
+        private Integer currentPage;
+        private Integer totalPages;
+        private Long totalArticles;
+        private Boolean hasNext;
     }
 }

@@ -41,34 +41,48 @@ class BookmarkServiceTest {
         Bookmark bookmark = Bookmark.builder().articleId(105).articleType(VendorType.SCHOOL).build();
 
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(bookmarkRepository.findAllByUserAndArticleType(user, VendorType.SCHOOL)).willReturn(List.of(bookmark));
+        given(bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.SCHOOL)).willReturn(List.of(bookmark));
         
         SchoolArticleListResponse expectedResponse = SchoolArticleListResponse.builder()
-                .school_articles(List.of()) // 내용은 Service에서 채워짐
+                .schoolArticles(List.of()) // 내용은 Service에서 채워짐
                 .build();
-        given(schoolArticleService.getSchoolArticlesByIds(any(), any(), any(), eq(userId))).willReturn(expectedResponse);
+        given(schoolArticleService.getSchoolArticlesByIds(any(), any(), any(), any(), any(), eq(userId))).willReturn(expectedResponse);
 
         // when
-        SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, 1, 10);
+        SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, null, null, 1, 10);
 
         // then
         assertThat(response).isNotNull();
     }
 
     @Test
-    @DisplayName("북마크한 글이 없으면 빈 목록을 반환한다.")
-    void getBookmarkedSchoolArticles_Empty() {
+    @DisplayName("내가 북마크한 모든 학교 공지사항을 삭제한다.")
+    void deleteAllBookmarkedSchoolArticles_Success() {
         // given
         Integer userId = 1;
         User user = User.builder().userId(userId).build();
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(bookmarkRepository.findAllByUserAndArticleType(user, VendorType.SCHOOL)).willReturn(List.of());
 
         // when
-        SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, 1, 10);
+        bookmarkService.deleteAllBookmarkedSchoolArticles(userId);
 
         // then
-        assertThat(response.getSchool_articles()).isEmpty();
-        assertThat(response.getPage_info().getTotal_articles()).isEqualTo(0L);
+        org.mockito.Mockito.verify(bookmarkRepository, org.mockito.Mockito.times(1))
+                .deleteAllByUserAndArticleType(user, VendorType.SCHOOL);
+    }
+
+    @Test
+    @DisplayName("학교 공지가 아닌 글을 북마크하려고 하면 예외가 발생한다.")
+    void toggleBookmark_NotSchool_Fail() {
+        // given
+        Integer userId = 1;
+        User user = User.builder().userId(userId).build();
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+
+        // when & then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookmarkService.toggleBookmark(userId, VendorType.CLUB, 100))
+                .isInstanceOf(today.inform.inform_backend.common.exception.BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(today.inform.inform_backend.common.exception.ErrorCode.INVALID_INPUT_VALUE);
     }
 }

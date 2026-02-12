@@ -7,6 +7,6 @@ import today.inform.inform_backend.entity.VendorType;
 @Getter
 @NoArgsConstructor
 public class BookmarkRequest {
-    private VendorType article_type;
-    private Integer article_id;
+    private VendorType articleType;
+    private Integer articleId;
 }

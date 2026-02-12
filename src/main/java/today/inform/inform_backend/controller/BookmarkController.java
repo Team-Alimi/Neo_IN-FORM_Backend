@@ -20,18 +20,19 @@ public class BookmarkController {
     public ApiResponse<SchoolArticleListResponse> getBookmarkedSchoolArticles(
             @AuthenticationPrincipal Integer userId,
             @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size
+            @RequestParam(defaultValue = "10") Integer size,
+            @RequestParam(name = "category_id", required = false) Integer categoryId,
+            @RequestParam(required = false) String keyword
     ) {
-        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, page, size));
+        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, categoryId, keyword, page, size));
     }
 
-    @GetMapping("/club")
-    public ApiResponse<ClubArticleListResponse> getBookmarkedClubArticles(
-            @AuthenticationPrincipal Integer userId,
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size
+    @DeleteMapping("/school/all")
+    public ApiResponse<Void> deleteAllBookmarkedSchoolArticles(
+            @AuthenticationPrincipal Integer userId
     ) {
-        return ApiResponse.success(bookmarkService.getBookmarkedClubArticles(userId, page, size));
+        bookmarkService.deleteAllBookmarkedSchoolArticles(userId);
+        return ApiResponse.success(null);
     }
 
     @PostMapping
@@ -39,7 +40,7 @@ public class BookmarkController {
             @AuthenticationPrincipal Integer userId,
             @RequestBody BookmarkRequest request
     ) {
-        boolean isBookmarked = bookmarkService.toggleBookmark(userId, request.getArticle_type(), request.getArticle_id());
+        boolean isBookmarked = bookmarkService.toggleBookmark(userId, request.getArticleType(), request.getArticleId());
         return ApiResponse.success(isBookmarked);
     }
 }

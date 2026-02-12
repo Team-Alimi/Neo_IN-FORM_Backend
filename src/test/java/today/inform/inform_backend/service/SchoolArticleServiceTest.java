@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
@@ -62,6 +62,7 @@ class SchoolArticleServiceTest {
         given(schoolArticleRepository.findById(articleId)).willReturn(Optional.of(article));
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
         given(bookmarkRepository.existsByUserAndArticleTypeAndArticleId(any(), any(), any())).willReturn(false);
+        given(bookmarkRepository.countByArticleIdAndArticleType(any(), any())).willReturn(5L);
         given(schoolArticleVendorRepository.findAllByArticle(article)).willReturn(List.of());
         given(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL))
                 .willReturn(List.of());
@@ -70,9 +71,30 @@ class SchoolArticleServiceTest {
         SchoolArticleDetailResponse result = schoolArticleService.getSchoolArticleDetail(articleId, userId);
 
         // then
-        assertThat(result.getArticle_id()).isEqualTo(articleId);
+        assertThat(result.getArticleId()).isEqualTo(articleId);
         assertThat(result.getTitle()).isEqualTo("테스트 공지");
         assertThat(result.getStatus()).isEqualTo("UPCOMING");
+    }
+
+    @Test
+    @DisplayName("인기 게시물 목록을 성공적으로 조회한다.")
+    void getHotSchoolArticles_Success() {
+        // given
+        Integer userId = 1;
+        SchoolArticle article = SchoolArticle.builder().articleId(10).title("인기글").build();
+        given(schoolArticleRepository.findHotArticles(any(), eq(10))).willReturn(List.of(article));
+        
+        User user = User.builder().userId(userId).build();
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+        given(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(any(), any(), any())).willReturn(List.of());
+        given(schoolArticleVendorRepository.findAllByArticleIn(any())).willReturn(List.of());
+
+        // when
+        List<SchoolArticleResponse> result = schoolArticleService.getHotSchoolArticles(userId);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getTitle()).isEqualTo("인기글");
     }
 
     @Test
@@ -97,13 +119,14 @@ class SchoolArticleServiceTest {
         User user = User.builder().userId(userId).build();
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
         given(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(any(), any(), any())).willReturn(List.of());
+        given(bookmarkRepository.countByArticleIdsAndArticleType(any(), any())).willReturn(List.of());
 
         // when
         SchoolArticleListResponse response = schoolArticleService.getSchoolArticles(1, 10, null, null, userId);
 
         // then
-        List<SchoolArticleResponse> articles = response.getSchool_articles();
+        List<SchoolArticleResponse> articles = response.getSchoolArticles();
         assertThat(articles.get(0).getStatus()).isEqualTo("OPEN");
-        assertThat(articles.get(0).getIs_bookmarked()).isFalse();
+        assertThat(articles.get(0).getIsBookmarked()).isFalse();
     }
 }
