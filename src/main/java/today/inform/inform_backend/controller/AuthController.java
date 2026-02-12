@@ -20,7 +20,7 @@ public class AuthController {
 
     @PostMapping("/login/google")
     public ApiResponse<LoginResponse> loginWithGoogle(@RequestBody LoginRequest request) {
-        LoginResponse response = authService.login(SocialType.GOOGLE, request.getId_token());
+        LoginResponse response = authService.login(SocialType.GOOGLE, request.getIdToken());
         return ApiResponse.success(response);
     }
 }

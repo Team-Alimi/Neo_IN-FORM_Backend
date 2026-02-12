@@ -44,7 +44,7 @@ class BookmarkServiceTest {
         given(bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.SCHOOL)).willReturn(List.of(bookmark));
         
         SchoolArticleListResponse expectedResponse = SchoolArticleListResponse.builder()
-                .school_articles(List.of()) // 내용은 Service에서 채워짐
+                .schoolArticles(List.of()) // 내용은 Service에서 채워짐
                 .build();
         given(schoolArticleService.getSchoolArticlesByIds(any(), any(), any(), any(), any(), eq(userId))).willReturn(expectedResponse);
 
