@@ -50,14 +50,16 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("내 프로필 정보를 성공적으로 조회한다.")
-    void getMyProfile_Success() {
+    @DisplayName("내 프로필 정보를 성공적으로 조회한다. (학과 설정됨)")
+    void getMyProfile_WithMajor_Success() {
         // given
         Integer userId = 1;
+        Vendor major = Vendor.builder().vendorId(10).vendorName("컴퓨터공학과").vendorInitial("CSE").vendorType(today.inform.inform_backend.entity.VendorType.SCHOOL).build();
         User user = User.builder()
                 .userId(userId)
                 .email("test@inha.edu")
                 .name("홍길동")
+                .major(major)
                 .build();
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
 
@@ -68,6 +70,29 @@ class UserServiceTest {
         assertThat(result.getUserId()).isEqualTo(userId);
         assertThat(result.getEmail()).isEqualTo("test@inha.edu");
         assertThat(result.getName()).isEqualTo("홍길동");
+        assertThat(result.getMajor()).isNotNull();
+        assertThat(result.getMajor().getVendorName()).isEqualTo("컴퓨터공학과");
+        assertThat(result.getMajor().getVendorInitial()).isEqualTo("CSE");
+    }
+
+    @Test
+    @DisplayName("내 프로필 정보를 성공적으로 조회한다. (학과 미설정)")
+    void getMyProfile_NoMajor_Success() {
+        // given
+        Integer userId = 1;
+        User user = User.builder()
+                .userId(userId)
+                .email("test@inha.edu")
+                .name("홍길동")
+                .major(null)
+                .build();
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+
+        // when
+        today.inform.inform_backend.dto.LoginResponse.UserInfo result = userService.getMyProfile(userId);
+
+        // then
+        assertThat(result.getMajor()).isNull();
     }
 
     @Test

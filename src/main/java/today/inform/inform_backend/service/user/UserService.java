@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform_backend.common.exception.BusinessException;
 import today.inform.inform_backend.common.exception.ErrorCode;
+import today.inform.inform_backend.dto.VendorListResponse;
 import today.inform.inform_backend.entity.User;
 import today.inform.inform_backend.entity.Vendor;
 import today.inform.inform_backend.repository.UserRepository;
@@ -28,7 +29,12 @@ public class UserService {
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .name(user.getName())
-                .majorId(user.getMajor() != null ? user.getMajor().getVendorId() : null)
+                .major(user.getMajor() != null ? VendorListResponse.builder()
+                        .vendorId(user.getMajor().getVendorId())
+                        .vendorName(user.getMajor().getVendorName())
+                        .vendorInitial(user.getMajor().getVendorInitial())
+                        .vendorType(user.getMajor().getVendorType().name())
+                        .build() : null)
                 .build();
     }
 

@@ -17,6 +17,6 @@ public class LoginResponse {
         private final Integer userId;
         private final String email;
         private final String name;
-        private final Integer majorId;
+        private final VendorListResponse major;
     }
 }
