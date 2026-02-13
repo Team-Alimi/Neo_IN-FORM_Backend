@@ -11,6 +11,7 @@ import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.ClubArticleDetailResponse;
 import today.inform.inform_backend.dto.ClubArticleListResponse;
 import today.inform.inform_backend.dto.ClubArticleResponse;
+import today.inform.inform_backend.dto.VendorListResponse;
 import today.inform.inform_backend.entity.Attachment;
 import today.inform.inform_backend.entity.ClubArticle;
 import today.inform.inform_backend.entity.VendorType;
@@ -52,21 +53,21 @@ public class ClubArticleService {
                                 .fileUrl(att.getAttachmentUrl())
                                 .build())
                         .collect(Collectors.toList()))
-                .vendors(ClubArticleDetailResponse.VendorResponse.builder()
+                .vendors(List.of(VendorListResponse.builder()
                         .vendorId(article.getVendor().getVendorId())
                         .vendorName(article.getVendor().getVendorName())
                         .vendorInitial(article.getVendor().getVendorInitial())
                         .vendorType(article.getVendor().getVendorType().name())
-                        .build())
+                        .build()))
                 .build();
     }
 
     @Transactional(readOnly = true)
-    public ClubArticleListResponse getClubArticles(Integer page, Integer size, Integer vendorId) {
+    public ClubArticleListResponse getClubArticles(Integer page, Integer size, Integer vendorId, String keyword) {
         // 보안/최적화: 최대 페이지 사이즈 제한 (예: 50)
         int cappedSize = Math.min(size, 50);
         Pageable pageable = PageRequest.of(page - 1, cappedSize);
-        Page<ClubArticle> articlePage = clubArticleRepository.findAllWithFilters(vendorId, pageable);
+        Page<ClubArticle> articlePage = clubArticleRepository.findAllWithFilters(vendorId, keyword, pageable);
 
         List<ClubArticle> articles = articlePage.getContent();
         
@@ -104,12 +105,12 @@ public class ClubArticleService {
                         .createdAt(article.getCreatedAt())
                         .updatedAt(article.getUpdatedAt())
                         .attachmentUrl(firstAttachmentMap.get(article.getArticleId()))
-                        .vendors(ClubArticleResponse.VendorResponse.builder()
+                        .vendors(List.of(VendorListResponse.builder()
                                 .vendorId(article.getVendor().getVendorId())
                                 .vendorName(article.getVendor().getVendorName())
                                 .vendorInitial(article.getVendor().getVendorInitial())
                                 .vendorType(article.getVendor().getVendorType().name())
-                                .build())
+                                .build()))
                         .build())
                 .collect(Collectors.toList());
 

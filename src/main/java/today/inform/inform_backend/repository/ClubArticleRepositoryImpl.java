@@ -31,11 +31,14 @@ public class ClubArticleRepositoryImpl implements ClubArticleRepositoryCustom {
     }
 
     @Override
-    public Page<ClubArticle> findAllWithFilters(Integer vendorId, Pageable pageable) {
+    public Page<ClubArticle> findAllWithFilters(Integer vendorId, String keyword, Pageable pageable) {
         List<ClubArticle> content = queryFactory
                 .selectFrom(clubArticle)
                 .leftJoin(clubArticle.vendor, vendor).fetchJoin()
-                .where(vendorIdEq(vendorId))
+                .where(
+                        vendorIdEq(vendorId),
+                        titleContains(keyword)
+                )
                 .orderBy(clubArticle.createdAt.desc())
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
@@ -44,7 +47,10 @@ public class ClubArticleRepositoryImpl implements ClubArticleRepositoryCustom {
         Long total = queryFactory
                 .select(clubArticle.count())
                 .from(clubArticle)
-                .where(vendorIdEq(vendorId))
+                .where(
+                        vendorIdEq(vendorId),
+                        titleContains(keyword)
+                )
                 .fetchOne();
 
         return new PageImpl<>(content, pageable, total != null ? total : 0L);
@@ -52,5 +58,9 @@ public class ClubArticleRepositoryImpl implements ClubArticleRepositoryCustom {
 
     private BooleanExpression vendorIdEq(Integer vendorId) {
         return vendorId != null ? clubArticle.vendor.vendorId.eq(vendorId) : null;
+    }
+
+    private BooleanExpression titleContains(String keyword) {
+        return keyword != null ? clubArticle.title.contains(keyword) : null;
     }
 }

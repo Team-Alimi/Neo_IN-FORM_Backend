@@ -8,6 +8,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ClubArticleRepositoryCustom {
-    Page<ClubArticle> findAllWithFilters(Integer vendorId, Pageable pageable);
+    Page<ClubArticle> findAllWithFilters(Integer vendorId, String keyword, Pageable pageable);
     Optional<ClubArticle> findByIdWithVendor(Integer articleId);
 }
