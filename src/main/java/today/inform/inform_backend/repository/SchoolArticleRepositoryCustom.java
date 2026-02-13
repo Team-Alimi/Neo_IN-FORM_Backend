@@ -32,8 +32,8 @@ public interface SchoolArticleRepositoryCustom {
     List<SchoolArticle> findCalendarArticles(
             List<String> categoryNames,
             Integer userId,
-            LocalDate startOfMonth,
-            LocalDate endOfMonth
+            LocalDate viewStart,
+            LocalDate viewEnd
     );
 
     Page<SchoolArticle> findDailyCalendarArticles(
