@@ -57,7 +57,7 @@ class JwtFilterIntegrationTest {
         today.inform.inform_backend.entity.User user = userRepository.save(today.inform.inform_backend.entity.User.builder()
                 .email("test@inha.edu")
                 .name("테스터")
-                .major(major) // not null 제약이 있다면 major를 넣어줘야 할 수도 있음 (현재 nullable이지만 안정성을 위해)
+                .major(major)
                 .build());
 
         this.testUserId = user.getUserId();
@@ -77,7 +77,7 @@ class JwtFilterIntegrationTest {
         mockMvc.perform(patch("/api/v1/users/" + testUserId + "/major")
                         .header("Authorization", "Bearer " + accessToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"majorId\": " + testMajorId + "}"))
+                        .content("{\"major_id\": " + testMajorId + "}")) // snake_case 반영
                 .andDo(print())
                 .andExpect(status().isOk());
     }
@@ -88,13 +88,13 @@ class JwtFilterIntegrationTest {
         // when & then
         mockMvc.perform(patch("/api/v1/users/" + testUserId + "/major")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"majorId\": " + testMajorId + "}"))
+                        .content("{\"major_id\": " + testMajorId + "}"))
                 .andDo(print())
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("타인의 ID로 전공 변경을 시도하면 400 에러가 발생한다.")
+    @DisplayName("타인의 ID로 전공 변경을 시도하면 403 에러가 발생한다.")
     void updateMajor_OtherUser_Fail() throws Exception {
         // given
         String accessToken = jwtProvider.createAccessToken(testUserId, "test@inha.edu");
@@ -104,8 +104,8 @@ class JwtFilterIntegrationTest {
         mockMvc.perform(patch("/api/v1/users/" + otherUserId + "/major")
                         .header("Authorization", "Bearer " + accessToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"majorId\": " + testMajorId + "}"))
+                        .content("{\"major_id\": " + testMajorId + "}"))
                 .andDo(print())
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isForbidden()); // BusinessException(ErrorCode.FORBIDDEN) 반영
     }
 }
