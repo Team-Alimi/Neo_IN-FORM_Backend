@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform_backend.dto.CalendarDailyListResponse;
 import today.inform.inform_backend.dto.CalendarNoticeResponse;
+import today.inform.inform_backend.dto.VendorListResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
 import today.inform.inform_backend.entity.SchoolArticleVendor;
 import today.inform.inform_backend.repository.SchoolArticleRepository;
@@ -33,12 +34,13 @@ public class CalendarService {
     );
 
     @Transactional(readOnly = true)
-    public List<CalendarNoticeResponse> getMonthlyNotices(Integer year, Integer month, List<String> categories, Integer userId) {
-        LocalDate startOfMonth = LocalDate.of(year, month, 1);
-        LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
+    public List<CalendarNoticeResponse> getMonthlyNotices(LocalDate viewStart, LocalDate viewEnd, List<String> categories, Integer userId) {
+        if (viewStart.isAfter(viewEnd)) {
+            throw new IllegalArgumentException("view_start cannot be after view_end");
+        }
 
         List<String> mappedCategories = mapCategories(categories);
-        List<SchoolArticle> articles = schoolArticleRepository.findCalendarArticles(mappedCategories, userId, startOfMonth, endOfMonth);
+        List<SchoolArticle> articles = schoolArticleRepository.findCalendarArticles(mappedCategories, userId, viewStart, viewEnd);
 
         return articles.stream()
                 .map(article -> CalendarNoticeResponse.builder()
@@ -71,11 +73,15 @@ public class CalendarService {
         }
 
         List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticleIn(articlePage.getContent());
-        Map<Integer, String> vendorMap = vendors.stream()
-                .collect(Collectors.toMap(
-                        v -> v.getArticle().getArticleId(),
-                        v -> v.getVendor().getVendorName(),
-                        (v1, v2) -> v1 + ", " + v2 // 다중 벤더 시 쉼표로 연결
+        Map<Integer, List<VendorListResponse>> vendorMap = vendors.stream()
+                .collect(Collectors.groupingBy(
+                        (SchoolArticleVendor v) -> v.getArticle().getArticleId(),
+                        Collectors.mapping((SchoolArticleVendor v) -> VendorListResponse.builder()
+                                .vendorId(v.getVendor().getVendorId())
+                                .vendorName(v.getVendor().getVendorName())
+                                .vendorInitial(v.getVendor().getVendorInitial())
+                                .vendorType(v.getVendor().getVendorType().name())
+                                .build(), Collectors.toList())
                 ));
 
         List<CalendarDailyListResponse.NoticeResponse> notices = articlePage.getContent().stream()
@@ -83,7 +89,7 @@ public class CalendarService {
                         .articleId(article.getArticleId())
                         .title(article.getTitle())
                         .status(determineStatus(article, LocalDate.now()))
-                        .vendorName(vendorMap.getOrDefault(article.getArticleId(), "알 수 없음"))
+                        .vendors(vendorMap.getOrDefault(article.getArticleId(), List.of()))
                         .startDate(article.getStartDate())
                         .categoryName(article.getCategory() != null ? article.getCategory().getCategoryName() : null)
                         .build())
