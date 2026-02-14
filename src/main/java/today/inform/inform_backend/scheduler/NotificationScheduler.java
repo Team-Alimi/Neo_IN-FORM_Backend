@@ -13,6 +13,7 @@ import today.inform.inform_backend.repository.SchoolArticleRepository;
 import today.inform.inform_backend.service.NotificationService;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +25,7 @@ public class NotificationScheduler {
     private final SchoolArticleRepository schoolArticleRepository;
     private final BookmarkRepository bookmarkRepository;
     private final NotificationService notificationService;
+    private final today.inform.inform_backend.repository.NotificationRepository notificationRepository;
 
     /**
      * 매일 오전 9시에 마감 1일 전 공지사항 알림 생성
@@ -61,5 +63,22 @@ public class NotificationScheduler {
         
         log.info("Successfully processed reminders for {} articles. Total notifications created: {}", 
                 articlesDueTomorrow.size(), notificationsToCreate.size());
+    }
+
+    /**
+     * 매일 오전 4시에 30일이 지난 오래된 알림 삭제
+     */
+    @Scheduled(cron = "0 0 4 * * *")
+    @Transactional
+    public void cleanupOldNotifications() {
+        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+        log.info("Starting notification cleanup. Removing data created before: {}", thirtyDaysAgo);
+
+        try {
+            notificationRepository.deleteByCreatedAtBefore(thirtyDaysAgo);
+            log.info("Successfully cleaned up old notifications.");
+        } catch (Exception e) {
+            log.error("Failed to cleanup old notifications: {}", e.getMessage());
+        }
     }
 }
