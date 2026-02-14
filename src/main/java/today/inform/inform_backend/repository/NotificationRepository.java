@@ -3,6 +3,7 @@ package today.inform.inform_backend.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import today.inform.inform_backend.entity.Notification;
 import today.inform.inform_backend.entity.User;
+import today.inform.inform_backend.entity.VendorType;
 
 import java.time.LocalDateTime;
 import java.util.List;
