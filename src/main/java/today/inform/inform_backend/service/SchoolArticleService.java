@@ -38,12 +38,21 @@ public class SchoolArticleService {
         SchoolArticle article = schoolArticleRepository.findById(articleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
-        today.inform.inform_backend.entity.User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        boolean isBookmarked = false;
+        String content = article.getContent();
 
-        boolean isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+            isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
+        } else {
+            // 비로그인 사용자: 본문 마스킹 처리 (약 100자)
+            if (content != null && content.length() > 100) {
+                content = content.substring(0, 100) + "... (로그인 후 전체 내용을 확인하실 수 있습니다.)";
+            }
+        }
+
         long bookmarkCount = bookmarkRepository.countByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
-
         List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticle(article);
         var attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
         LocalDate todayDate = LocalDate.now();
@@ -51,7 +60,7 @@ public class SchoolArticleService {
         return SchoolArticleDetailResponse.builder()
                 .articleId(article.getArticleId())
                 .title(article.getTitle())
-                .content(article.getContent())
+                .content(content)
                 .startDate(article.getStartDate())
                 .dueDate(article.getDueDate())
                 .status(determineStatus(article, todayDate))
