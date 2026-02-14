@@ -18,6 +18,8 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Integer> {
 
     long countByArticleIdAndArticleType(Integer articleId, VendorType articleType);
 
+    List<Bookmark> findAllByArticleTypeAndArticleId(VendorType articleType, Integer articleId);
+
     @org.springframework.data.jpa.repository.Query("SELECT b.articleId, COUNT(b) FROM Bookmark b WHERE b.articleId IN :articleIds AND b.articleType = :articleType GROUP BY b.articleId")
     List<Object[]> countByArticleIdsAndArticleType(@org.springframework.data.repository.query.Param("articleIds") List<Integer> articleIds, @org.springframework.data.repository.query.Param("articleType") VendorType articleType);
 }
