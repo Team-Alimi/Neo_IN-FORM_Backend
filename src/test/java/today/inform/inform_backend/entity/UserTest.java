@@ -5,10 +5,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 class UserTest {
+
+    @Test
+    @DisplayName("유저 생성 시 알림 리스트가 빈 상태로 초기화된다.")
+    void user_NotificationList_Initialization() {
+        User user = User.builder()
+                .email("test@inha.edu")
+                .name("테스터")
+                .build();
+
+        assertThat(user.getNotifications()).isNotNull();
+        assertThat(user.getNotifications()).isEmpty();
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {"test@inha.edu", "test@inha.ac.kr"})

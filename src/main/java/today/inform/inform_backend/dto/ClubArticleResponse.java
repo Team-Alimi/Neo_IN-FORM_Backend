@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
@@ -15,14 +16,5 @@ public class ClubArticleResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String attachmentUrl;
-    private VendorResponse vendors;
-
-    @Getter
-    @Builder
-    public static class VendorResponse {
-        private Integer vendorId;
-        private String vendorName;
-        private String vendorInitial;
-        private String vendorType;
-    }
+    private List<VendorListResponse> vendors;
 }
