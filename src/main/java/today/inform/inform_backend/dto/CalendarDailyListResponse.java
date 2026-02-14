@@ -26,7 +26,7 @@ public class CalendarDailyListResponse {
         private Integer articleId;
         private String title;
         private String status;
-        private String vendorName;
+        private List<VendorListResponse> vendors;
         private LocalDate startDate;
         private String categoryName;
     }

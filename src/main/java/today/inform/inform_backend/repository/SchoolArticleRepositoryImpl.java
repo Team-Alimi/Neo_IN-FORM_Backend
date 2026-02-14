@@ -127,14 +127,14 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     }
 
     @Override
-    public List<SchoolArticle> findCalendarArticles(List<String> categoryNames, Integer userId, LocalDate startOfMonth, LocalDate endOfMonth) {
+    public List<SchoolArticle> findCalendarArticles(List<String> categoryNames, Integer userId, LocalDate viewStart, LocalDate viewEnd) {
         return queryFactory
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
                         calendarCategoryFilter(categoryNames, userId),
-                        schoolArticle.startDate.loe(endOfMonth),
-                        schoolArticle.dueDate.goe(startOfMonth)
+                        schoolArticle.startDate.loe(viewEnd),
+                        schoolArticle.dueDate.goe(viewStart)
                 )
                 .fetch();
     }

@@ -18,21 +18,12 @@ public class ClubArticleDetailResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<AttachmentResponse> attachments;
-    private VendorResponse vendors;
+    private List<VendorListResponse> vendors;
 
     @Getter
     @Builder
     public static class AttachmentResponse {
         private Integer fileId;
         private String fileUrl;
-    }
-
-    @Getter
-    @Builder
-    public static class VendorResponse {
-        private Integer vendorId;
-        private String vendorName;
-        private String vendorInitial;
-        private String vendorType;
     }
 }
