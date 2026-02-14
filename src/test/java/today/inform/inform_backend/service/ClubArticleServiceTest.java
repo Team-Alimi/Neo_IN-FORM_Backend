@@ -59,7 +59,7 @@ class ClubArticleServiceTest {
                 .build();
 
         Page<ClubArticle> page = new PageImpl<>(List.of(article), PageRequest.of(0, 4), 1);
-        given(clubArticleRepository.findAllWithFilters(any(), any())).willReturn(page);
+        given(clubArticleRepository.findAllWithFilters(any(), any(), any())).willReturn(page);
 
         Attachment attachment = Attachment.builder()
                 .id(1)
@@ -71,14 +71,14 @@ class ClubArticleServiceTest {
                 .willReturn(List.of(attachment));
 
         // when
-        ClubArticleListResponse response = clubArticleService.getClubArticles(1, 4, null);
+        ClubArticleListResponse response = clubArticleService.getClubArticles(1, 4, null, "GOAT");
 
         // then
         assertThat(response.getClubArticles()).hasSize(1);
         assertThat(response.getClubArticles().get(0).getTitle()).isEqualTo("GOAT 행사");
         assertThat(response.getClubArticles().get(0).getAttachmentUrl()).isEqualTo("https://image.com/1.jpg");
-        assertThat(response.getClubArticles().get(0).getVendors().getVendorId()).isEqualTo(1);
-        assertThat(response.getClubArticles().get(0).getVendors().getVendorType()).isEqualTo("CLUB");
+        assertThat(response.getClubArticles().get(0).getVendors()).hasSize(1);
+        assertThat(response.getClubArticles().get(0).getVendors().get(0).getVendorId()).isEqualTo(1);
     }
 
     @Test
@@ -89,6 +89,7 @@ class ClubArticleServiceTest {
                 .vendorId(1)
                 .vendorName("GDGOC")
                 .vendorInitial("cl_gdgoc")
+                .vendorType(VendorType.CLUB)
                 .build();
 
         ClubArticle article = ClubArticle.builder()
@@ -115,7 +116,7 @@ class ClubArticleServiceTest {
         assertThat(response.getContent()).isEqualTo("상세 내용");
         assertThat(response.getAttachments()).hasSize(1);
         assertThat(response.getAttachments().get(0).getFileUrl()).isEqualTo("https://image.com/detail.jpg");
-        assertThat(response.getVendors().getVendorName()).isEqualTo("GDGOC");
-        assertThat(response.getVendors().getVendorId()).isEqualTo(1);
+        assertThat(response.getVendors()).hasSize(1);
+        assertThat(response.getVendors().get(0).getVendorName()).isEqualTo("GDGOC");
     }
 }

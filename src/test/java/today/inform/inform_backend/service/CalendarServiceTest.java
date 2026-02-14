@@ -37,28 +37,43 @@ class CalendarServiceTest {
     @DisplayName("월간 일정 조회 시 카테고리 필터가 없으면 기본값(대회•공모전)이 적용된다.")
     void getMonthlyNotices_DefaultCategory() {
         // given
-        given(schoolArticleRepository.findCalendarArticles(eq(List.of("대회•공모전")), any(), any(), any()))
+        LocalDate start = LocalDate.of(2026, 1, 26);
+        LocalDate end = LocalDate.of(2026, 3, 8);
+        given(schoolArticleRepository.findCalendarArticles(eq(List.of("대회•공모전")), any(), eq(start), eq(end)))
                 .willReturn(List.of());
 
         // when
-        calendarService.getMonthlyNotices(2026, 2, null, null);
+        calendarService.getMonthlyNotices(start, end, null, null);
 
         // then
-        // verify가 필요하지만 given만으로도 flow 확인 가능
     }
 
     @Test
     @DisplayName("MY 카테고리가 포함되면 다른 카테고리는 무시된다.")
     void mapCategories_MyPriority() {
         // given
-        given(schoolArticleRepository.findCalendarArticles(eq(List.of("MY")), any(), any(), any()))
+        LocalDate start = LocalDate.of(2026, 1, 26);
+        LocalDate end = LocalDate.of(2026, 3, 8);
+        given(schoolArticleRepository.findCalendarArticles(eq(List.of("MY")), any(), eq(start), eq(end)))
                 .willReturn(List.of());
 
         // when
-        calendarService.getMonthlyNotices(2026, 2, List.of("CONTEST", "MY", "SCHOLAR"), 1);
+        calendarService.getMonthlyNotices(start, end, List.of("CONTEST", "MY", "SCHOLAR"), 1);
 
         // then
-        // findCalendarArticles에 "MY"만 전달되었는지 확인 (given 조건에 의해 실패 시 에러 발생)
+    }
+
+    @Test
+    @DisplayName("view_start가 view_end보다 이후 날짜면 예외가 발생한다.")
+    void getMonthlyNotices_InvalidRange() {
+        // given
+        LocalDate start = LocalDate.of(2026, 3, 1);
+        LocalDate end = LocalDate.of(2026, 2, 1);
+
+        // when & then
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                calendarService.getMonthlyNotices(start, end, null, null)
+        );
     }
 
     @Test

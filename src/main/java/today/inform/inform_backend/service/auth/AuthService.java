@@ -7,6 +7,7 @@ import today.inform.inform_backend.config.jwt.JwtProperties;
 import today.inform.inform_backend.config.jwt.JwtProvider;
 import today.inform.inform_backend.dto.GoogleUserInfo;
 import today.inform.inform_backend.dto.LoginResponse;
+import today.inform.inform_backend.dto.VendorListResponse;
 import today.inform.inform_backend.entity.RefreshToken;
 import today.inform.inform_backend.entity.SocialType;
 import today.inform.inform_backend.entity.User;
@@ -56,7 +57,12 @@ public class AuthService {
                         .userId(user.getUserId())
                         .email(user.getEmail())
                         .name(user.getName())
-                        .majorId(user.getMajor() != null ? user.getMajor().getVendorId() : null)
+                        .major(user.getMajor() != null ? VendorListResponse.builder()
+                                .vendorId(user.getMajor().getVendorId())
+                                .vendorName(user.getMajor().getVendorName())
+                                .vendorInitial(user.getMajor().getVendorInitial())
+                                .vendorType(user.getMajor().getVendorType().name())
+                                .build() : null)
                         .build())
                 .build();
     }

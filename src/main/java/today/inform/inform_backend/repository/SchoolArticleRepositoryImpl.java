@@ -127,14 +127,14 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     }
 
     @Override
-    public List<SchoolArticle> findCalendarArticles(List<String> categoryNames, Integer userId, LocalDate startOfMonth, LocalDate endOfMonth) {
+    public List<SchoolArticle> findCalendarArticles(List<String> categoryNames, Integer userId, LocalDate viewStart, LocalDate viewEnd) {
         return queryFactory
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
                         calendarCategoryFilter(categoryNames, userId),
-                        schoolArticle.startDate.loe(endOfMonth),
-                        schoolArticle.dueDate.goe(startOfMonth)
+                        schoolArticle.startDate.loe(viewEnd),
+                        schoolArticle.dueDate.goe(viewStart)
                 )
                 .fetch();
     }
@@ -200,9 +200,9 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     // --- 정렬 로직 (기존 CASE WHEN을 자바 코드로 구현) ---
     private OrderSpecifier<Integer> createStatusOrder(LocalDate today, LocalDate upcomingLimit, LocalDate endingSoonLimit) {
         NumberExpression<Integer> statusPriority = new CaseBuilder()
-                .when(schoolArticle.startDate.loe(today).and(schoolArticle.dueDate.goe(today))).then(1)   // OPEN
-                .when(schoolArticle.startDate.gt(today).and(schoolArticle.startDate.loe(upcomingLimit))).then(2) // UPCOMING
-                .when(schoolArticle.dueDate.goe(today).and(schoolArticle.dueDate.loe(endingSoonLimit))).then(3)  // ENDING_SOON
+                .when(schoolArticle.startDate.loe(today).and(schoolArticle.dueDate.gt(endingSoonLimit).or(schoolArticle.dueDate.isNull()))).then(1)   // OPEN (General)
+                .when(schoolArticle.dueDate.goe(today).and(schoolArticle.dueDate.loe(endingSoonLimit))).then(2)  // ENDING_SOON
+                .when(schoolArticle.startDate.gt(today).and(schoolArticle.startDate.loe(upcomingLimit))).then(3) // UPCOMING
                 .when(schoolArticle.dueDate.lt(today)).then(5)  // CLOSED
                 .otherwise(4); // NORMAL
 
