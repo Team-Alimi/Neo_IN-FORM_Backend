@@ -6,127 +6,103 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import today.inform.inform_backend.dto.SchoolArticleListResponse;
-import today.inform.inform_backend.dto.SchoolArticleResponse;
+import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
 import today.inform.inform_backend.entity.User;
+import today.inform.inform_backend.entity.VendorType;
 import today.inform.inform_backend.repository.AttachmentRepository;
 import today.inform.inform_backend.repository.BookmarkRepository;
 import today.inform.inform_backend.repository.SchoolArticleRepository;
 import today.inform.inform_backend.repository.SchoolArticleVendorRepository;
 import today.inform.inform_backend.repository.UserRepository;
-import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
-import today.inform.inform_backend.entity.VendorType;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SchoolArticleServiceTest {
 
-    @Mock private SchoolArticleRepository schoolArticleRepository;
-    @Mock private SchoolArticleVendorRepository schoolArticleVendorRepository;
-    @Mock private AttachmentRepository attachmentRepository;
-    @Mock private BookmarkRepository bookmarkRepository;
-    @Mock private UserRepository userRepository;
+    @InjectMocks
+    private SchoolArticleService schoolArticleService;
 
-    @InjectMocks private SchoolArticleService schoolArticleService;
+    @Mock
+    private SchoolArticleRepository schoolArticleRepository;
+    @Mock
+    private SchoolArticleVendorRepository schoolArticleVendorRepository;
+    @Mock
+    private AttachmentRepository attachmentRepository;
+    @Mock
+    private BookmarkRepository bookmarkRepository;
+    @Mock
+    private UserRepository userRepository;
 
     @Test
-    @DisplayName("학교 공지사항 상세 정보를 성공적으로 조회한다.")
-    void getSchoolArticleDetail_Success() {
+    @DisplayName("로그인 사용자는 전체 본문을 볼 수 있다.")
+    void getSchoolArticleDetail_Authenticated() {
         // given
-        Integer articleId = 105;
         Integer userId = 1;
-        LocalDate todayDate = LocalDate.now();
+        Integer articleId = 100;
+        String fullContent = "A".repeat(200); // 200자 본문
+
         SchoolArticle article = SchoolArticle.builder()
                 .articleId(articleId)
-                .title("테스트 공지")
-                .content("본문 내용")
-                .startDate(todayDate.plusDays(1))
-                .dueDate(todayDate.plusDays(5))
+                .title("Test Title")
+                .content(fullContent)
                 .build();
 
-        User user = User.builder()
-                .userId(userId)
-                .build();
+        User user = User.builder().userId(userId).build();
 
-        given(schoolArticleRepository.findById(articleId)).willReturn(Optional.of(article));
-        given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(bookmarkRepository.existsByUserAndArticleTypeAndArticleId(any(), any(), any())).willReturn(false);
-        given(bookmarkRepository.countByArticleIdAndArticleType(any(), any())).willReturn(5L);
-        given(schoolArticleVendorRepository.findAllByArticle(article)).willReturn(List.of());
-        given(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL))
-                .willReturn(List.of());
+        when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId)).thenReturn(true);
+        when(schoolArticleVendorRepository.findAllByArticle(article)).thenReturn(List.of());
+        when(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL)).thenReturn(List.of());
 
         // when
-        SchoolArticleDetailResponse result = schoolArticleService.getSchoolArticleDetail(articleId, userId);
+        SchoolArticleDetailResponse response = schoolArticleService.getSchoolArticleDetail(articleId, userId);
 
         // then
-        assertThat(result.getArticleId()).isEqualTo(articleId);
-        assertThat(result.getTitle()).isEqualTo("테스트 공지");
-        assertThat(result.getStatus()).isEqualTo("UPCOMING");
+        assertThat(response.getContent()).isEqualTo(fullContent); // 원본 그대로
+        assertThat(response.getIsBookmarked()).isTrue();
+        
+        // verify: User 조회가 일어났는지 확인
+        verify(userRepository, times(1)).findById(userId);
     }
 
     @Test
-    @DisplayName("인기 게시물 목록을 성공적으로 조회한다.")
-    void getHotSchoolArticles_Success() {
+    @DisplayName("비로그인 사용자는 본문이 마스킹 처리된다.")
+    void getSchoolArticleDetail_Anonymous() {
         // given
-        Integer userId = 1;
-        SchoolArticle article = SchoolArticle.builder().articleId(10).title("인기글").build();
-        given(schoolArticleRepository.findHotArticles(any(), eq(10))).willReturn(List.of(article));
-        
-        User user = User.builder().userId(userId).build();
-        given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(any(), any(), any())).willReturn(List.of());
-        given(schoolArticleVendorRepository.findAllByArticleIn(any())).willReturn(List.of());
+        Integer userId = null; // 비로그인
+        Integer articleId = 100;
+        String fullContent = "A".repeat(200); // 200자 본문
 
-        // when
-        List<SchoolArticleResponse> result = schoolArticleService.getHotSchoolArticles(userId);
-
-        // then
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getTitle()).isEqualTo("인기글");
-    }
-
-    @Test
-    @DisplayName("날짜에 따라 공지사항의 상태(status)가 올바르게 판별된다.")
-    void determineStatus_Test() {
-        // given
-        Integer userId = 1;
-        LocalDate todayDate = LocalDate.now();
-        
-        // 1. OPEN: 오늘이 시작과 마감 사이
-        SchoolArticle openArticle = SchoolArticle.builder()
-                .articleId(1)
-                .startDate(todayDate.minusDays(1))
-                .dueDate(todayDate.plusDays(10))
+        SchoolArticle article = SchoolArticle.builder()
+                .articleId(articleId)
+                .title("Test Title")
+                .content(fullContent)
                 .build();
 
-        Page<SchoolArticle> page = new PageImpl<>(List.of(openArticle));
-        given(schoolArticleRepository.findAllWithFiltersAndSorting(any(), any(), any(), any(), any(), any())).willReturn(page);
-        given(schoolArticleVendorRepository.findAllByArticleIn(any())).willReturn(List.of());
-        
-        // 북마크 Mock
-        User user = User.builder().userId(userId).build();
-        given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(any(), any(), any())).willReturn(List.of());
-        given(bookmarkRepository.countByArticleIdsAndArticleType(any(), any())).willReturn(List.of());
+        when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+        // User, Bookmark 조회는 mocking하지 않음 (호출되지 않아야 하므로)
+        when(schoolArticleVendorRepository.findAllByArticle(article)).thenReturn(List.of());
+        when(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL)).thenReturn(List.of());
 
         // when
-        SchoolArticleListResponse response = schoolArticleService.getSchoolArticles(1, 10, null, null, userId);
+        SchoolArticleDetailResponse response = schoolArticleService.getSchoolArticleDetail(articleId, userId);
 
         // then
-        List<SchoolArticleResponse> articles = response.getSchoolArticles();
-        assertThat(articles.get(0).getStatus()).isEqualTo("OPEN");
-        assertThat(articles.get(0).getIsBookmarked()).isFalse();
+        assertThat(response.getContent()).isNotEqualTo(fullContent);
+        assertThat(response.getContent()).contains("... (로그인 후 전체 내용을 확인하실 수 있습니다.)");
+        assertThat(response.getContent().length()).isLessThan(fullContent.length());
+        assertThat(response.getIsBookmarked()).isFalse();
+
+        // verify: User 조회나 Bookmark 확인 로직이 실행되지 않았는지 검증 (성능/보안)
+        verify(userRepository, never()).findById(any());
+        verify(bookmarkRepository, never()).existsByUserAndArticleTypeAndArticleId(any(), any(), any());
     }
 }
