@@ -44,9 +44,9 @@ jobs:
         host: ${{ secrets.GCP_VM_IP }}
         username: ${{ secrets.GCP_SSH_USER }}
         key: ${{ secrets.GCP_SSH_KEY }}
-        source: "inform-backend/build/libs/*-SNAPSHOT.jar,inform-backend/Dockerfile"
+        source: "build/libs/*-SNAPSHOT.jar,Dockerfile"
         target: "~/inform-main"
-        strip_components: 1
+        strip_components: 2
 
     - name: Deploy to GCP
       uses: appleboy/ssh-action@v1.0.3
