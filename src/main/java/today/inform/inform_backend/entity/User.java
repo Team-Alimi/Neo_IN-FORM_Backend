@@ -3,6 +3,9 @@ package today.inform.inform_backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "users")
 @Getter
@@ -25,6 +28,10 @@ public class User extends BaseCreatedTimeEntity { // createdAt만 상속
     @JoinColumn(name = "major_id")
     private Vendor major;
 
+    @Builder.Default
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Notification> notifications = new ArrayList<>();
+
     public void updateName(String name) {
         this.name = name;
     }
@@ -33,9 +40,16 @@ public class User extends BaseCreatedTimeEntity { // createdAt만 상속
         this.major = major;
     }
 
-    public static void validateInhaDomain(String email) {
-        if (email == null || (!email.endsWith("@inha.edu") && !email.endsWith("@inha.ac.kr"))) {
-            throw new IllegalArgumentException("학교 이메일(@inha.edu/@inha.ac.kr)로만 로그인할 수 있습니다.");
+        public static void validateInhaDomain(String email) {
+
+            if (email == null || (!email.endsWith("@inha.edu") && !email.endsWith("@inha.ac.kr"))) {
+
+                throw new today.inform.inform_backend.common.exception.BusinessException(today.inform.inform_backend.common.exception.ErrorCode.DOMAIN_RESTRICTED);
+
+            }
+
         }
+
     }
-}
+
+    

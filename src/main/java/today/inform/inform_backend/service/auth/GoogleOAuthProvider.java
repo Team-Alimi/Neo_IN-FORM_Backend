@@ -6,6 +6,8 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.GoogleUserInfo;
 import today.inform.inform_backend.entity.SocialType;
 import today.inform.inform_backend.entity.User;
@@ -32,7 +34,7 @@ public class GoogleOAuthProvider implements OAuthProvider {
         try {
             GoogleIdToken googleIdToken = verifier.verify(idToken);
             if (googleIdToken == null) {
-                throw new IllegalArgumentException("유효하지 않은 구글 토큰입니다.");
+                throw new BusinessException(ErrorCode.INVALID_ID_TOKEN);
             }
 
             GoogleIdToken.Payload payload = googleIdToken.getPayload();
@@ -45,8 +47,10 @@ public class GoogleOAuthProvider implements OAuthProvider {
                     .name((String) payload.get("name"))
                     .build();
 
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("구글 토큰 검증 중 오류가 발생했습니다: " + e.getMessage());
+            throw new BusinessException(ErrorCode.INVALID_ID_TOKEN, "구글 토큰 검증 중 오류가 발생했습니다: " + e.getMessage());
         }
     }
 }

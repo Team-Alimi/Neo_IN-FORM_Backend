@@ -3,9 +3,13 @@ package today.inform.inform_backend.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.common.response.ApiResponse;
 import today.inform.inform_backend.dto.UserUpdateRequest;
 import today.inform.inform_backend.service.user.UserService;
+
+import today.inform.inform_backend.dto.LoginResponse; // UserInfo DTO 재사용을 위함
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -13,6 +17,13 @@ import today.inform.inform_backend.service.user.UserService;
 public class UserController {
 
     private final UserService userService;
+
+    @GetMapping("/me")
+    public ApiResponse<LoginResponse.UserInfo> getMyProfile(
+            @AuthenticationPrincipal Integer userId
+    ) {
+        return ApiResponse.success(userService.getMyProfile(userId));
+    }
 
     @PatchMapping("/{userId}/major")
     public ApiResponse<Void> updateMajor(
@@ -22,7 +33,7 @@ public class UserController {
     ) {
         // 보안 검증: 본인 확인
         if (!userId.equals(loginUserId)) {
-            throw new today.inform.inform_backend.common.exception.BusinessException("FORBIDDEN", "본인의 정보만 수정할 수 있습니다.");
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
         userService.updateMajor(userId, request.getMajorId());

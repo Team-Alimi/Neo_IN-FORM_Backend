@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import today.inform.inform_backend.entity.SchoolArticle;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public interface SchoolArticleRepositoryCustom {
     Page<SchoolArticle> findAllWithFiltersAndSorting(
@@ -13,6 +14,32 @@ public interface SchoolArticleRepositoryCustom {
             LocalDate today,
             LocalDate upcomingLimit,
             LocalDate endingSoonLimit,
+            Pageable pageable
+    );
+
+    Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
+            List<Integer> articleIds,
+            Integer categoryId,
+            String keyword,
+            LocalDate today,
+            LocalDate upcomingLimit,
+            LocalDate endingSoonLimit,
+            Pageable pageable
+    );
+
+    List<SchoolArticle> findHotArticles(LocalDate today, int limit);
+
+    List<SchoolArticle> findCalendarArticles(
+            List<String> categoryNames,
+            Integer userId,
+            LocalDate viewStart,
+            LocalDate viewEnd
+    );
+
+    Page<SchoolArticle> findDailyCalendarArticles(
+            LocalDate selectedDate,
+            List<String> categoryNames,
+            Integer userId,
             Pageable pageable
     );
 }

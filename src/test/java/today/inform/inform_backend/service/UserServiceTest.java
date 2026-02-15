@@ -6,6 +6,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.entity.User;
 import today.inform.inform_backend.entity.Vendor;
 import today.inform.inform_backend.repository.UserRepository;
@@ -48,6 +50,52 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("내 프로필 정보를 성공적으로 조회한다. (학과 설정됨)")
+    void getMyProfile_WithMajor_Success() {
+        // given
+        Integer userId = 1;
+        Vendor major = Vendor.builder().vendorId(10).vendorName("컴퓨터공학과").vendorInitial("CSE").vendorType(today.inform.inform_backend.entity.VendorType.SCHOOL).build();
+        User user = User.builder()
+                .userId(userId)
+                .email("test@inha.edu")
+                .name("홍길동")
+                .major(major)
+                .build();
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+
+        // when
+        today.inform.inform_backend.dto.LoginResponse.UserInfo result = userService.getMyProfile(userId);
+
+        // then
+        assertThat(result.getUserId()).isEqualTo(userId);
+        assertThat(result.getEmail()).isEqualTo("test@inha.edu");
+        assertThat(result.getName()).isEqualTo("홍길동");
+        assertThat(result.getMajor()).isNotNull();
+        assertThat(result.getMajor().getVendorName()).isEqualTo("컴퓨터공학과");
+        assertThat(result.getMajor().getVendorInitial()).isEqualTo("CSE");
+    }
+
+    @Test
+    @DisplayName("내 프로필 정보를 성공적으로 조회한다. (학과 미설정)")
+    void getMyProfile_NoMajor_Success() {
+        // given
+        Integer userId = 1;
+        User user = User.builder()
+                .userId(userId)
+                .email("test@inha.edu")
+                .name("홍길동")
+                .major(null)
+                .build();
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+
+        // when
+        today.inform.inform_backend.dto.LoginResponse.UserInfo result = userService.getMyProfile(userId);
+
+        // then
+        assertThat(result.getMajor()).isNull();
+    }
+
+    @Test
     @DisplayName("존재하지 않는 사용자일 경우 예외가 발생한다.")
     void updateMajor_UserNotFound() {
         // given
@@ -55,8 +103,9 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.updateMajor(1, 10))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("존재하지 않는 사용자입니다.");
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
     }
 
     @Test
@@ -70,7 +119,8 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.updateMajor(userId, 999))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("존재하지 않는 학과입니다.");
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
     }
 }

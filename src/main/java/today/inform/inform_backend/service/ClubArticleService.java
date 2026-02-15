@@ -6,9 +6,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.ClubArticleDetailResponse;
 import today.inform.inform_backend.dto.ClubArticleListResponse;
 import today.inform.inform_backend.dto.ClubArticleResponse;
+import today.inform.inform_backend.dto.VendorListResponse;
 import today.inform.inform_backend.entity.Attachment;
 import today.inform.inform_backend.entity.ClubArticle;
 import today.inform.inform_backend.entity.VendorType;
@@ -25,55 +28,58 @@ public class ClubArticleService {
 
     private final ClubArticleRepository clubArticleRepository;
     private final AttachmentRepository attachmentRepository;
+    private final today.inform.inform_backend.repository.BookmarkRepository bookmarkRepository;
+    private final today.inform.inform_backend.repository.UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public ClubArticleDetailResponse getClubArticleDetail(Integer articleId) {
         ClubArticle article = clubArticleRepository.findByIdWithVendor(articleId)
-                .orElseThrow(() -> new today.inform.inform_backend.common.exception.BusinessException("ARTICLE_NOT_FOUND", "존재하지 않는 동아리 공지사항입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
         List<Attachment> attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.CLUB);
 
         return ClubArticleDetailResponse.builder()
-                .article_id(article.getArticleId())
+                .articleId(article.getArticleId())
                 .title(article.getTitle())
                 .content(article.getContent())
-                .original_url(article.getOriginalUrl())
-                .start_date(article.getStartDate())
-                .due_date(article.getDueDate())
-                .created_at(article.getCreatedAt())
-                .updated_at(article.getUpdatedAt())
+                .originalUrl(article.getOriginalUrl())
+                .startDate(article.getStartDate())
+                .dueDate(article.getDueDate())
+                .createdAt(article.getCreatedAt())
+                .updatedAt(article.getUpdatedAt())
                 .attachments(attachments.stream()
                         .map(att -> ClubArticleDetailResponse.AttachmentResponse.builder()
-                                .file_id(att.getId())
-                                .file_url(att.getAttachmentUrl())
+                                .fileId(att.getId())
+                                .fileUrl(att.getAttachmentUrl())
                                 .build())
                         .collect(Collectors.toList()))
-                .vendors(ClubArticleDetailResponse.VendorResponse.builder()
-                        .vendor_id(article.getVendor().getVendorId())
-                        .vendor_name(article.getVendor().getVendorName())
-                        .vendor_initial(article.getVendor().getVendorInitial())
-                        .build())
+                .vendors(List.of(VendorListResponse.builder()
+                        .vendorId(article.getVendor().getVendorId())
+                        .vendorName(article.getVendor().getVendorName())
+                        .vendorInitial(article.getVendor().getVendorInitial())
+                        .vendorType(article.getVendor().getVendorType().name())
+                        .build()))
                 .build();
     }
 
     @Transactional(readOnly = true)
-    public ClubArticleListResponse getClubArticles(Integer page, Integer size, Integer vendorId) {
+    public ClubArticleListResponse getClubArticles(Integer page, Integer size, Integer vendorId, String keyword) {
         // 보안/최적화: 최대 페이지 사이즈 제한 (예: 50)
         int cappedSize = Math.min(size, 50);
         Pageable pageable = PageRequest.of(page - 1, cappedSize);
-        Page<ClubArticle> articlePage = clubArticleRepository.findAllWithFilters(vendorId, pageable);
+        Page<ClubArticle> articlePage = clubArticleRepository.findAllWithFilters(vendorId, keyword, pageable);
 
         List<ClubArticle> articles = articlePage.getContent();
         
-        // 최적화: 게시글이 없으면 첨부파일 쿼리 생략
+        // 최적화: 게시글이 없으면 빈 응답
         if (articles.isEmpty()) {
             return ClubArticleListResponse.builder()
-                    .page_info(ClubArticleListResponse.PageInfo.builder()
-                            .current_page(page)
-                            .total_pages(articlePage.getTotalPages())
-                            .total_articles(articlePage.getTotalElements())
+                    .pageInfo(ClubArticleListResponse.PageInfo.builder()
+                            .currentPage(page)
+                            .totalPages(articlePage.getTotalPages())
+                            .totalArticles(articlePage.getTotalElements())
                             .build())
-                    .club_articles(List.of())
+                    .clubArticles(List.of())
                     .build();
         }
 
@@ -92,27 +98,29 @@ public class ClubArticleService {
 
         List<ClubArticleResponse> responseList = articles.stream()
                 .map(article -> ClubArticleResponse.builder()
-                        .article_id(article.getArticleId())
+                        .articleId(article.getArticleId())
                         .title(article.getTitle())
-                        .start_date(article.getStartDate())
-                        .due_date(article.getDueDate())
-                        .created_at(article.getCreatedAt())
-                        .updated_at(article.getUpdatedAt())
-                        .attachment_url(firstAttachmentMap.get(article.getArticleId()))
-                        .vendors(ClubArticleResponse.VendorResponse.builder()
-                                .vendor_name(article.getVendor().getVendorName())
-                                .vendor_initial(article.getVendor().getVendorInitial())
-                                .build())
+                        .startDate(article.getStartDate())
+                        .dueDate(article.getDueDate())
+                        .createdAt(article.getCreatedAt())
+                        .updatedAt(article.getUpdatedAt())
+                        .attachmentUrl(firstAttachmentMap.get(article.getArticleId()))
+                        .vendors(List.of(VendorListResponse.builder()
+                                .vendorId(article.getVendor().getVendorId())
+                                .vendorName(article.getVendor().getVendorName())
+                                .vendorInitial(article.getVendor().getVendorInitial())
+                                .vendorType(article.getVendor().getVendorType().name())
+                                .build()))
                         .build())
                 .collect(Collectors.toList());
 
         return ClubArticleListResponse.builder()
-                .page_info(ClubArticleListResponse.PageInfo.builder()
-                        .current_page(page)
-                        .total_pages(articlePage.getTotalPages())
-                        .total_articles(articlePage.getTotalElements())
+                .pageInfo(ClubArticleListResponse.PageInfo.builder()
+                        .currentPage(page)
+                        .totalPages(articlePage.getTotalPages())
+                        .totalArticles(articlePage.getTotalElements())
                         .build())
-                .club_articles(responseList)
+                .clubArticles(responseList)
                 .build();
     }
 }

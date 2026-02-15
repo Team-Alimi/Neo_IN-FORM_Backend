@@ -1,0 +1,71 @@
+name: Java CI with Gradle
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Create application.yaml
+      run: |
+        mkdir -p src/main/resources
+        echo "${{ secrets.APPLICATION_YAML }}" > src/main/resources/application.yaml
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build with Gradle
+      run: ./gradlew build
+
+    - name: Deliver files to GCP
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.GCP_VM_IP }}
+        username: ${{ secrets.GCP_SSH_USER }}
+        key: ${{ secrets.GCP_SSH_KEY }}
+        source: "inform-backend/build/libs/*-SNAPSHOT.jar,inform-backend/Dockerfile"
+        target: "~/inform-main"
+        strip_components: 1
+
+    - name: Deploy to GCP
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.GCP_VM_IP }}
+        username: ${{ secrets.GCP_SSH_USER }}
+        key: ${{ secrets.GCP_SSH_KEY }}
+        script: |
+          cd ~/inform-main
+          # 1. 새로운 이미지 빌드
+          docker build -t inform-main-backend .
+          
+          # 2. 기존 컨테이너 중지 및 제거 (이미 실행 중인 경우)
+          docker stop my-api-server || true
+          docker rm my-api-server || true
+          
+          # 3. 새로운 컨테이너 실행 (DB, Redis와 연동)
+          # --network bridge를 사용하거나 이미 구성된 네트워크가 있다면 맞춰야 함
+          docker run -d \
+            --name my-api-server \
+            -p 8080:8080 \
+            --restart always \
+            inform-main-backend
+

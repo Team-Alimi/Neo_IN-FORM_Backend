@@ -6,17 +6,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import today.inform.inform_backend.dto.SchoolArticleListResponse;
+import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
 import today.inform.inform_backend.dto.SchoolArticleResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
-import today.inform.inform_backend.repository.AttachmentRepository;
-import today.inform.inform_backend.repository.SchoolArticleRepository;
-import today.inform.inform_backend.repository.SchoolArticleVendorRepository;
-import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
+import today.inform.inform_backend.entity.User;
 import today.inform.inform_backend.entity.VendorType;
+import today.inform.inform_backend.repository.*;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -24,91 +19,119 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SchoolArticleServiceTest {
 
-    @Mock private SchoolArticleRepository schoolArticleRepository;
-    @Mock private SchoolArticleVendorRepository schoolArticleVendorRepository;
-    @Mock private AttachmentRepository attachmentRepository;
+    @InjectMocks
+    private SchoolArticleService schoolArticleService;
 
-    @InjectMocks private SchoolArticleService schoolArticleService;
+    @Mock
+    private SchoolArticleRepository schoolArticleRepository;
+    @Mock
+    private SchoolArticleVendorRepository schoolArticleVendorRepository;
+    @Mock
+    private AttachmentRepository attachmentRepository;
+    @Mock
+    private BookmarkRepository bookmarkRepository;
+    @Mock
+    private UserRepository userRepository;
 
     @Test
-    @DisplayName("학교 공지사항 상세 정보를 성공적으로 조회한다.")
-    void getSchoolArticleDetail_Success() {
+    @DisplayName("인기 게시물 상위 10개를 조회한다.")
+    void getHotSchoolArticles_Success() {
         // given
-        Integer articleId = 105;
-        LocalDate today = LocalDate.now();
+        Integer userId = 1;
         SchoolArticle article = SchoolArticle.builder()
-                .articleId(articleId)
-                .title("테스트 공지")
-                .content("본문 내용")
-                .startDate(today.plusDays(1))
-                .dueDate(today.plusDays(5))
+                .articleId(1)
+                .title("Hot Article")
                 .build();
+        List<SchoolArticle> articles = List.of(article);
+        User user = User.builder().userId(userId).build();
 
-        given(schoolArticleRepository.findById(articleId)).willReturn(Optional.of(article));
-        given(schoolArticleVendorRepository.findAllByArticle(article)).willReturn(List.of());
-        given(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL))
-                .willReturn(List.of());
+        when(schoolArticleRepository.findHotArticles(any(LocalDate.class), eq(10))).thenReturn(articles);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(eq(user), eq(VendorType.SCHOOL), anyList()))
+                .thenReturn(List.of()); // 북마크 안한 상태
+        
+        Object[] countResult = new Object[]{1, 5L};
+        when(bookmarkRepository.countByArticleIdsAndArticleType(anyList(), eq(VendorType.SCHOOL)))
+                .thenReturn(java.util.Collections.singletonList(countResult)); // 북마크 수 5개
 
         // when
-        SchoolArticleDetailResponse result = schoolArticleService.getSchoolArticleDetail(articleId);
+        List<SchoolArticleResponse> result = schoolArticleService.getHotSchoolArticles(userId);
 
         // then
-        assertThat(result.getArticle_id()).isEqualTo(articleId);
-        assertThat(result.getTitle()).isEqualTo("테스트 공지");
-        assertThat(result.getStatus()).isEqualTo("UPCOMING");
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getTitle()).isEqualTo("Hot Article");
+        assertThat(result.get(0).getBookmarkCount()).isEqualTo(5L);
+        verify(schoolArticleRepository, times(1)).findHotArticles(any(), eq(10));
     }
 
     @Test
-    @DisplayName("날짜에 따라 공지사항의 상태(status)가 올바르게 판별된다.")
-    void determineStatus_Test() {
+    @DisplayName("로그인 사용자는 전체 본문을 볼 수 있다.")
+    void getSchoolArticleDetail_Authenticated() {
         // given
-        LocalDate today = LocalDate.now();
-        
-        // 1. OPEN: 오늘이 시작과 마감 사이
-        SchoolArticle openArticle = SchoolArticle.builder()
-                .articleId(1)
-                .startDate(today.minusDays(1))
-                .dueDate(today.plusDays(10))
+        Integer userId = 1;
+        Integer articleId = 100;
+        String fullContent = "A".repeat(200); // 200자 본문
+
+        SchoolArticle article = SchoolArticle.builder()
+                .articleId(articleId)
+                .title("Test Title")
+                .content(fullContent)
                 .build();
 
-        // 2. UPCOMING: 시작일이 오늘부터 5일 이내 미래
-        SchoolArticle upcomingArticle = SchoolArticle.builder()
-                .articleId(2)
-                .startDate(today.plusDays(3))
-                .dueDate(today.plusDays(10))
-                .build();
+        User user = User.builder().userId(userId).build();
 
-        // 3. ENDING_SOON: 마감일이 오늘부터 5일 이내 남음
-        SchoolArticle endingSoonArticle = SchoolArticle.builder()
-                .articleId(3)
-                .startDate(today.minusDays(5))
-                .dueDate(today.plusDays(2))
-                .build();
-
-        // 4. CLOSED: 마감이 지남
-        SchoolArticle closedArticle = SchoolArticle.builder()
-                .articleId(4)
-                .startDate(today.minusDays(10))
-                .dueDate(today.minusDays(1))
-                .build();
-
-        Page<SchoolArticle> page = new PageImpl<>(List.of(openArticle, upcomingArticle, endingSoonArticle, closedArticle));
-        given(schoolArticleRepository.findAllWithFiltersAndSorting(any(), any(), any(), any(), any(), any())).willReturn(page);
-        given(schoolArticleVendorRepository.findAllByArticleIn(any())).willReturn(List.of());
+        when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId)).thenReturn(true);
+        when(schoolArticleVendorRepository.findAllByArticle(article)).thenReturn(List.of());
+        when(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL)).thenReturn(List.of());
 
         // when
-        SchoolArticleListResponse response = schoolArticleService.getSchoolArticles(1, 10, null, null);
+        SchoolArticleDetailResponse response = schoolArticleService.getSchoolArticleDetail(articleId, userId);
 
         // then
-        List<SchoolArticleResponse> articles = response.getSchool_articles();
-        assertThat(articles.get(0).getStatus()).isEqualTo("OPEN");
-        assertThat(articles.get(1).getStatus()).isEqualTo("UPCOMING");
-        assertThat(articles.get(2).getStatus()).isEqualTo("ENDING_SOON");
-        assertThat(articles.get(3).getStatus()).isEqualTo("CLOSED");
+        assertThat(response.getContent()).isEqualTo(fullContent); // 원본 그대로
+        assertThat(response.getIsBookmarked()).isTrue();
+        
+        // verify: User 조회가 일어났는지 확인
+        verify(userRepository, times(1)).findById(userId);
+    }
+
+    @Test
+    @DisplayName("비로그인 사용자는 본문이 마스킹 처리된다.")
+    void getSchoolArticleDetail_Anonymous() {
+        // given
+        Integer userId = null; // 비로그인
+        Integer articleId = 100;
+        String fullContent = "A".repeat(200); // 200자 본문
+
+        SchoolArticle article = SchoolArticle.builder()
+                .articleId(articleId)
+                .title("Test Title")
+                .content(fullContent)
+                .build();
+
+        when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+        // User, Bookmark 조회는 mocking하지 않음 (호출되지 않아야 하므로)
+        when(schoolArticleVendorRepository.findAllByArticle(article)).thenReturn(List.of());
+        when(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL)).thenReturn(List.of());
+
+        // when
+        SchoolArticleDetailResponse response = schoolArticleService.getSchoolArticleDetail(articleId, userId);
+
+        // then
+        assertThat(response.getContent()).isNotEqualTo(fullContent);
+        assertThat(response.getContent()).contains("... (로그인 후 전체 내용을 확인하실 수 있습니다.)");
+        assertThat(response.getContent().length()).isLessThan(fullContent.length());
+        assertThat(response.getIsBookmarked()).isFalse();
+
+        // verify: User 조회나 Bookmark 확인 로직이 실행되지 않았는지 검증 (성능/보안)
+        verify(userRepository, never()).findById(any());
+        verify(bookmarkRepository, never()).existsByUserAndArticleTypeAndArticleId(any(), any(), any());
     }
 }
