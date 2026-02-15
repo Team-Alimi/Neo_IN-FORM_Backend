@@ -7,15 +7,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
+import today.inform.inform_backend.dto.SchoolArticleResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
 import today.inform.inform_backend.entity.User;
 import today.inform.inform_backend.entity.VendorType;
-import today.inform.inform_backend.repository.AttachmentRepository;
-import today.inform.inform_backend.repository.BookmarkRepository;
-import today.inform.inform_backend.repository.SchoolArticleRepository;
-import today.inform.inform_backend.repository.SchoolArticleVendorRepository;
-import today.inform.inform_backend.repository.UserRepository;
+import today.inform.inform_backend.repository.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,6 +37,37 @@ class SchoolArticleServiceTest {
     private BookmarkRepository bookmarkRepository;
     @Mock
     private UserRepository userRepository;
+
+    @Test
+    @DisplayName("인기 게시물 상위 10개를 조회한다.")
+    void getHotSchoolArticles_Success() {
+        // given
+        Integer userId = 1;
+        SchoolArticle article = SchoolArticle.builder()
+                .articleId(1)
+                .title("Hot Article")
+                .build();
+        List<SchoolArticle> articles = List.of(article);
+        User user = User.builder().userId(userId).build();
+
+        when(schoolArticleRepository.findHotArticles(any(LocalDate.class), eq(10))).thenReturn(articles);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(eq(user), eq(VendorType.SCHOOL), anyList()))
+                .thenReturn(List.of()); // 북마크 안한 상태
+        
+        Object[] countResult = new Object[]{1, 5L};
+        when(bookmarkRepository.countByArticleIdsAndArticleType(anyList(), eq(VendorType.SCHOOL)))
+                .thenReturn(java.util.Collections.singletonList(countResult)); // 북마크 수 5개
+
+        // when
+        List<SchoolArticleResponse> result = schoolArticleService.getHotSchoolArticles(userId);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getTitle()).isEqualTo("Hot Article");
+        assertThat(result.get(0).getBookmarkCount()).isEqualTo(5L);
+        verify(schoolArticleRepository, times(1)).findHotArticles(any(), eq(10));
+    }
 
     @Test
     @DisplayName("로그인 사용자는 전체 본문을 볼 수 있다.")
