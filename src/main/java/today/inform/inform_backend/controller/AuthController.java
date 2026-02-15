@@ -1,6 +1,7 @@
 package today.inform.inform_backend.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -8,6 +9,8 @@ import org.springframework.web.bind.annotation.RestController;
 import today.inform.inform_backend.common.response.ApiResponse;
 import today.inform.inform_backend.dto.LoginRequest;
 import today.inform.inform_backend.dto.LoginResponse;
+import today.inform.inform_backend.dto.TokenRefreshRequest;
+import today.inform.inform_backend.dto.TokenRefreshResponse;
 import today.inform.inform_backend.entity.SocialType;
 import today.inform.inform_backend.service.auth.AuthService;
 
@@ -22,5 +25,17 @@ public class AuthController {
     public ApiResponse<LoginResponse> loginWithGoogle(@RequestBody LoginRequest request) {
         LoginResponse response = authService.login(SocialType.GOOGLE, request.getIdToken());
         return ApiResponse.success(response);
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<TokenRefreshResponse> refresh(@RequestBody TokenRefreshRequest request) {
+        TokenRefreshResponse response = authService.reissueToken(request.getRefreshToken());
+        return ApiResponse.success(response);
+    }
+
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(@AuthenticationPrincipal Integer userId) {
+        authService.logout(userId);
+        return ApiResponse.success(null);
     }
 }
