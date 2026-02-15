@@ -25,16 +25,18 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Create application.yaml
+    - name: Create Configuration Files
       run: |
-        mkdir -p src/main/resources
-        echo "${{ secrets.APPLICATION_YAML }}" > src/main/resources/application.yaml
+        mkdir -p ./src/main/resources
+        echo "${{ secrets.APPLICATION_YAML }}" > ./src/main/resources/application.yaml
+        mkdir -p ./src/test/resources
+        echo "${{ secrets.APPLICATION_TEST_YAML }}" > ./src/test/resources/application-test.yaml
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build -Dspring.profiles.active=test --info
 
     - name: Deliver files to GCP
       uses: appleboy/scp-action@v0.1.7
@@ -42,9 +44,9 @@ jobs:
         host: ${{ secrets.GCP_VM_IP }}
         username: ${{ secrets.GCP_SSH_USER }}
         key: ${{ secrets.GCP_SSH_KEY }}
-        source: "inform-backend/build/libs/*-SNAPSHOT.jar,inform-backend/Dockerfile"
+        source: "build/libs/*-SNAPSHOT.jar,Dockerfile"
         target: "~/inform-main"
-        strip_components: 1
+        strip_components: 2
 
     - name: Deploy to GCP
       uses: appleboy/ssh-action@v1.0.3
