@@ -1,6 +1,7 @@
 package today.inform.inform_backend.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -91,6 +92,7 @@ public class SchoolArticleService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "hotArticles", key = "#userId ?: 'anonymous'", unless = "#result == null")
     public List<SchoolArticleResponse> getHotSchoolArticles(Integer userId) {
         LocalDate todayDate = LocalDate.now();
         List<SchoolArticle> articles = schoolArticleRepository.findHotArticles(todayDate, 10);

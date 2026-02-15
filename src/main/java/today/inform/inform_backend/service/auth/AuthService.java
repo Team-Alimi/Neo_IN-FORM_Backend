@@ -5,9 +5,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform_backend.config.jwt.JwtProperties;
 import today.inform.inform_backend.config.jwt.JwtProvider;
-import today.inform.inform_backend.dto.GoogleUserInfo;
-import today.inform.inform_backend.dto.LoginResponse;
-import today.inform.inform_backend.dto.VendorListResponse;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
+import today.inform.inform_backend.dto.*;
 import today.inform.inform_backend.entity.RefreshToken;
 import today.inform.inform_backend.entity.SocialType;
 import today.inform.inform_backend.entity.User;
@@ -65,6 +65,46 @@ public class AuthService {
                                 .build() : null)
                         .build())
                 .build();
+    }
+
+    @Transactional
+    public TokenRefreshResponse reissueToken(String refreshToken) {
+        // 1. Refresh Token 유효성 검증
+        if (!jwtProvider.validateToken(refreshToken)) {
+            throw new BusinessException(ErrorCode.INVALID_ID_TOKEN, "유효하지 않은 Refresh Token입니다.");
+        }
+
+        // 2. 토큰에서 정보 추출
+        var claims = jwtProvider.getClaims(refreshToken);
+        String email = claims.get("email", String.class);
+        Integer userId = Integer.parseInt(claims.getSubject());
+
+        // 3. Redis에 저장된 토큰과 일치하는지 확인
+        RefreshToken storedToken = refreshTokenRepository.findById(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_ID_TOKEN, "만료된 Refresh Token입니다. 다시 로그인해주세요."));
+
+        if (!storedToken.getToken().equals(refreshToken)) {
+            throw new BusinessException(ErrorCode.INVALID_ID_TOKEN, "유효하지 않은 Refresh Token입니다.");
+        }
+
+        // 4. 새로운 토큰 쌍 발급 (RT Rotation)
+        String newAccessToken = jwtProvider.createAccessToken(userId, email);
+        String newRefreshToken = jwtProvider.createRefreshToken(userId, email);
+
+        saveRefreshToken(email, newRefreshToken);
+
+        return TokenRefreshResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken)
+                .build();
+    }
+
+    @Transactional
+    public void logout(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        
+        refreshTokenRepository.deleteById(user.getEmail());
     }
 
     private void saveRefreshToken(String email, String token) {

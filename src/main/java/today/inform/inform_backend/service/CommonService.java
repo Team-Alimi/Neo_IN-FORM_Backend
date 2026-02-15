@@ -1,6 +1,7 @@
 package today.inform.inform_backend.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform_backend.dto.CategoryListResponse;
@@ -20,6 +21,7 @@ public class CommonService {
     private final CategoryRepository categoryRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "vendors", key = "#type != null ? #type.name() : 'ALL'", unless = "#result == null")
     public List<VendorListResponse> getVendors(VendorType type) {
         List<today.inform.inform_backend.entity.Vendor> vendors;
         if (type == null) {
@@ -33,11 +35,13 @@ public class CommonService {
                         .vendorId(v.getVendorId())
                         .vendorName(v.getVendorName())
                         .vendorInitial(v.getVendorInitial())
+                        .vendorType(v.getVendorType().name())
                         .build())
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "categories", unless = "#result == null")
     public List<CategoryListResponse> getCategories() {
         return categoryRepository.findAll().stream()
                 .map(c -> CategoryListResponse.builder()
