@@ -2,13 +2,16 @@ package today.inform.inform_backend.dto;
 
 import lombok.Builder;
 import lombok.Getter;
+
+import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
 @Builder
-public class SchoolArticleResponse {
+public class SchoolArticleResponse implements Serializable {
+    private static final long serialVersionUID = 1L;
     private Integer articleId;
     private String title;
     private LocalDate startDate;
@@ -23,7 +26,8 @@ public class SchoolArticleResponse {
 
     @Getter
     @Builder
-    public static class VendorResponse {
+    public static class VendorResponse implements Serializable {
+        private static final long serialVersionUID = 1L;
         private Integer vendorId;
         private String vendorName;
         private String vendorInitial;
@@ -32,7 +36,8 @@ public class SchoolArticleResponse {
 
     @Getter
     @Builder
-    public static class CategoryResponse {
+    public static class CategoryResponse implements Serializable {
+        private static final long serialVersionUID = 1L;
         private Integer categoryId;
         private String categoryName;
     }
