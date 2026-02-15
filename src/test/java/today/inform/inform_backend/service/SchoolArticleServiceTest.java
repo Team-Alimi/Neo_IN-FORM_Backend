@@ -6,6 +6,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
 import today.inform.inform_backend.dto.SchoolArticleResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -103,35 +106,22 @@ class SchoolArticleServiceTest {
     }
 
     @Test
-    @DisplayName("비로그인 사용자는 본문이 마스킹 처리된다.")
-    void getSchoolArticleDetail_Anonymous() {
+    @DisplayName("비로그인 사용자가 조회 시 USER_NOT_FOUND 예외가 발생한다.")
+    void getSchoolArticleDetail_Anonymous_Fail() {
         // given
-        Integer userId = null; // 비로그인
+        Integer userId = null;
         Integer articleId = 100;
-        String fullContent = "A".repeat(200); // 200자 본문
 
         SchoolArticle article = SchoolArticle.builder()
                 .articleId(articleId)
                 .title("Test Title")
-                .content(fullContent)
                 .build();
 
         when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
-        // User, Bookmark 조회는 mocking하지 않음 (호출되지 않아야 하므로)
-        when(schoolArticleVendorRepository.findAllByArticle(article)).thenReturn(List.of());
-        when(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL)).thenReturn(List.of());
 
-        // when
-        SchoolArticleDetailResponse response = schoolArticleService.getSchoolArticleDetail(articleId, userId);
-
-        // then
-        assertThat(response.getContent()).isNotEqualTo(fullContent);
-        assertThat(response.getContent()).contains("... (로그인 후 전체 내용을 확인하실 수 있습니다.)");
-        assertThat(response.getContent().length()).isLessThan(fullContent.length());
-        assertThat(response.getIsBookmarked()).isFalse();
-
-        // verify: User 조회나 Bookmark 확인 로직이 실행되지 않았는지 검증 (성능/보안)
-        verify(userRepository, never()).findById(any());
-        verify(bookmarkRepository, never()).existsByUserAndArticleTypeAndArticleId(any(), any(), any());
+        // when & then
+        assertThatThrownBy(() -> schoolArticleService.getSchoolArticleDetail(articleId, userId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
     }
 }
