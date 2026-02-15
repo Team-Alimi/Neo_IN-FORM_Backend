@@ -4,7 +4,13 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "bookmarks")
+@Table(
+    name = "bookmarks",
+    indexes = {
+        @Index(name = "idx_bookmark_user", columnList = "user_id"),
+        @Index(name = "idx_bookmark_article", columnList = "articleType, articleId")
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
