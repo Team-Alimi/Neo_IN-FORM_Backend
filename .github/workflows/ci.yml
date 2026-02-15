@@ -27,16 +27,16 @@ jobs:
 
     - name: Create Configuration Files
       run: |
-        mkdir -p src/main/resources
-        echo "${{ secrets.APPLICATION_YAML }}" > src/main/resources/application.yaml
-        mkdir -p src/test/resources
-        echo "${{ secrets.APPLICATION_TEST_YAML }}" > src/test/resources/application-test.yaml
+        mkdir -p ./src/main/resources
+        echo "${{ secrets.APPLICATION_YAML }}" > ./src/main/resources/application.yaml
+        mkdir -p ./src/test/resources
+        echo "${{ secrets.APPLICATION_TEST_YAML }}" > ./src/test/resources/application-test.yaml
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: ./gradlew build -Dspring.profiles.active=test
+      run: ./gradlew build -Dspring.profiles.active=test --info
 
     - name: Deliver files to GCP
       uses: appleboy/scp-action@v0.1.7
