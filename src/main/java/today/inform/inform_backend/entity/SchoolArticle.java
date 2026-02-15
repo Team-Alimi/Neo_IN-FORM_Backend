@@ -5,7 +5,13 @@ import lombok.*;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "school_articles")
+@Table(
+    name = "school_articles",
+    indexes = {
+        @Index(name = "idx_school_article_category", columnList = "category_id"),
+        @Index(name = "idx_school_article_dates", columnList = "startDate, dueDate")
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
