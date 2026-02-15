@@ -36,7 +36,7 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build -Dspring.profiles.active=test
 
     - name: Deliver files to GCP
       uses: appleboy/scp-action@v0.1.7
