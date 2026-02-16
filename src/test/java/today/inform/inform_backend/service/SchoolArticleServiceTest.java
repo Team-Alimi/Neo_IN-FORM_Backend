@@ -106,22 +106,33 @@ class SchoolArticleServiceTest {
     }
 
     @Test
-    @DisplayName("비로그인 사용자가 조회 시 USER_NOT_FOUND 예외가 발생한다.")
-    void getSchoolArticleDetail_Anonymous_Fail() {
+    @DisplayName("비로그인 사용자도 본문 전체를 조회할 수 있으며 북마크 여부는 false로 반환된다.")
+    void getSchoolArticleDetail_Anonymous_Success() {
         // given
         Integer userId = null;
         Integer articleId = 100;
+        String content = "전체 본문 내용입니다.";
 
         SchoolArticle article = SchoolArticle.builder()
                 .articleId(articleId)
                 .title("Test Title")
+                .content(content)
                 .build();
 
         when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+        when(schoolArticleVendorRepository.findAllByArticle(article)).thenReturn(List.of());
+        when(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL)).thenReturn(List.of());
+        when(bookmarkRepository.countByArticleIdAndArticleType(articleId, VendorType.SCHOOL)).thenReturn(10L);
 
-        // when & then
-        assertThatThrownBy(() -> schoolArticleService.getSchoolArticleDetail(articleId, userId))
-                .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
+        // when
+        SchoolArticleDetailResponse response = schoolArticleService.getSchoolArticleDetail(articleId, userId);
+
+        // then
+        assertThat(response.getContent()).isEqualTo(content);
+        assertThat(response.getIsBookmarked()).isFalse();
+        assertThat(response.getBookmarkCount()).isEqualTo(10L);
+        
+        // verify: 비로그인이므로 UserRepository를 조회하지 않아야 함
+        verify(userRepository, never()).findById(any());
     }
 }

@@ -28,15 +28,4 @@ public class CalendarController {
     ) {
         return ApiResponse.success(calendarService.getMonthlyNotices(year, month, categoryIds, isMyOnly, userId));
     }
-
-    @GetMapping("/daily-notices")
-    public ApiResponse<CalendarDailyListResponse> getDailyNotices(
-            @RequestParam LocalDate date,
-            @RequestParam(name = "category_id", required = false) List<Integer> categoryIds,
-            @RequestParam(name = "is_my_only", required = false) Boolean isMyOnly,
-            @RequestParam(defaultValue = "1") Integer page,
-            @AuthenticationPrincipal Integer userId
-    ) {
-        return ApiResponse.success(calendarService.getDailyNotices(date, categoryIds, isMyOnly, page, userId));
-    }
 }
