@@ -30,7 +30,8 @@ public interface SchoolArticleRepositoryCustom {
     List<SchoolArticle> findHotArticles(LocalDate today, int limit);
 
     List<SchoolArticle> findCalendarArticles(
-            List<String> categoryNames,
+            List<Integer> categoryIds,
+            Boolean isMyOnly,
             Integer userId,
             LocalDate viewStart,
             LocalDate viewEnd
@@ -38,7 +39,8 @@ public interface SchoolArticleRepositoryCustom {
 
     Page<SchoolArticle> findDailyCalendarArticles(
             LocalDate selectedDate,
-            List<String> categoryNames,
+            List<Integer> categoryIds,
+            Boolean isMyOnly,
             Integer userId,
             Pageable pageable
     );
