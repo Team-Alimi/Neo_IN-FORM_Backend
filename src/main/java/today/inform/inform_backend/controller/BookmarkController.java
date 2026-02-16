@@ -21,10 +21,10 @@ public class BookmarkController {
             @AuthenticationPrincipal Integer userId,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(name = "category_id", required = false) Integer categoryId,
+            @RequestParam(name = "category_id", required = false) List<Integer> categoryIds,
             @RequestParam(required = false) String keyword
     ) {
-        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, categoryId, keyword, page, size));
+        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, categoryIds, keyword, page, size));
     }
 
     @DeleteMapping("/school/all")
