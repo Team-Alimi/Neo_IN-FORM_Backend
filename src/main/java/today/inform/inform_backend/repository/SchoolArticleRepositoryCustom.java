@@ -10,6 +10,7 @@ import java.util.List;
 public interface SchoolArticleRepositoryCustom {
     Page<SchoolArticle> findAllWithFiltersAndSorting(
             List<Integer> categoryIds,
+            List<Integer> vendorIds,
             String keyword,
             LocalDate today,
             LocalDate upcomingLimit,

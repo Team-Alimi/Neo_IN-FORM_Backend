@@ -10,7 +10,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
-import today.inform.inform_backend.entity.QSchoolArticle;
 import today.inform.inform_backend.entity.SchoolArticle;
 
 import java.time.LocalDate;
@@ -18,6 +17,7 @@ import java.util.List;
 
 import static today.inform.inform_backend.entity.QCategory.category;
 import static today.inform.inform_backend.entity.QSchoolArticle.schoolArticle;
+import static today.inform.inform_backend.entity.QSchoolArticleVendor.schoolArticleVendor;
 
 import today.inform.inform_backend.entity.VendorType;
 import static today.inform.inform_backend.entity.QBookmark.bookmark;
@@ -38,7 +38,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 )
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
-                        schoolArticle.dueDate.goe(today).or(schoolArticle.dueDate.isNull()) // 마감되지 않은 글
+                        schoolArticle.dueDate.goe(today).or(schoolArticle.dueDate.isNull())
                 )
                 .groupBy(schoolArticle.articleId)
                 .orderBy(
@@ -91,18 +91,19 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     @Override
     public Page<SchoolArticle> findAllWithFiltersAndSorting(
             List<Integer> categoryIds,
+            List<Integer> vendorIds,
             String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
             LocalDate endingSoonLimit,
             Pageable pageable
     ) {
-        // 1. 데이터 조회 쿼리
         List<SchoolArticle> content = queryFactory
                 .selectFrom(schoolArticle)
-                .leftJoin(schoolArticle.category, category).fetchJoin() // Fetch Join으로 N+1 방지
+                .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
                         categoryIn(categoryIds),
+                        vendorIn(vendorIds),
                         titleContains(keyword)
                 )
                 .orderBy(
@@ -113,12 +114,12 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .limit(pageable.getPageSize())
                 .fetch();
 
-        // 2. 카운트 쿼리 (별도 실행으로 최적화)
         Long total = queryFactory
                 .select(schoolArticle.count())
                 .from(schoolArticle)
                 .where(
                         categoryIn(categoryIds),
+                        vendorIn(vendorIds),
                         titleContains(keyword)
                 )
                 .fetchOne();
@@ -168,9 +169,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     }
 
     private BooleanExpression calendarCategoryFilter(List<Integer> categoryIds, Boolean isMyOnly, Integer userId) {
-        // 1. MY 필터 (본인 북마크) 처리
         if (Boolean.TRUE.equals(isMyOnly)) {
-            if (userId == null) return schoolArticle.articleId.eq(-1); // 비로그인 시 결과 없음
+            if (userId == null) return schoolArticle.articleId.eq(-1);
             return schoolArticle.articleId.in(
                     queryFactory.select(bookmark.articleId)
                             .from(bookmark)
@@ -179,40 +179,38 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
             );
         }
 
-        // 2. 카테고리 ID 다중 필터 처리 (전달된 ID가 없으면 전체 조회)
         return (categoryIds != null && !categoryIds.isEmpty()) 
                 ? schoolArticle.category.categoryId.in(categoryIds) 
                 : null;
     }
 
-    // --- 조건절 메서드 (재사용 및 가독성 향상) ---
-
     private BooleanExpression categoryIn(List<Integer> categoryIds) {
         return (categoryIds != null && !categoryIds.isEmpty()) ? schoolArticle.category.categoryId.in(categoryIds) : null;
+    }
+
+    private BooleanExpression vendorIn(List<Integer> vendorIds) {
+        if (vendorIds == null || vendorIds.isEmpty()) return null;
+        
+        return schoolArticle.articleId.in(
+                queryFactory.select(schoolArticleVendor.article.articleId)
+                        .from(schoolArticleVendor)
+                        .where(schoolArticleVendor.vendor.vendorId.in(vendorIds))
+        );
     }
 
     private BooleanExpression titleContains(String keyword) {
         return keyword != null ? schoolArticle.title.contains(keyword) : null;
     }
 
-    // --- 정렬 로직 (사용자 체감 시급성 기준 우선순위 조정) ---
     private OrderSpecifier<Integer> createStatusOrder(LocalDate today, LocalDate upcomingLimit, LocalDate endingSoonLimit) {
         NumberExpression<Integer> statusPriority = new CaseBuilder()
-                // 1. 마감 임박 (ENDING_SOON): 이미 시작되었고 마감일이 오늘~5일 이내인 경우
                 .when(schoolArticle.startDate.loe(today)
                         .and(schoolArticle.dueDate.goe(today))
                         .and(schoolArticle.dueDate.loe(endingSoonLimit))).then(1)
-                
-                // 2. 진행중 (OPEN): 이미 시작되었고 마감일이 5일보다 많이 남았거나 없는 경우
                 .when(schoolArticle.startDate.loe(today)
                         .and(schoolArticle.dueDate.gt(endingSoonLimit).or(schoolArticle.dueDate.isNull()))).then(2)
-                
-                // 3. 시작예정 (UPCOMING): 아직 시작일이 되지 않은 경우
                 .when(schoolArticle.startDate.gt(today)).then(3)
-                
-                // 4. 종료 (CLOSED): 마감일이 오늘 이전인 경우
                 .when(schoolArticle.dueDate.lt(today)).then(4)
-                
                 .otherwise(5);
 
         return statusPriority.asc();
