@@ -42,9 +42,20 @@ public class SchoolArticleService {
         boolean isBookmarked = false;
         String content = article.getContent();
 
-        today.inform.inform_backend.entity.User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
+        // 로그인 사용자인 경우
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId)
+                    .orElse(null);
+            
+            if (user != null) {
+                isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
+            }
+        } else {
+            // 비로그인 사용자인 경우: 본문 100자 마스킹 처리
+            if (content != null && content.length() > 100) {
+                content = content.substring(0, 100) + "... (로그인 후 전체 내용을 확인하실 수 있습니다.)";
+            }
+        }
 
         long bookmarkCount = bookmarkRepository.countByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
         List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticle(article);
