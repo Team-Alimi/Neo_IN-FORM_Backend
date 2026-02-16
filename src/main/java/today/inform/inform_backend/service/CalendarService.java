@@ -28,11 +28,14 @@ public class CalendarService {
 
     @Transactional(readOnly = true)
     public List<CalendarNoticeResponse> getMonthlyNotices(Integer year, Integer month, List<Integer> categoryIds, Boolean isMyOnly, Integer userId) {
-        // 1. 해당 월의 시작일과 종료일 계산
+        // 1. 기본값 설정: 필터가 아예 없는 경우 '대회•공모전(ID: 1)'을 디폴트로 사용
+        List<Integer> effectiveCategoryIds = getEffectiveCategoryIds(categoryIds, isMyOnly);
+
+        // 2. 해당 월의 시작일과 종료일 계산
         LocalDate startOfMonth = LocalDate.of(year, month, 1);
         LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
 
-        List<SchoolArticle> articles = schoolArticleRepository.findCalendarArticles(categoryIds, isMyOnly, userId, startOfMonth, endOfMonth);
+        List<SchoolArticle> articles = schoolArticleRepository.findCalendarArticles(effectiveCategoryIds, isMyOnly, userId, startOfMonth, endOfMonth);
 
         return articles.stream()
                 .map(article -> CalendarNoticeResponse.builder()
@@ -47,9 +50,10 @@ public class CalendarService {
 
     @Transactional(readOnly = true)
     public CalendarDailyListResponse getDailyNotices(LocalDate selectedDate, List<Integer> categoryIds, Boolean isMyOnly, Integer page, Integer userId) {
+        List<Integer> effectiveCategoryIds = getEffectiveCategoryIds(categoryIds, isMyOnly);
         Pageable pageable = PageRequest.of(page - 1, 5); // 한 페이지 5개 고정
 
-        Page<SchoolArticle> articlePage = schoolArticleRepository.findDailyCalendarArticles(selectedDate, categoryIds, isMyOnly, userId, pageable);
+        Page<SchoolArticle> articlePage = schoolArticleRepository.findDailyCalendarArticles(selectedDate, effectiveCategoryIds, isMyOnly, userId, pageable);
 
         if (articlePage.isEmpty()) {
             return CalendarDailyListResponse.builder()
@@ -95,6 +99,14 @@ public class CalendarService {
                         .build())
                 .notices(notices)
                 .build();
+    }
+
+    private List<Integer> getEffectiveCategoryIds(List<Integer> categoryIds, Boolean isMyOnly) {
+        // 카테고리 필터가 없고, '내 일정만 보기'도 체크 안 된 경우에만 ID 1번(대회•공모전)을 기본값으로 사용
+        if ((categoryIds == null || categoryIds.isEmpty()) && !Boolean.TRUE.equals(isMyOnly)) {
+            return List.of(1);
+        }
+        return categoryIds;
     }
 
     private String determineStatus(SchoolArticle article, LocalDate today) {
