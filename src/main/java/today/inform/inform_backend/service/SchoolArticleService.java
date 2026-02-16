@@ -256,7 +256,7 @@ public class SchoolArticleService {
                 .build();
     }
 
-    private SchoolArticleResponse convertToResponse(SchoolArticle article, List<SchoolArticleVendor> vendors, LocalDate today, boolean isBookmarked, Long bookmarkCount) {
+    SchoolArticleResponse convertToResponse(SchoolArticle article, List<SchoolArticleVendor> vendors, LocalDate today, boolean isBookmarked, Long bookmarkCount) {
         return SchoolArticleResponse.builder()
                 .articleId(article.getArticleId())
                 .title(article.getTitle())
@@ -282,7 +282,7 @@ public class SchoolArticleService {
                 .build();
     }
 
-    private String determineStatus(SchoolArticle article, LocalDate today) {
+    String determineStatus(SchoolArticle article, LocalDate today) {
         if (article.getDueDate() != null && article.getDueDate().isBefore(today)) return "CLOSED";
         if (article.getStartDate() != null && article.getStartDate().isAfter(today)) return "UPCOMING";
         if (article.getDueDate() != null && !article.getDueDate().isAfter(today.plusDays(5))) return "ENDING_SOON";

@@ -6,7 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import today.inform.inform_backend.dto.CalendarNoticeResponse;
+import today.inform.inform_backend.dto.SchoolArticleResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
 import today.inform.inform_backend.repository.BookmarkRepository;
 import today.inform.inform_backend.repository.SchoolArticleRepository;
@@ -38,6 +38,9 @@ class CalendarServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private SchoolArticleService schoolArticleService;
+
     @Test
     @DisplayName("월간 일정 조회 시 카테고리 필터가 없으면 기본값(ID: 1)이 적용된다.")
     void getMonthlyNotices_DefaultCategory() {
@@ -46,7 +49,7 @@ class CalendarServiceTest {
                 .willReturn(List.of());
 
         // when
-        List<CalendarNoticeResponse> response = calendarService.getMonthlyNotices(2026, 2, null, null, null);
+        List<SchoolArticleResponse> response = calendarService.getMonthlyNotices(2026, 2, null, null, null);
 
         // then
         assertThat(response).isEmpty();
@@ -67,7 +70,7 @@ class CalendarServiceTest {
     }
 
     @Test
-    @DisplayName("일정 조회 결과가 있으면 벤더 및 북마크 정보가 포함되어 반환된다.")
+    @DisplayName("일정 조회 결과가 있으면 SchoolArticleService를 통해 응답이 변환된다.")
     void getMonthlyNotices_Success() {
         // given
         SchoolArticle article = SchoolArticle.builder()
@@ -81,9 +84,12 @@ class CalendarServiceTest {
                 .willReturn(List.of(article));
         given(schoolArticleVendorRepository.findAllByArticleIn(any())).willReturn(List.of());
         given(bookmarkRepository.countByArticleIdsAndArticleType(any(), any())).willReturn(List.of());
+        
+        given(schoolArticleService.convertToResponse(any(), any(), any(), anyBoolean(), anyLong()))
+                .willReturn(SchoolArticleResponse.builder().articleId(100).build());
 
         // when
-        List<CalendarNoticeResponse> response = calendarService.getMonthlyNotices(2026, 2, null, null, null);
+        List<SchoolArticleResponse> response = calendarService.getMonthlyNotices(2026, 2, null, null, null);
 
         // then
         assertThat(response).hasSize(1);

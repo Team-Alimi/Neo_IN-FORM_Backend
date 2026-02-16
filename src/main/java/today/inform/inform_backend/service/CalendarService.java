@@ -3,8 +3,7 @@ package today.inform.inform_backend.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import today.inform.inform_backend.dto.CalendarNoticeResponse;
-import today.inform.inform_backend.dto.VendorListResponse;
+import today.inform.inform_backend.dto.SchoolArticleResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
 import today.inform.inform_backend.entity.SchoolArticleVendor;
 import today.inform.inform_backend.repository.SchoolArticleRepository;
@@ -25,9 +24,10 @@ public class CalendarService {
     private final SchoolArticleVendorRepository schoolArticleVendorRepository;
     private final BookmarkRepository bookmarkRepository;
     private final UserRepository userRepository;
+    private final SchoolArticleService schoolArticleService;
 
     @Transactional(readOnly = true)
-    public List<CalendarNoticeResponse> getMonthlyNotices(Integer year, Integer month, List<Integer> categoryIds, Boolean isMyOnly, Integer userId) {
+    public List<SchoolArticleResponse> getMonthlyNotices(Integer year, Integer month, List<Integer> categoryIds, Boolean isMyOnly, Integer userId) {
         // 1. 기본값 설정
         List<Integer> effectiveCategoryIds = getEffectiveCategoryIds(categoryIds, isMyOnly);
 
@@ -44,18 +44,10 @@ public class CalendarService {
 
         List<Integer> articleIds = articles.stream().map(SchoolArticle::getArticleId).collect(Collectors.toList());
 
-        // 4. 벤더 정보 일괄 조회 (N+1 방지)
+        // 4. 벤더 정보 일괄 조회
         List<SchoolArticleVendor> savs = schoolArticleVendorRepository.findAllByArticleIn(articles);
-        Map<Integer, List<VendorListResponse>> vendorMap = savs.stream()
-                .collect(Collectors.groupingBy(
-                        sav -> sav.getArticle().getArticleId(),
-                        Collectors.mapping(sav -> VendorListResponse.builder()
-                                .vendorId(sav.getVendor().getVendorId())
-                                .vendorName(sav.getVendor().getVendorName())
-                                .vendorInitial(sav.getVendor().getVendorInitial())
-                                .vendorType(sav.getVendor().getVendorType().name())
-                                .build(), Collectors.toList())
-                ));
+        Map<Integer, List<SchoolArticleVendor>> vendorMap = savs.stream()
+                .collect(Collectors.groupingBy(sav -> sav.getArticle().getArticleId()));
 
         // 5. 북마크 여부 일괄 확인
         java.util.Set<Integer> bookmarkedIds = new java.util.HashSet<>();
@@ -73,20 +65,16 @@ public class CalendarService {
         // 6. 북마크 개수 일괄 조회
         Map<Integer, Long> bookmarkCountMap = getBookmarkCountMap(articleIds);
 
-        // 7. 응답 변환
+        // 7. 응답 변환 (SchoolArticleService의 로직 재사용)
         LocalDate today = LocalDate.now();
         return articles.stream()
-                .map(article -> CalendarNoticeResponse.builder()
-                        .articleId(article.getArticleId())
-                        .title(article.getTitle())
-                        .startDate(article.getStartDate())
-                        .dueDate(article.getDueDate())
-                        .categoryName(article.getCategory() != null ? article.getCategory().getCategoryName() : null)
-                        .status(determineStatus(article, today))
-                        .isBookmarked(finalBookmarkedIds.contains(article.getArticleId()))
-                        .bookmarkCount(bookmarkCountMap.getOrDefault(article.getArticleId(), 0L))
-                        .vendors(vendorMap.getOrDefault(article.getArticleId(), List.of()))
-                        .build())
+                .map(article -> schoolArticleService.convertToResponse(
+                        article, 
+                        vendorMap.get(article.getArticleId()), 
+                        today, 
+                        finalBookmarkedIds.contains(article.getArticleId()), 
+                        bookmarkCountMap.getOrDefault(article.getArticleId(), 0L)
+                ))
                 .collect(Collectors.toList());
     }
 
@@ -100,17 +88,9 @@ public class CalendarService {
     }
 
     private List<Integer> getEffectiveCategoryIds(List<Integer> categoryIds, Boolean isMyOnly) {
-        // 카테고리 필터가 없고, '내 일정만 보기'도 체크 안 된 경우에만 ID 1번(대회•공모전)을 기본값으로 사용
         if ((categoryIds == null || categoryIds.isEmpty()) && !Boolean.TRUE.equals(isMyOnly)) {
             return List.of(1);
         }
         return categoryIds;
-    }
-
-    private String determineStatus(SchoolArticle article, LocalDate today) {
-        if (article.getDueDate() != null && article.getDueDate().isBefore(today)) return "CLOSED";
-        if (article.getStartDate() != null && article.getStartDate().isAfter(today)) return "UPCOMING";
-        if (article.getDueDate() != null && !article.getDueDate().isAfter(today.plusDays(5))) return "ENDING_SOON";
-        return "OPEN";
     }
 }
