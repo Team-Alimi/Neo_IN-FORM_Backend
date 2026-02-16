@@ -197,14 +197,25 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         return keyword != null ? schoolArticle.title.contains(keyword) : null;
     }
 
-    // --- 정렬 로직 (기존 CASE WHEN을 자바 코드로 구현) ---
+    // --- 정렬 로직 (사용자 체감 시급성 기준 우선순위 조정) ---
     private OrderSpecifier<Integer> createStatusOrder(LocalDate today, LocalDate upcomingLimit, LocalDate endingSoonLimit) {
         NumberExpression<Integer> statusPriority = new CaseBuilder()
-                .when(schoolArticle.startDate.loe(today).and(schoolArticle.dueDate.gt(endingSoonLimit).or(schoolArticle.dueDate.isNull()))).then(1)   // OPEN (General)
-                .when(schoolArticle.dueDate.goe(today).and(schoolArticle.dueDate.loe(endingSoonLimit))).then(2)  // ENDING_SOON
-                .when(schoolArticle.startDate.gt(today).and(schoolArticle.startDate.loe(upcomingLimit))).then(3) // UPCOMING
-                .when(schoolArticle.dueDate.lt(today)).then(5)  // CLOSED
-                .otherwise(4); // NORMAL
+                // 1. 마감 임박 (ENDING_SOON): 이미 시작되었고 마감일이 오늘~5일 이내인 경우
+                .when(schoolArticle.startDate.loe(today)
+                        .and(schoolArticle.dueDate.goe(today))
+                        .and(schoolArticle.dueDate.loe(endingSoonLimit))).then(1)
+                
+                // 2. 진행중 (OPEN): 이미 시작되었고 마감일이 5일보다 많이 남았거나 없는 경우
+                .when(schoolArticle.startDate.loe(today)
+                        .and(schoolArticle.dueDate.gt(endingSoonLimit).or(schoolArticle.dueDate.isNull()))).then(2)
+                
+                // 3. 시작예정 (UPCOMING): 아직 시작일이 되지 않은 경우
+                .when(schoolArticle.startDate.gt(today)).then(3)
+                
+                // 4. 종료 (CLOSED): 마감일이 오늘 이전인 경우
+                .when(schoolArticle.dueDate.lt(today)).then(4)
+                
+                .otherwise(5);
 
         return statusPriority.asc();
     }
