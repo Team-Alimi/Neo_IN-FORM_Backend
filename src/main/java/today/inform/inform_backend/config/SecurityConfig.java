@@ -60,7 +60,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/calendar/notices").permitAll()
                 .requestMatchers("/api/v1/calendar/daily-notices").permitAll()
                 .requestMatchers("/api/v1/users/**").hasRole("USER")
-                .requestMatchers("/api/v1/school_articles/**").hasRole("USER")
+                .requestMatchers("/api/v1/school_articles/**").permitAll()
                 .requestMatchers("/api/v1/bookmarks/**").hasRole("USER")
                 .anyRequest().authenticated()
             )
