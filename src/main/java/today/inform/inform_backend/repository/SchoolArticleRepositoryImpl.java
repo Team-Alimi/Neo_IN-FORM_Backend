@@ -52,7 +52,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     @Override
     public Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
             List<Integer> articleIds,
-            Integer categoryId,
+            List<Integer> categoryIds,
             String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
@@ -64,7 +64,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
                         schoolArticle.articleId.in(articleIds),
-                        categoryEq(categoryId),
+                        categoryIn(categoryIds),
                         titleContains(keyword)
                 )
                 .orderBy(
@@ -80,7 +80,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .from(schoolArticle)
                 .where(
                         schoolArticle.articleId.in(articleIds),
-                        categoryEq(categoryId),
+                        categoryIn(categoryIds),
                         titleContains(keyword)
                 )
                 .fetchOne();
@@ -90,7 +90,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
 
     @Override
     public Page<SchoolArticle> findAllWithFiltersAndSorting(
-            Integer categoryId,
+            List<Integer> categoryIds,
             String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
@@ -102,7 +102,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin() // Fetch Join으로 N+1 방지
                 .where(
-                        categoryEq(categoryId),
+                        categoryIn(categoryIds),
                         titleContains(keyword)
                 )
                 .orderBy(
@@ -118,7 +118,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .select(schoolArticle.count())
                 .from(schoolArticle)
                 .where(
-                        categoryEq(categoryId),
+                        categoryIn(categoryIds),
                         titleContains(keyword)
                 )
                 .fetchOne();
@@ -189,8 +189,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
 
     // --- 조건절 메서드 (재사용 및 가독성 향상) ---
 
-    private BooleanExpression categoryEq(Integer categoryId) {
-        return categoryId != null ? schoolArticle.category.categoryId.eq(categoryId) : null;
+    private BooleanExpression categoryIn(List<Integer> categoryIds) {
+        return (categoryIds != null && !categoryIds.isEmpty()) ? schoolArticle.category.categoryId.in(categoryIds) : null;
     }
 
     private BooleanExpression titleContains(String keyword) {
