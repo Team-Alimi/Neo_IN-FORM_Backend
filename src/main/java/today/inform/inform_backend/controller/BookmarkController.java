@@ -9,6 +9,8 @@ import today.inform.inform_backend.dto.ClubArticleListResponse;
 import today.inform.inform_backend.dto.SchoolArticleListResponse;
 import today.inform.inform_backend.service.BookmarkService;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/bookmarks")
 @RequiredArgsConstructor
