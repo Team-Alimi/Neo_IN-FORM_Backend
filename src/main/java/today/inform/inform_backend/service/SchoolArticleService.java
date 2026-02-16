@@ -42,9 +42,15 @@ public class SchoolArticleService {
         boolean isBookmarked = false;
         String content = article.getContent();
 
-        today.inform.inform_backend.entity.User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
+        // 로그인 사용자인 경우 북마크 여부 확인
+        if (userId != null) {
+            today.inform.inform_backend.entity.User user = userRepository.findById(userId)
+                    .orElse(null);
+            
+            if (user != null) {
+                isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
+            }
+        }
 
         long bookmarkCount = bookmarkRepository.countByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
         List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticle(article);
