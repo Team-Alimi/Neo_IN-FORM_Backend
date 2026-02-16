@@ -36,9 +36,9 @@ public class SchoolArticleController {
         return ApiResponse.success(schoolArticleService.getHotSchoolArticles(userId));
     }
 
-    @GetMapping("/{articleId}")
+    @GetMapping("/{article_id}")
     public ApiResponse<SchoolArticleDetailResponse> getSchoolArticleDetail(
-            @PathVariable Integer articleId,
+            @PathVariable(name = "article_id") Integer articleId,
             @AuthenticationPrincipal Integer userId
     ) {
         return ApiResponse.success(schoolArticleService.getSchoolArticleDetail(articleId, userId));

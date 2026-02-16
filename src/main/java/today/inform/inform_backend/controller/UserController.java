@@ -25,9 +25,9 @@ public class UserController {
         return ApiResponse.success(userService.getMyProfile(userId));
     }
 
-    @PatchMapping("/{userId}/major")
+    @PatchMapping("/{user_id}/major")
     public ApiResponse<Void> updateMajor(
-            @PathVariable Integer userId,
+            @PathVariable(name = "user_id") Integer userId,
             @AuthenticationPrincipal Integer loginUserId, // SecurityContext에서 꺼내온 ID
             @RequestBody UserUpdateRequest request
     ) {
