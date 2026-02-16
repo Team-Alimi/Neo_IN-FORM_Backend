@@ -66,9 +66,9 @@ public class NotificationScheduler {
     }
 
     /**
-     * 매일 오전 4시에 30일이 지난 오래된 알림 삭제
+     * 매일 오전 4시 30분에 30일이 지난 오래된 알림 삭제
      */
-    @Scheduled(cron = "0 0 4 * * *")
+    @Scheduled(cron = "0 30 4 * * *")
     @Transactional
     public void cleanupOldNotifications() {
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
