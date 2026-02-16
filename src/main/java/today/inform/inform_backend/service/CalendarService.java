@@ -26,21 +26,13 @@ public class CalendarService {
     private final SchoolArticleRepository schoolArticleRepository;
     private final SchoolArticleVendorRepository schoolArticleVendorRepository;
 
-    private static final Map<String, String> CATEGORY_MAP = Map.of(
-            "CONTEST", "대회•공모전",
-            "LECTURE", "특강",
-            "SCHOLAR", "장학",
-            "ACTIVITY", "대내외 활동"
-    );
-
     @Transactional(readOnly = true)
-    public List<CalendarNoticeResponse> getMonthlyNotices(Integer year, Integer month, List<String> categories, Integer userId) {
+    public List<CalendarNoticeResponse> getMonthlyNotices(Integer year, Integer month, List<Integer> categoryIds, Boolean isMyOnly, Integer userId) {
         // 1. 해당 월의 시작일과 종료일 계산
         LocalDate startOfMonth = LocalDate.of(year, month, 1);
         LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
 
-        List<String> mappedCategories = mapCategories(categories);
-        List<SchoolArticle> articles = schoolArticleRepository.findCalendarArticles(mappedCategories, userId, startOfMonth, endOfMonth);
+        List<SchoolArticle> articles = schoolArticleRepository.findCalendarArticles(categoryIds, isMyOnly, userId, startOfMonth, endOfMonth);
 
         return articles.stream()
                 .map(article -> CalendarNoticeResponse.builder()
@@ -54,11 +46,10 @@ public class CalendarService {
     }
 
     @Transactional(readOnly = true)
-    public CalendarDailyListResponse getDailyNotices(LocalDate selectedDate, List<String> categories, Integer page, Integer userId) {
-        Pageable pageable = PageRequest.of(page - 1, 5); // 5개 고정
-        List<String> mappedCategories = mapCategories(categories);
+    public CalendarDailyListResponse getDailyNotices(LocalDate selectedDate, List<Integer> categoryIds, Boolean isMyOnly, Integer page, Integer userId) {
+        Pageable pageable = PageRequest.of(page - 1, 5); // 한 페이지 5개 고정
 
-        Page<SchoolArticle> articlePage = schoolArticleRepository.findDailyCalendarArticles(selectedDate, mappedCategories, userId, pageable);
+        Page<SchoolArticle> articlePage = schoolArticleRepository.findDailyCalendarArticles(selectedDate, categoryIds, isMyOnly, userId, pageable);
 
         if (articlePage.isEmpty()) {
             return CalendarDailyListResponse.builder()
@@ -104,18 +95,6 @@ public class CalendarService {
                         .build())
                 .notices(notices)
                 .build();
-    }
-
-    private List<String> mapCategories(List<String> categories) {
-        if (categories == null || categories.isEmpty()) {
-            return List.of("대회•공모전");
-        }
-        if (categories.contains("MY")) {
-            return List.of("MY");
-        }
-        return categories.stream()
-                .map(c -> CATEGORY_MAP.getOrDefault(c, c))
-                .collect(Collectors.toList());
     }
 
     private String determineStatus(SchoolArticle article, LocalDate today) {

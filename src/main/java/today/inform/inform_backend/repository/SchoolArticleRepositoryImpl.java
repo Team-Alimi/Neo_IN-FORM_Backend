@@ -127,12 +127,12 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     }
 
     @Override
-    public List<SchoolArticle> findCalendarArticles(List<String> categoryNames, Integer userId, LocalDate viewStart, LocalDate viewEnd) {
+    public List<SchoolArticle> findCalendarArticles(List<Integer> categoryIds, Boolean isMyOnly, Integer userId, LocalDate viewStart, LocalDate viewEnd) {
         return queryFactory
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
-                        calendarCategoryFilter(categoryNames, userId),
+                        calendarCategoryFilter(categoryIds, isMyOnly, userId),
                         schoolArticle.startDate.loe(viewEnd),
                         schoolArticle.dueDate.goe(viewStart)
                 )
@@ -140,12 +140,12 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     }
 
     @Override
-    public Page<SchoolArticle> findDailyCalendarArticles(LocalDate selectedDate, List<String> categoryNames, Integer userId, Pageable pageable) {
+    public Page<SchoolArticle> findDailyCalendarArticles(LocalDate selectedDate, List<Integer> categoryIds, Boolean isMyOnly, Integer userId, Pageable pageable) {
         List<SchoolArticle> content = queryFactory
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
-                        calendarCategoryFilter(categoryNames, userId),
+                        calendarCategoryFilter(categoryIds, isMyOnly, userId),
                         schoolArticle.startDate.loe(selectedDate),
                         schoolArticle.dueDate.goe(selectedDate)
                 )
@@ -158,7 +158,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .select(schoolArticle.count())
                 .from(schoolArticle)
                 .where(
-                        calendarCategoryFilter(categoryNames, userId),
+                        calendarCategoryFilter(categoryIds, isMyOnly, userId),
                         schoolArticle.startDate.loe(selectedDate),
                         schoolArticle.dueDate.goe(selectedDate)
                 )
@@ -167,10 +167,10 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         return new PageImpl<>(content, pageable, total != null ? total : 0L);
     }
 
-    private BooleanExpression calendarCategoryFilter(List<String> categoryNames, Integer userId) {
-        // MY 필터가 포함되어 있으면 다른 카테고리는 무시
-        if (categoryNames != null && categoryNames.contains("MY")) {
-            if (userId == null) return schoolArticle.articleId.eq(-1); // 로그인 안 했으면 결과 없음
+    private BooleanExpression calendarCategoryFilter(List<Integer> categoryIds, Boolean isMyOnly, Integer userId) {
+        // 1. MY 필터 (본인 북마크) 처리
+        if (Boolean.TRUE.equals(isMyOnly)) {
+            if (userId == null) return schoolArticle.articleId.eq(-1); // 비로그인 시 결과 없음
             return schoolArticle.articleId.in(
                     queryFactory.select(bookmark.articleId)
                             .from(bookmark)
@@ -179,12 +179,10 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
             );
         }
 
-        // 일반 카테고리 필터링
-        if (categoryNames == null || categoryNames.isEmpty()) {
-            return category.categoryName.eq("대회•공모전");
-        }
-
-        return category.categoryName.in(categoryNames);
+        // 2. 카테고리 ID 다중 필터 처리 (전달된 ID가 없으면 전체 조회)
+        return (categoryIds != null && !categoryIds.isEmpty()) 
+                ? schoolArticle.category.categoryId.in(categoryIds) 
+                : null;
     }
 
     // --- 조건절 메서드 (재사용 및 가독성 향상) ---
