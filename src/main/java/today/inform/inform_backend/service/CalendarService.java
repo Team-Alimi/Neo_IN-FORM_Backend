@@ -34,13 +34,13 @@ public class CalendarService {
     );
 
     @Transactional(readOnly = true)
-    public List<CalendarNoticeResponse> getMonthlyNotices(LocalDate viewStart, LocalDate viewEnd, List<String> categories, Integer userId) {
-        if (viewStart.isAfter(viewEnd)) {
-            throw new IllegalArgumentException("view_start cannot be after view_end");
-        }
+    public List<CalendarNoticeResponse> getMonthlyNotices(Integer year, Integer month, List<String> categories, Integer userId) {
+        // 1. 해당 월의 시작일과 종료일 계산
+        LocalDate startOfMonth = LocalDate.of(year, month, 1);
+        LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
 
         List<String> mappedCategories = mapCategories(categories);
-        List<SchoolArticle> articles = schoolArticleRepository.findCalendarArticles(mappedCategories, userId, viewStart, viewEnd);
+        List<SchoolArticle> articles = schoolArticleRepository.findCalendarArticles(mappedCategories, userId, startOfMonth, endOfMonth);
 
         return articles.stream()
                 .map(article -> CalendarNoticeResponse.builder()

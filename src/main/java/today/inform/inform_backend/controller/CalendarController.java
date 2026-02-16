@@ -20,12 +20,12 @@ public class CalendarController {
 
     @GetMapping("/notices")
     public ApiResponse<List<CalendarNoticeResponse>> getMonthlyNotices(
-            @RequestParam(name = "view_start") LocalDate viewStart,
-            @RequestParam(name = "view_end") LocalDate viewEnd,
+            @RequestParam Integer year,
+            @RequestParam Integer month,
             @RequestParam(required = false) List<String> categories,
             @AuthenticationPrincipal Integer userId
     ) {
-        return ApiResponse.success(calendarService.getMonthlyNotices(viewStart, viewEnd, categories, userId));
+        return ApiResponse.success(calendarService.getMonthlyNotices(year, month, categories, userId));
     }
 
     @GetMapping("/daily-notices")
