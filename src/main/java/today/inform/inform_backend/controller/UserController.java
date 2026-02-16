@@ -25,6 +25,14 @@ public class UserController {
         return ApiResponse.success(userService.getMyProfile(userId));
     }
 
+    @DeleteMapping("/me")
+    public ApiResponse<Void> withdraw(
+            @AuthenticationPrincipal Integer userId
+    ) {
+        userService.withdraw(userId);
+        return ApiResponse.success(null);
+    }
+
     @PatchMapping("/{user_id}/major")
     public ApiResponse<Void> updateMajor(
             @PathVariable(name = "user_id") Integer userId,
