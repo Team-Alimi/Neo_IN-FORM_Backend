@@ -188,7 +188,7 @@ public class SchoolArticleService {
     }
 
     @Transactional(readOnly = true)
-    public SchoolArticleListResponse getSchoolArticles(Integer page, Integer size, Integer categoryId, String keyword, Integer userId) {
+    public SchoolArticleListResponse getSchoolArticles(Integer page, Integer size, List<Integer> categoryIds, String keyword, Integer userId) {
         // 보안/최적화: 최대 페이지 사이즈 제한
         int cappedSize = Math.min(size, 50);
         
@@ -198,7 +198,7 @@ public class SchoolArticleService {
 
         Pageable pageable = PageRequest.of(page - 1, cappedSize);
         Page<SchoolArticle> articlePage = schoolArticleRepository.findAllWithFiltersAndSorting(
-                categoryId, keyword, todayDate, upcomingLimit, endingSoonLimit, pageable
+                categoryIds, keyword, todayDate, upcomingLimit, endingSoonLimit, pageable
         );
 
         List<SchoolArticle> articles = articlePage.getContent();
