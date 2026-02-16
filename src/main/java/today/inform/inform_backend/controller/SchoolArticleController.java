@@ -23,10 +23,11 @@ public class SchoolArticleController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(name = "category_id", required = false) List<Integer> categoryIds,
+            @RequestParam(name = "vendor_id", required = false) List<Integer> vendorIds,
             @RequestParam(required = false) String keyword,
             @AuthenticationPrincipal Integer userId
     ) {
-        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryIds, keyword, userId));
+        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryIds, vendorIds, keyword, userId));
     }
 
     @GetMapping("/hot")

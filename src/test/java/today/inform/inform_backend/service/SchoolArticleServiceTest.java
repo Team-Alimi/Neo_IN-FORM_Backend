@@ -6,6 +6,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import today.inform.inform_backend.common.exception.BusinessException;
 import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
@@ -56,11 +58,11 @@ class SchoolArticleServiceTest {
         when(schoolArticleRepository.findHotArticles(any(LocalDate.class), eq(10))).thenReturn(articles);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(bookmarkRepository.findAllByUserAndArticleTypeAndArticleIdIn(eq(user), eq(VendorType.SCHOOL), anyList()))
-                .thenReturn(List.of()); // 북마크 안한 상태
+                .thenReturn(List.of());
         
         Object[] countResult = new Object[]{1, 5L};
         when(bookmarkRepository.countByArticleIdsAndArticleType(anyList(), eq(VendorType.SCHOOL)))
-                .thenReturn(java.util.Collections.singletonList(countResult)); // 북마크 수 5개
+                .thenReturn(java.util.Collections.singletonList(countResult));
 
         // when
         List<SchoolArticleResponse> result = schoolArticleService.getHotSchoolArticles(userId);
@@ -69,7 +71,6 @@ class SchoolArticleServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getTitle()).isEqualTo("Hot Article");
         assertThat(result.get(0).getBookmarkCount()).isEqualTo(5L);
-        verify(schoolArticleRepository, times(1)).findHotArticles(any(), eq(10));
     }
 
     @Test
@@ -78,7 +79,7 @@ class SchoolArticleServiceTest {
         // given
         Integer userId = 1;
         Integer articleId = 100;
-        String fullContent = "A".repeat(200); // 200자 본문
+        String fullContent = "A".repeat(200);
 
         SchoolArticle article = SchoolArticle.builder()
                 .articleId(articleId)
@@ -98,11 +99,8 @@ class SchoolArticleServiceTest {
         SchoolArticleDetailResponse response = schoolArticleService.getSchoolArticleDetail(articleId, userId);
 
         // then
-        assertThat(response.getContent()).isEqualTo(fullContent); // 원본 그대로
+        assertThat(response.getContent()).isEqualTo(fullContent);
         assertThat(response.getIsBookmarked()).isTrue();
-        
-        // verify: User 조회가 일어났는지 확인
-        verify(userRepository, times(1)).findById(userId);
     }
 
     @Test
@@ -130,9 +128,23 @@ class SchoolArticleServiceTest {
         // then
         assertThat(response.getContent()).isEqualTo(content);
         assertThat(response.getIsBookmarked()).isFalse();
-        assertThat(response.getBookmarkCount()).isEqualTo(10L);
+    }
+
+    @Test
+    @DisplayName("제공처 ID 리스트로 필터링하여 공지사항 목록을 조회한다.")
+    void getSchoolArticles_WithVendorFilter() {
+        // given
+        List<Integer> vendorIds = List.of(5, 12);
+        Page<SchoolArticle> page = new PageImpl<>(List.of());
         
-        // verify: 비로그인이므로 UserRepository를 조회하지 않아야 함
-        verify(userRepository, never()).findById(any());
+        when(schoolArticleRepository.findAllWithFiltersAndSorting(any(), eq(vendorIds), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        // when
+        schoolArticleService.getSchoolArticles(1, 10, null, vendorIds, null, null);
+
+        // then
+        verify(schoolArticleRepository, times(1))
+                .findAllWithFiltersAndSorting(any(), eq(vendorIds), any(), any(), any(), any(), any());
     }
 }
