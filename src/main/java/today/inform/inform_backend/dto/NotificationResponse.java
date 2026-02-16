@@ -15,5 +15,7 @@ public class NotificationResponse {
     private VendorType articleType;
     private Integer articleId;
     private boolean isRead;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime createdAt;
 }
