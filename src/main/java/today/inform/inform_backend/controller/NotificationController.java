@@ -32,10 +32,10 @@ public class NotificationController {
         return ApiResponse.success(Map.of("unread_count", count));
     }
 
-    @PatchMapping("/{notificationId}/read")
+    @PatchMapping("/{notification_id}/read")
     public ApiResponse<Void> markAsRead(
             @AuthenticationPrincipal Integer userId,
-            @PathVariable Integer notificationId
+            @PathVariable(name = "notification_id") Integer notificationId
     ) {
         notificationService.markAsRead(userId, notificationId);
         return ApiResponse.success(null);

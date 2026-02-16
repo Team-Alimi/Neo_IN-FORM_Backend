@@ -28,7 +28,7 @@ public class BookmarkService {
     private final ClubArticleService clubArticleService;
 
     @Transactional(readOnly = true)
-    public today.inform.inform_backend.dto.SchoolArticleListResponse getBookmarkedSchoolArticles(Integer userId, Integer categoryId, String keyword, Integer page, Integer size) {
+    public today.inform.inform_backend.dto.SchoolArticleListResponse getBookmarkedSchoolArticles(Integer userId, List<Integer> categoryIds, String keyword, Integer page, Integer size) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
@@ -49,7 +49,7 @@ public class BookmarkService {
                     .build();
         }
 
-        return schoolArticleService.getSchoolArticlesByIds(articleIds, categoryId, keyword, page, size, userId);
+        return schoolArticleService.getSchoolArticlesByIds(articleIds, categoryIds, keyword, page, size, userId);
     }
 
     @Transactional

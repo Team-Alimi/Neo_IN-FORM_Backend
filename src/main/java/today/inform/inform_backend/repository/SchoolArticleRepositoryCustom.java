@@ -9,7 +9,8 @@ import java.util.List;
 
 public interface SchoolArticleRepositoryCustom {
     Page<SchoolArticle> findAllWithFiltersAndSorting(
-            Integer categoryId,
+            List<Integer> categoryIds,
+            List<Integer> vendorIds,
             String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
@@ -19,7 +20,7 @@ public interface SchoolArticleRepositoryCustom {
 
     Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
             List<Integer> articleIds,
-            Integer categoryId,
+            List<Integer> categoryIds,
             String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
@@ -30,7 +31,8 @@ public interface SchoolArticleRepositoryCustom {
     List<SchoolArticle> findHotArticles(LocalDate today, int limit);
 
     List<SchoolArticle> findCalendarArticles(
-            List<String> categoryNames,
+            List<Integer> categoryIds,
+            Boolean isMyOnly,
             Integer userId,
             LocalDate viewStart,
             LocalDate viewEnd
@@ -38,7 +40,8 @@ public interface SchoolArticleRepositoryCustom {
 
     Page<SchoolArticle> findDailyCalendarArticles(
             LocalDate selectedDate,
-            List<String> categoryNames,
+            List<Integer> categoryIds,
+            Boolean isMyOnly,
             Integer userId,
             Pageable pageable
     );

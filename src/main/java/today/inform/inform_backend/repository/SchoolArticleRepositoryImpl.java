@@ -10,7 +10,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
-import today.inform.inform_backend.entity.QSchoolArticle;
 import today.inform.inform_backend.entity.SchoolArticle;
 
 import java.time.LocalDate;
@@ -18,6 +17,7 @@ import java.util.List;
 
 import static today.inform.inform_backend.entity.QCategory.category;
 import static today.inform.inform_backend.entity.QSchoolArticle.schoolArticle;
+import static today.inform.inform_backend.entity.QSchoolArticleVendor.schoolArticleVendor;
 
 import today.inform.inform_backend.entity.VendorType;
 import static today.inform.inform_backend.entity.QBookmark.bookmark;
@@ -38,7 +38,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 )
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
-                        schoolArticle.dueDate.goe(today).or(schoolArticle.dueDate.isNull()) // 마감되지 않은 글
+                        schoolArticle.dueDate.goe(today).or(schoolArticle.dueDate.isNull())
                 )
                 .groupBy(schoolArticle.articleId)
                 .orderBy(
@@ -52,7 +52,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     @Override
     public Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
             List<Integer> articleIds,
-            Integer categoryId,
+            List<Integer> categoryIds,
             String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
@@ -64,7 +64,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
                         schoolArticle.articleId.in(articleIds),
-                        categoryEq(categoryId),
+                        categoryIn(categoryIds),
                         titleContains(keyword)
                 )
                 .orderBy(
@@ -80,7 +80,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .from(schoolArticle)
                 .where(
                         schoolArticle.articleId.in(articleIds),
-                        categoryEq(categoryId),
+                        categoryIn(categoryIds),
                         titleContains(keyword)
                 )
                 .fetchOne();
@@ -90,19 +90,20 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
 
     @Override
     public Page<SchoolArticle> findAllWithFiltersAndSorting(
-            Integer categoryId,
+            List<Integer> categoryIds,
+            List<Integer> vendorIds,
             String keyword,
             LocalDate today,
             LocalDate upcomingLimit,
             LocalDate endingSoonLimit,
             Pageable pageable
     ) {
-        // 1. 데이터 조회 쿼리
         List<SchoolArticle> content = queryFactory
                 .selectFrom(schoolArticle)
-                .leftJoin(schoolArticle.category, category).fetchJoin() // Fetch Join으로 N+1 방지
+                .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
-                        categoryEq(categoryId),
+                        categoryIn(categoryIds),
+                        vendorIn(vendorIds),
                         titleContains(keyword)
                 )
                 .orderBy(
@@ -113,12 +114,12 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .limit(pageable.getPageSize())
                 .fetch();
 
-        // 2. 카운트 쿼리 (별도 실행으로 최적화)
         Long total = queryFactory
                 .select(schoolArticle.count())
                 .from(schoolArticle)
                 .where(
-                        categoryEq(categoryId),
+                        categoryIn(categoryIds),
+                        vendorIn(vendorIds),
                         titleContains(keyword)
                 )
                 .fetchOne();
@@ -127,12 +128,12 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     }
 
     @Override
-    public List<SchoolArticle> findCalendarArticles(List<String> categoryNames, Integer userId, LocalDate viewStart, LocalDate viewEnd) {
+    public List<SchoolArticle> findCalendarArticles(List<Integer> categoryIds, Boolean isMyOnly, Integer userId, LocalDate viewStart, LocalDate viewEnd) {
         return queryFactory
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
-                        calendarCategoryFilter(categoryNames, userId),
+                        calendarCategoryFilter(categoryIds, isMyOnly, userId),
                         schoolArticle.startDate.loe(viewEnd),
                         schoolArticle.dueDate.goe(viewStart)
                 )
@@ -140,12 +141,12 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
     }
 
     @Override
-    public Page<SchoolArticle> findDailyCalendarArticles(LocalDate selectedDate, List<String> categoryNames, Integer userId, Pageable pageable) {
+    public Page<SchoolArticle> findDailyCalendarArticles(LocalDate selectedDate, List<Integer> categoryIds, Boolean isMyOnly, Integer userId, Pageable pageable) {
         List<SchoolArticle> content = queryFactory
                 .selectFrom(schoolArticle)
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
-                        calendarCategoryFilter(categoryNames, userId),
+                        calendarCategoryFilter(categoryIds, isMyOnly, userId),
                         schoolArticle.startDate.loe(selectedDate),
                         schoolArticle.dueDate.goe(selectedDate)
                 )
@@ -158,7 +159,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .select(schoolArticle.count())
                 .from(schoolArticle)
                 .where(
-                        calendarCategoryFilter(categoryNames, userId),
+                        calendarCategoryFilter(categoryIds, isMyOnly, userId),
                         schoolArticle.startDate.loe(selectedDate),
                         schoolArticle.dueDate.goe(selectedDate)
                 )
@@ -167,10 +168,9 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         return new PageImpl<>(content, pageable, total != null ? total : 0L);
     }
 
-    private BooleanExpression calendarCategoryFilter(List<String> categoryNames, Integer userId) {
-        // MY 필터가 포함되어 있으면 다른 카테고리는 무시
-        if (categoryNames != null && categoryNames.contains("MY")) {
-            if (userId == null) return schoolArticle.articleId.eq(-1); // 로그인 안 했으면 결과 없음
+    private BooleanExpression calendarCategoryFilter(List<Integer> categoryIds, Boolean isMyOnly, Integer userId) {
+        if (Boolean.TRUE.equals(isMyOnly)) {
+            if (userId == null) return schoolArticle.articleId.eq(-1);
             return schoolArticle.articleId.in(
                     queryFactory.select(bookmark.articleId)
                             .from(bookmark)
@@ -179,32 +179,39 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
             );
         }
 
-        // 일반 카테고리 필터링
-        if (categoryNames == null || categoryNames.isEmpty()) {
-            return category.categoryName.eq("대회•공모전");
-        }
-
-        return category.categoryName.in(categoryNames);
+        return (categoryIds != null && !categoryIds.isEmpty()) 
+                ? schoolArticle.category.categoryId.in(categoryIds) 
+                : null;
     }
 
-    // --- 조건절 메서드 (재사용 및 가독성 향상) ---
+    private BooleanExpression categoryIn(List<Integer> categoryIds) {
+        return (categoryIds != null && !categoryIds.isEmpty()) ? schoolArticle.category.categoryId.in(categoryIds) : null;
+    }
 
-    private BooleanExpression categoryEq(Integer categoryId) {
-        return categoryId != null ? schoolArticle.category.categoryId.eq(categoryId) : null;
+    private BooleanExpression vendorIn(List<Integer> vendorIds) {
+        if (vendorIds == null || vendorIds.isEmpty()) return null;
+        
+        return schoolArticle.articleId.in(
+                queryFactory.select(schoolArticleVendor.article.articleId)
+                        .from(schoolArticleVendor)
+                        .where(schoolArticleVendor.vendor.vendorId.in(vendorIds))
+        );
     }
 
     private BooleanExpression titleContains(String keyword) {
         return keyword != null ? schoolArticle.title.contains(keyword) : null;
     }
 
-    // --- 정렬 로직 (기존 CASE WHEN을 자바 코드로 구현) ---
     private OrderSpecifier<Integer> createStatusOrder(LocalDate today, LocalDate upcomingLimit, LocalDate endingSoonLimit) {
         NumberExpression<Integer> statusPriority = new CaseBuilder()
-                .when(schoolArticle.startDate.loe(today).and(schoolArticle.dueDate.gt(endingSoonLimit).or(schoolArticle.dueDate.isNull()))).then(1)   // OPEN (General)
-                .when(schoolArticle.dueDate.goe(today).and(schoolArticle.dueDate.loe(endingSoonLimit))).then(2)  // ENDING_SOON
-                .when(schoolArticle.startDate.gt(today).and(schoolArticle.startDate.loe(upcomingLimit))).then(3) // UPCOMING
-                .when(schoolArticle.dueDate.lt(today)).then(5)  // CLOSED
-                .otherwise(4); // NORMAL
+                .when(schoolArticle.startDate.loe(today)
+                        .and(schoolArticle.dueDate.goe(today))
+                        .and(schoolArticle.dueDate.loe(endingSoonLimit))).then(1)
+                .when(schoolArticle.startDate.loe(today)
+                        .and(schoolArticle.dueDate.gt(endingSoonLimit).or(schoolArticle.dueDate.isNull()))).then(2)
+                .when(schoolArticle.startDate.gt(today)).then(3)
+                .when(schoolArticle.dueDate.lt(today)).then(4)
+                .otherwise(5);
 
         return statusPriority.asc();
     }

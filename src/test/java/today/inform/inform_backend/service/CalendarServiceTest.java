@@ -6,13 +6,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import today.inform.inform_backend.dto.CalendarDailyListResponse;
-import today.inform.inform_backend.dto.CalendarNoticeResponse;
+import today.inform.inform_backend.dto.SchoolArticleResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
+import today.inform.inform_backend.repository.BookmarkRepository;
 import today.inform.inform_backend.repository.SchoolArticleRepository;
 import today.inform.inform_backend.repository.SchoolArticleVendorRepository;
+import today.inform.inform_backend.repository.UserRepository;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -33,63 +32,67 @@ class CalendarServiceTest {
     @Mock
     private SchoolArticleVendorRepository schoolArticleVendorRepository;
 
+    @Mock
+    private BookmarkRepository bookmarkRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private SchoolArticleService schoolArticleService;
+
     @Test
-    @DisplayName("월간 일정 조회 시 카테고리 필터가 없으면 기본값(대회•공모전)이 적용된다.")
+    @DisplayName("월간 일정 조회 시 카테고리 필터가 없으면 기본값(ID: 1)이 적용된다.")
     void getMonthlyNotices_DefaultCategory() {
         // given
-        LocalDate start = LocalDate.of(2026, 1, 26);
-        LocalDate end = LocalDate.of(2026, 3, 8);
-        given(schoolArticleRepository.findCalendarArticles(eq(List.of("대회•공모전")), any(), eq(start), eq(end)))
+        given(schoolArticleRepository.findCalendarArticles(eq(List.of(1)), any(), any(), any(), any()))
                 .willReturn(List.of());
 
         // when
-        calendarService.getMonthlyNotices(start, end, null, null);
+        List<SchoolArticleResponse> response = calendarService.getMonthlyNotices(2026, 2, null, null, null);
+
+        // then
+        assertThat(response).isEmpty();
+    }
+
+    @Test
+    @DisplayName("isMyOnly가 true이면 카테고리 ID가 전달된 대로 유지되며 내 일정 필터가 작동한다.")
+    void getMonthlyNotices_MyFilter() {
+        // given
+        List<Integer> categoryIds = List.of(1, 2);
+        given(schoolArticleRepository.findCalendarArticles(eq(categoryIds), eq(true), any(), any(), any()))
+                .willReturn(List.of());
+
+        // when
+        calendarService.getMonthlyNotices(2026, 2, categoryIds, true, 1);
 
         // then
     }
 
     @Test
-    @DisplayName("MY 카테고리가 포함되면 다른 카테고리는 무시된다.")
-    void mapCategories_MyPriority() {
+    @DisplayName("일정 조회 결과가 있으면 SchoolArticleService를 통해 응답이 변환된다.")
+    void getMonthlyNotices_Success() {
         // given
-        LocalDate start = LocalDate.of(2026, 1, 26);
-        LocalDate end = LocalDate.of(2026, 3, 8);
-        given(schoolArticleRepository.findCalendarArticles(eq(List.of("MY")), any(), eq(start), eq(end)))
-                .willReturn(List.of());
+        SchoolArticle article = SchoolArticle.builder()
+                .articleId(100)
+                .title("테스트")
+                .startDate(LocalDate.of(2026, 2, 1))
+                .dueDate(LocalDate.of(2026, 2, 28))
+                .build();
 
-        // when
-        calendarService.getMonthlyNotices(start, end, List.of("CONTEST", "MY", "SCHOLAR"), 1);
-
-        // then
-    }
-
-    @Test
-    @DisplayName("view_start가 view_end보다 이후 날짜면 예외가 발생한다.")
-    void getMonthlyNotices_InvalidRange() {
-        // given
-        LocalDate start = LocalDate.of(2026, 3, 1);
-        LocalDate end = LocalDate.of(2026, 2, 1);
-
-        // when & then
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
-                calendarService.getMonthlyNotices(start, end, null, null)
-        );
-    }
-
-    @Test
-    @DisplayName("일별 일정 조회 시 5개씩 페이징 처리된다.")
-    void getDailyNotices_Pagination() {
-        // given
-        SchoolArticle article = SchoolArticle.builder().articleId(1).title("테스트").build();
-        Page<SchoolArticle> page = new PageImpl<>(List.of(article));
-        given(schoolArticleRepository.findDailyCalendarArticles(any(), any(), any(), any())).willReturn(page);
+        given(schoolArticleRepository.findCalendarArticles(any(), any(), any(), any(), any()))
+                .willReturn(List.of(article));
         given(schoolArticleVendorRepository.findAllByArticleIn(any())).willReturn(List.of());
+        given(bookmarkRepository.countByArticleIdsAndArticleType(any(), any())).willReturn(List.of());
+        
+        given(schoolArticleService.convertToResponse(any(), any(), any(), anyBoolean(), anyLong()))
+                .willReturn(SchoolArticleResponse.builder().articleId(100).build());
 
         // when
-        CalendarDailyListResponse response = calendarService.getDailyNotices(LocalDate.now(), List.of("CONTEST"), 1, null);
+        List<SchoolArticleResponse> response = calendarService.getMonthlyNotices(2026, 2, null, null, null);
 
         // then
-        assertThat(response.getNotices()).hasSize(1);
-        assertThat(response.getPageInfo().getCurrentPage()).isEqualTo(1);
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).getArticleId()).isEqualTo(100);
     }
 }

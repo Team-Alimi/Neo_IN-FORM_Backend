@@ -20,4 +20,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
     @Modifying
     @Query("DELETE FROM Notification n WHERE n.createdAt < :targetDate")
     void deleteByCreatedAtBefore(@Param("targetDate") LocalDateTime targetDate);
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM Notification n WHERE n.user = :user")
+    void deleteAllByUser(@org.springframework.data.repository.query.Param("user") User user);
 }

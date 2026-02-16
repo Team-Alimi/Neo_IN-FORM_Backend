@@ -22,11 +22,12 @@ public class SchoolArticleController {
     public ApiResponse<SchoolArticleListResponse> getSchoolArticles(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(name = "category_id", required = false) Integer categoryId,
+            @RequestParam(name = "category_id", required = false) List<Integer> categoryIds,
+            @RequestParam(name = "vendor_id", required = false) List<Integer> vendorIds,
             @RequestParam(required = false) String keyword,
             @AuthenticationPrincipal Integer userId
     ) {
-        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryId, keyword, userId));
+        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryIds, vendorIds, keyword, userId));
     }
 
     @GetMapping("/hot")
@@ -36,9 +37,9 @@ public class SchoolArticleController {
         return ApiResponse.success(schoolArticleService.getHotSchoolArticles(userId));
     }
 
-    @GetMapping("/{articleId}")
+    @GetMapping("/{article_id}")
     public ApiResponse<SchoolArticleDetailResponse> getSchoolArticleDetail(
-            @PathVariable Integer articleId,
+            @PathVariable(name = "article_id") Integer articleId,
             @AuthenticationPrincipal Integer userId
     ) {
         return ApiResponse.success(schoolArticleService.getSchoolArticleDetail(articleId, userId));
