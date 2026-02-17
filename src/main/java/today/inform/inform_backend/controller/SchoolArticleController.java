@@ -25,9 +25,11 @@ public class SchoolArticleController {
             @RequestParam(name = "category_id", required = false) List<Integer> categoryIds,
             @RequestParam(name = "vendor_id", required = false) List<Integer> vendorIds,
             @RequestParam(required = false) String keyword,
+            @RequestParam(name = "start_date", required = false) java.time.LocalDate startDate,
+            @RequestParam(name = "end_date", required = false) java.time.LocalDate endDate,
             @AuthenticationPrincipal Integer userId
     ) {
-        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryIds, vendorIds, keyword, userId));
+        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryIds, vendorIds, keyword, startDate, endDate, userId));
     }
 
     @GetMapping("/hot")

@@ -137,14 +137,14 @@ class SchoolArticleServiceTest {
         List<Integer> vendorIds = List.of(5, 12);
         Page<SchoolArticle> page = new PageImpl<>(List.of());
         
-        when(schoolArticleRepository.findAllWithFiltersAndSorting(any(), eq(vendorIds), any(), any(), any(), any(), any()))
+        when(schoolArticleRepository.findAllWithFiltersAndSorting(any(), eq(vendorIds), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(page);
 
         // when
-        schoolArticleService.getSchoolArticles(1, 10, null, vendorIds, null, null);
+        schoolArticleService.getSchoolArticles(1, 10, null, vendorIds, null, null, null, null);
 
         // then
         verify(schoolArticleRepository, times(1))
-                .findAllWithFiltersAndSorting(any(), eq(vendorIds), any(), any(), any(), any(), any());
+                .findAllWithFiltersAndSorting(any(), eq(vendorIds), any(), any(), any(), any(), any(), any(), any());
     }
 }
