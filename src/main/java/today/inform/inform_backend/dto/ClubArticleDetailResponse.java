@@ -15,8 +15,13 @@ public class ClubArticleDetailResponse {
     private String originalUrl;
     private LocalDate startDate;
     private LocalDate dueDate;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime createdAt;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime updatedAt;
+
     private List<AttachmentResponse> attachments;
     private List<VendorListResponse> vendors;
 

@@ -46,7 +46,7 @@ class BookmarkServiceTest {
         SchoolArticleListResponse expectedResponse = SchoolArticleListResponse.builder()
                 .schoolArticles(List.of()) // 내용은 Service에서 채워짐
                 .build();
-        given(schoolArticleService.getSchoolArticlesByIds(any(), any(), any(), any(), any(), eq(userId))).willReturn(expectedResponse);
+        given(schoolArticleService.getSchoolArticlesByIds(any(), any(), any(), any(), any(), any(), any(), eq(userId))).willReturn(expectedResponse);
 
         // when
         SchoolArticleListResponse response = bookmarkService.getBookmarkedSchoolArticles(userId, null, null, 1, 10);

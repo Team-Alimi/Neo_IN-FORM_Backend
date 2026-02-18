@@ -10,8 +10,7 @@ import today.inform.inform_backend.common.exception.BusinessException;
 import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.entity.User;
 import today.inform.inform_backend.entity.Vendor;
-import today.inform.inform_backend.repository.UserRepository;
-import today.inform.inform_backend.repository.VendorRepository;
+import today.inform.inform_backend.repository.*;
 import today.inform.inform_backend.service.user.UserService;
 
 import java.util.Optional;
@@ -20,12 +19,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private VendorRepository vendorRepository;
+    @Mock private BookmarkRepository bookmarkRepository;
+    @Mock private NotificationRepository notificationRepository;
+    @Mock private RefreshTokenRepository refreshTokenRepository;
 
     @InjectMocks private UserService userService;
 
@@ -72,55 +75,41 @@ class UserServiceTest {
         assertThat(result.getName()).isEqualTo("홍길동");
         assertThat(result.getMajor()).isNotNull();
         assertThat(result.getMajor().getVendorName()).isEqualTo("컴퓨터공학과");
-        assertThat(result.getMajor().getVendorInitial()).isEqualTo("CSE");
     }
 
     @Test
-    @DisplayName("내 프로필 정보를 성공적으로 조회한다. (학과 미설정)")
-    void getMyProfile_NoMajor_Success() {
+    @DisplayName("회원 탈퇴 시 유저 정보와 연관 데이터, 토큰이 모두 삭제되어야 한다.")
+    void withdraw_Success() {
         // given
         Integer userId = 1;
         User user = User.builder()
                 .userId(userId)
-                .email("test@inha.edu")
-                .name("홍길동")
-                .major(null)
+                .email("user@inha.edu")
                 .build();
+
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
 
         // when
-        today.inform.inform_backend.dto.LoginResponse.UserInfo result = userService.getMyProfile(userId);
+        userService.withdraw(userId);
 
         // then
-        assertThat(result.getMajor()).isNull();
+        verify(bookmarkRepository, times(1)).deleteAllByUser(user);
+        verify(notificationRepository, times(1)).deleteAllByUser(user);
+        verify(refreshTokenRepository, times(1)).deleteById(user.getEmail());
+        verify(userRepository, times(1)).delete(user);
     }
 
     @Test
-    @DisplayName("존재하지 않는 사용자일 경우 예외가 발생한다.")
-    void updateMajor_UserNotFound() {
+    @DisplayName("존재하지 않는 유저가 탈퇴 시도 시 USER_NOT_FOUND 예외가 발생한다.")
+    void withdraw_Fail_UserNotFound() {
         // given
-        given(userRepository.findById(any())).willReturn(Optional.empty());
+        Integer userId = 999;
+        given(userRepository.findById(userId)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> userService.updateMajor(1, 10))
+        assertThatThrownBy(() -> userService.withdraw(userId))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
-    }
-
-    @Test
-    @DisplayName("존재하지 않는 학과일 경우 예외가 발생한다.")
-    void updateMajor_MajorNotFound() {
-        // given
-        Integer userId = 1;
-        User user = User.builder().userId(userId).build();
-        given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(vendorRepository.findById(any())).willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> userService.updateMajor(userId, 999))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
     }
 }

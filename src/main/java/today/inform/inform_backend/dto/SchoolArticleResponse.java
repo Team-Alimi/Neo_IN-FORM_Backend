@@ -17,8 +17,13 @@ public class SchoolArticleResponse implements Serializable {
     private LocalDate startDate;
     private LocalDate dueDate;
     private String status;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime createdAt;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime updatedAt;
+
     private Boolean isBookmarked;
     private Long bookmarkCount;
     private List<VendorResponse> vendors;

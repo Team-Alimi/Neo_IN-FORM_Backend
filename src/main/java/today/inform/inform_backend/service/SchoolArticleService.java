@@ -42,14 +42,13 @@ public class SchoolArticleService {
         boolean isBookmarked = false;
         String content = article.getContent();
 
+        // 로그인 사용자인 경우 북마크 여부 확인
         if (userId != null) {
             today.inform.inform_backend.entity.User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-            isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
-        } else {
-            // 비로그인 사용자: 본문 마스킹 처리 (약 100자)
-            if (content != null && content.length() > 100) {
-                content = content.substring(0, 100) + "... (로그인 후 전체 내용을 확인하실 수 있습니다.)";
+                    .orElse(null);
+            
+            if (user != null) {
+                isBookmarked = bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId);
             }
         }
 
@@ -130,7 +129,7 @@ public class SchoolArticleService {
     }
 
     @Transactional(readOnly = true)
-    public SchoolArticleListResponse getSchoolArticlesByIds(List<Integer> articleIds, Integer categoryId, String keyword, Integer page, Integer size, Integer userId) {
+    public SchoolArticleListResponse getSchoolArticlesByIds(List<Integer> articleIds, List<Integer> categoryIds, String keyword, LocalDate startDate, LocalDate endDate, Integer page, Integer size, Integer userId) {
         int cappedSize = Math.min(size, 50);
         LocalDate todayDate = LocalDate.now();
         LocalDate upcomingLimit = todayDate.plusDays(5);
@@ -138,7 +137,7 @@ public class SchoolArticleService {
 
         Pageable pageable = PageRequest.of(page - 1, cappedSize);
         Page<SchoolArticle> articlePage = schoolArticleRepository.findAllByIdsWithFiltersAndSorting(
-                articleIds, categoryId, keyword, todayDate, upcomingLimit, endingSoonLimit, pageable
+                articleIds, categoryIds, keyword, startDate, endDate, todayDate, upcomingLimit, endingSoonLimit, pageable
         );
 
         List<SchoolArticle> articles = articlePage.getContent();
@@ -189,7 +188,7 @@ public class SchoolArticleService {
     }
 
     @Transactional(readOnly = true)
-    public SchoolArticleListResponse getSchoolArticles(Integer page, Integer size, Integer categoryId, String keyword, Integer userId) {
+    public SchoolArticleListResponse getSchoolArticles(Integer page, Integer size, List<Integer> categoryIds, List<Integer> vendorIds, String keyword, LocalDate startDate, LocalDate endDate, Integer userId) {
         // 보안/최적화: 최대 페이지 사이즈 제한
         int cappedSize = Math.min(size, 50);
         
@@ -199,7 +198,7 @@ public class SchoolArticleService {
 
         Pageable pageable = PageRequest.of(page - 1, cappedSize);
         Page<SchoolArticle> articlePage = schoolArticleRepository.findAllWithFiltersAndSorting(
-                categoryId, keyword, todayDate, upcomingLimit, endingSoonLimit, pageable
+                categoryIds, vendorIds, keyword, startDate, endDate, todayDate, upcomingLimit, endingSoonLimit, pageable
         );
 
         List<SchoolArticle> articles = articlePage.getContent();
@@ -257,7 +256,7 @@ public class SchoolArticleService {
                 .build();
     }
 
-    private SchoolArticleResponse convertToResponse(SchoolArticle article, List<SchoolArticleVendor> vendors, LocalDate today, boolean isBookmarked, Long bookmarkCount) {
+    SchoolArticleResponse convertToResponse(SchoolArticle article, List<SchoolArticleVendor> vendors, LocalDate today, boolean isBookmarked, Long bookmarkCount) {
         return SchoolArticleResponse.builder()
                 .articleId(article.getArticleId())
                 .title(article.getTitle())
@@ -283,7 +282,7 @@ public class SchoolArticleService {
                 .build();
     }
 
-    private String determineStatus(SchoolArticle article, LocalDate today) {
+    String determineStatus(SchoolArticle article, LocalDate today) {
         if (article.getDueDate() != null && article.getDueDate().isBefore(today)) return "CLOSED";
         if (article.getStartDate() != null && article.getStartDate().isAfter(today)) return "UPCOMING";
         if (article.getDueDate() != null && !article.getDueDate().isAfter(today.plusDays(5))) return "ENDING_SOON";

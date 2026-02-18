@@ -25,9 +25,9 @@ public class ClubArticleController {
         return ApiResponse.success(response);
     }
 
-    @GetMapping("/{articleId}")
+    @GetMapping("/{article_id}")
     public ApiResponse<ClubArticleDetailResponse> getClubArticleDetail(
-            @PathVariable Integer articleId
+            @PathVariable(name = "article_id") Integer articleId
     ) {
         ClubArticleDetailResponse response = clubArticleService.getClubArticleDetail(articleId);
         return ApiResponse.success(response);

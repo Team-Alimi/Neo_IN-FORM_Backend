@@ -22,4 +22,7 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Integer> {
 
     @org.springframework.data.jpa.repository.Query("SELECT b.articleId, COUNT(b) FROM Bookmark b WHERE b.articleId IN :articleIds AND b.articleType = :articleType GROUP BY b.articleId")
     List<Object[]> countByArticleIdsAndArticleType(@org.springframework.data.repository.query.Param("articleIds") List<Integer> articleIds, @org.springframework.data.repository.query.Param("articleType") VendorType articleType);
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM Bookmark b WHERE b.user = :user")
+    void deleteAllByUser(@org.springframework.data.repository.query.Param("user") User user);
 }
