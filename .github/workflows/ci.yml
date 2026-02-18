@@ -38,15 +38,24 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew build -Dspring.profiles.active=test --info
 
-    - name: Deliver files to GCP
+    - name: Deliver JAR to GCP
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.GCP_VM_IP }}
         username: ${{ secrets.GCP_SSH_USER }}
         key: ${{ secrets.GCP_SSH_KEY }}
-        source: "build/libs/*-SNAPSHOT.jar,Dockerfile"
+        source: "build/libs/*-SNAPSHOT.jar"
         target: "~/inform-main"
         strip_components: 2
+
+    - name: Deliver Dockerfile to GCP
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.GCP_VM_IP }}
+        username: ${{ secrets.GCP_SSH_USER }}
+        key: ${{ secrets.GCP_SSH_KEY }}
+        source: "Dockerfile"
+        target: "~/inform-main"
 
     - name: Deploy to GCP
       uses: appleboy/ssh-action@v1.0.3
@@ -63,6 +72,6 @@ jobs:
           docker stop my-api-server || true
           docker rm my-api-server || true
           
-          # 3. docker-compose로 전체 서비스 재시작 (네트워크 자동 구성)
-          docker-compose up -d
+          # 3. docker compose로 전체 서비스 재시작 (네트워크 자동 구성)
+          docker compose up -d
 
