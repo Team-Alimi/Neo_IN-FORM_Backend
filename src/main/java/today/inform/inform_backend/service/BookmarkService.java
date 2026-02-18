@@ -49,7 +49,7 @@ public class BookmarkService {
                     .build();
         }
 
-        return schoolArticleService.getSchoolArticlesByIds(articleIds, categoryIds, keyword, page, size, userId);
+        return schoolArticleService.getSchoolArticlesByIds(articleIds, categoryIds, keyword, null, null, page, size, userId);
     }
 
     @Transactional
