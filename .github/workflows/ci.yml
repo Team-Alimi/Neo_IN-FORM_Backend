@@ -68,6 +68,7 @@ jobs:
           docker run -d \
             --name my-api-server \
             -p 8080:8080 \
+            --network inform-main_default \
             --restart always \
             inform-main-backend
 
