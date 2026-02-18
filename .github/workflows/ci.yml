@@ -73,5 +73,5 @@ jobs:
           docker rm my-api-server || true
           
           # 3. docker compose로 전체 서비스 재시작 (네트워크 자동 구성)
-          docker compose up -d
+          docker compose up -d --force-recreate
 
