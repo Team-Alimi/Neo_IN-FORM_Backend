@@ -54,6 +54,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
             List<Integer> articleIds,
             List<Integer> categoryIds,
             String keyword,
+            LocalDate startDate,
+            LocalDate endDate,
             LocalDate today,
             LocalDate upcomingLimit,
             LocalDate endingSoonLimit,
@@ -65,7 +67,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .where(
                         schoolArticle.articleId.in(articleIds),
                         categoryIn(categoryIds),
-                        titleContains(keyword)
+                        titleContains(keyword),
+                        dateRangeFilter(startDate, endDate)
                 )
                 .orderBy(
                         createStatusOrder(today, upcomingLimit, endingSoonLimit),
@@ -81,7 +84,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .where(
                         schoolArticle.articleId.in(articleIds),
                         categoryIn(categoryIds),
-                        titleContains(keyword)
+                        titleContains(keyword),
+                        dateRangeFilter(startDate, endDate)
                 )
                 .fetchOne();
 
@@ -93,6 +97,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
             List<Integer> categoryIds,
             List<Integer> vendorIds,
             String keyword,
+            LocalDate startDate,
+            LocalDate endDate,
             LocalDate today,
             LocalDate upcomingLimit,
             LocalDate endingSoonLimit,
@@ -104,7 +110,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .where(
                         categoryIn(categoryIds),
                         vendorIn(vendorIds),
-                        titleContains(keyword)
+                        titleContains(keyword),
+                        dateRangeFilter(startDate, endDate)
                 )
                 .orderBy(
                         createStatusOrder(today, upcomingLimit, endingSoonLimit),
@@ -120,7 +127,8 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .where(
                         categoryIn(categoryIds),
                         vendorIn(vendorIds),
-                        titleContains(keyword)
+                        titleContains(keyword),
+                        dateRangeFilter(startDate, endDate)
                 )
                 .fetchOne();
 
@@ -134,8 +142,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
                         calendarCategoryFilter(categoryIds, isMyOnly, userId),
-                        schoolArticle.startDate.loe(viewEnd),
-                        schoolArticle.dueDate.goe(viewStart)
+                        dateRangeFilter(viewStart, viewEnd)
                 )
                 .fetch();
     }
@@ -147,8 +154,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .leftJoin(schoolArticle.category, category).fetchJoin()
                 .where(
                         calendarCategoryFilter(categoryIds, isMyOnly, userId),
-                        schoolArticle.startDate.loe(selectedDate),
-                        schoolArticle.dueDate.goe(selectedDate)
+                        dateRangeFilter(selectedDate, selectedDate)
                 )
                 .orderBy(schoolArticle.createdAt.desc())
                 .offset(pageable.getOffset())
@@ -160,8 +166,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                 .from(schoolArticle)
                 .where(
                         calendarCategoryFilter(categoryIds, isMyOnly, userId),
-                        schoolArticle.startDate.loe(selectedDate),
-                        schoolArticle.dueDate.goe(selectedDate)
+                        dateRangeFilter(selectedDate, selectedDate)
                 )
                 .fetchOne();
 
@@ -182,6 +187,25 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
         return (categoryIds != null && !categoryIds.isEmpty()) 
                 ? schoolArticle.category.categoryId.in(categoryIds) 
                 : null;
+    }
+
+    private BooleanExpression dateRangeFilter(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null && endDate == null) return null;
+        
+        BooleanExpression filter = null;
+        
+        if (startDate != null) {
+            // 공지사항의 종료일이 필터의 시작일보다 같거나 커야 함 (기간이 겹침)
+            filter = schoolArticle.dueDate.goe(startDate).or(schoolArticle.dueDate.isNull());
+        }
+        
+        if (endDate != null) {
+            // 공지사항의 시작일이 필터의 종료일보다 같거나 작아야 함 (기간이 겹침)
+            BooleanExpression endFilter = schoolArticle.startDate.loe(endDate).or(schoolArticle.startDate.isNull());
+            filter = (filter == null) ? endFilter : filter.and(endFilter);
+        }
+        
+        return filter;
     }
 
     private BooleanExpression categoryIn(List<Integer> categoryIds) {
