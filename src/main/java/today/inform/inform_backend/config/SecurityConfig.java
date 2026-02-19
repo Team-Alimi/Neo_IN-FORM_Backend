@@ -17,10 +17,12 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.util.List;
 
 import today.inform.inform_backend.config.jwt.JwtAuthenticationFilter;
-
-
 
 @Configuration
 
@@ -30,11 +32,7 @@ import today.inform.inform_backend.config.jwt.JwtAuthenticationFilter;
 
 public class SecurityConfig {
 
-
-
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-
-
 
     @Bean
 
@@ -42,35 +40,43 @@ public class SecurityConfig {
 
         http
 
-            .csrf(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
 
-            .formLogin(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
 
-            .httpBasic(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
 
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/auth/login/**").permitAll()
+                        .requestMatchers("/api/v1/auth/refresh").permitAll()
+                        .requestMatchers("/api/v1/auth/logout").hasRole("USER")
+                        .requestMatchers("/api/v1/club_articles/**").permitAll()
+                        .requestMatchers("/api/v1/vendors/**").permitAll()
+                        .requestMatchers("/api/v1/categories/**").permitAll()
+                        .requestMatchers("/api/v1/calendar/notices").permitAll()
+                        .requestMatchers("/api/v1/calendar/daily-notices").permitAll()
+                        .requestMatchers("/api/v1/users/**").hasRole("USER")
+                        .requestMatchers("/api/v1/school_articles/**").permitAll()
+                        .requestMatchers("/api/v1/bookmarks/**").hasRole("USER")
+                        .anyRequest().authenticated())
 
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/login/**").permitAll()
-                .requestMatchers("/api/v1/auth/refresh").permitAll()
-                .requestMatchers("/api/v1/auth/logout").hasRole("USER")
-                .requestMatchers("/api/v1/club_articles/**").permitAll()
-                .requestMatchers("/api/v1/vendors/**").permitAll()
-                .requestMatchers("/api/v1/categories/**").permitAll()
-                .requestMatchers("/api/v1/calendar/notices").permitAll()
-                .requestMatchers("/api/v1/calendar/daily-notices").permitAll()
-                .requestMatchers("/api/v1/users/**").hasRole("USER")
-                .requestMatchers("/api/v1/school_articles/**").permitAll()
-                .requestMatchers("/api/v1/bookmarks/**").hasRole("USER")
-                .anyRequest().authenticated()
-            )
-
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
-        
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
 
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
 }
