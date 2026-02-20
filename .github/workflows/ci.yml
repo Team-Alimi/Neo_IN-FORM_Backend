@@ -48,14 +48,15 @@ jobs:
         target: "~/inform-main"
         strip_components: 2
 
-    - name: Deliver Dockerfile to GCP
+    - name: Deliver Deploy Files to GCP
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.GCP_VM_IP }}
         username: ${{ secrets.GCP_SSH_USER }}
         key: ${{ secrets.GCP_SSH_KEY }}
-        source: "Dockerfile"
+        source: "Dockerfile,nginx,init-letsencrypt.sh"
         target: "~/inform-main"
+        strip_components: 2
 
     - name: Deploy to GCP
       uses: appleboy/ssh-action@v1.0.3
