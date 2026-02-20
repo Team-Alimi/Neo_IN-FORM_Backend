@@ -55,7 +55,7 @@ jobs:
         username: ${{ secrets.GCP_SSH_USER }}
         key: ${{ secrets.GCP_SSH_KEY }}
         source: "Dockerfile,nginx,init-letsencrypt.sh"
-        target: "/home/team_alimi_inform/inform-main"
+        target: "deploy_temp"
 
     - name: Deploy to GCP
       uses: appleboy/ssh-action@v1.0.3
@@ -64,14 +64,20 @@ jobs:
         username: ${{ secrets.GCP_SSH_USER }}
         key: ${{ secrets.GCP_SSH_KEY }}
         script: |
+          # 1. 파일 옮기기 (temp -> real)
+          mkdir -p ~/inform-main
+          # 숨김 파일(.env 등)까지 싹 다 옮기기 위해 . 포함
+          cp -r ~/deploy_temp/* ~/inform-main/
+          rm -rf ~/deploy_temp
+          
           cd ~/inform-main
-          # 1. 캐시 없이 새로운 이미지 강제 빌드
+          # 2. 캐시 없이 새로운 이미지 강제 빌드
           docker build --no-cache -t inform-main-backend .
           
-          # 2. 기존 앱 컨테이너 중지 및 제거
+          # 3. 기존 앱 컨테이너 중지 및 제거
           docker stop my-api-server || true
           docker rm my-api-server || true
           
-          # 3. docker compose로 전체 서비스 재시작 (네트워크 자동 구성)
+          # 4. docker compose로 전체 서비스 재시작 (네트워크 자동 구성)
           docker compose up -d --force-recreate
 
