@@ -55,8 +55,7 @@ jobs:
         username: ${{ secrets.GCP_SSH_USER }}
         key: ${{ secrets.GCP_SSH_KEY }}
         source: "Dockerfile,nginx,init-letsencrypt.sh"
-        target: "~/inform-main"
-        strip_components: 2
+        target: "/home/team_alimi_inform/inform-main"
 
     - name: Deploy to GCP
       uses: appleboy/ssh-action@v1.0.3
