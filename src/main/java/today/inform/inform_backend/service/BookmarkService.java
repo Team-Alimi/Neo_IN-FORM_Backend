@@ -28,11 +28,13 @@ public class BookmarkService {
     private final ClubArticleService clubArticleService;
 
     @Transactional(readOnly = true)
-    public today.inform.inform_backend.dto.SchoolArticleListResponse getBookmarkedSchoolArticles(Integer userId, List<Integer> categoryIds, String keyword, Integer page, Integer size) {
+    public today.inform.inform_backend.dto.SchoolArticleListResponse getBookmarkedSchoolArticles(Integer userId,
+            List<Integer> categoryIds, String keyword, Integer page, Integer size) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        List<Integer> articleIds = bookmarkRepository.findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.SCHOOL)
+        List<Integer> articleIds = bookmarkRepository
+                .findAllByUserAndArticleTypeOrderByCreatedAtDesc(user, VendorType.SCHOOL)
                 .stream()
                 .map(Bookmark::getArticleId)
                 .collect(java.util.stream.Collectors.toList());
@@ -49,7 +51,8 @@ public class BookmarkService {
                     .build();
         }
 
-        return schoolArticleService.getSchoolArticlesByIds(articleIds, categoryIds, keyword, null, null, page, size, userId);
+        return schoolArticleService.getSchoolArticlesByIds(articleIds, categoryIds, keyword, null, null, page, size,
+                userId);
     }
 
     @Transactional
@@ -58,6 +61,15 @@ public class BookmarkService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         bookmarkRepository.deleteAllByUserAndArticleType(user, VendorType.SCHOOL);
+    }
+
+    @Transactional
+    public void deleteBookmarkedSchoolArticle(Integer userId, Integer articleId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        bookmarkRepository.findByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId)
+                .ifPresent(bookmarkRepository::delete);
     }
 
     @Transactional
@@ -74,7 +86,8 @@ public class BookmarkService {
         validateArticleExists(articleType, articleId);
 
         // 2. 이미 북마크가 있는지 확인
-        Optional<Bookmark> existingBookmark = bookmarkRepository.findByUserAndArticleTypeAndArticleId(user, articleType, articleId);
+        Optional<Bookmark> existingBookmark = bookmarkRepository.findByUserAndArticleTypeAndArticleId(user, articleType,
+                articleId);
 
         if (existingBookmark.isPresent()) {
             // 있으면 삭제 (해제)
