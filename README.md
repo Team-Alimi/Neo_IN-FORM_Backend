@@ -177,8 +177,9 @@ src/
 | Method | Endpoint | 설명 | 인증 |
 |--------|----------|------|------|
 | `POST` | `/bookmarks` | 북마크 토글 (등록/해제) | ✅ |
-| `GET` | `/bookmarks/school_articles` | 북마크한 학교 공지 목록 조회 | ✅ |
-| `DELETE` | `/bookmarks` | 북마크 전체 삭제 | ✅ |
+| `GET` | `/bookmarks/school` | 북마크한 학교 공지 목록 조회 | ✅ |
+| `DELETE` | `/bookmarks/school/all` | 북마크 전체 삭제 | ✅ |
+| `DELETE` | `/bookmarks/school/{article_id}` | 북마크 개별 삭제 | ✅ |
 
 ### 알림 (Notification)
 
