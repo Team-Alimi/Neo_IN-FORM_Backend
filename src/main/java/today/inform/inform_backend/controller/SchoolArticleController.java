@@ -27,23 +27,22 @@ public class SchoolArticleController {
             @RequestParam(required = false) String keyword,
             @RequestParam(name = "start_date", required = false) java.time.LocalDate startDate,
             @RequestParam(name = "end_date", required = false) java.time.LocalDate endDate,
-            @AuthenticationPrincipal Integer userId
-    ) {
-        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryIds, vendorIds, keyword, startDate, endDate, userId));
+            @RequestParam(required = false) String status,
+            @AuthenticationPrincipal Integer userId) {
+        return ApiResponse.success(schoolArticleService.getSchoolArticles(page, size, categoryIds, vendorIds, keyword,
+                startDate, endDate, status, userId));
     }
 
     @GetMapping("/hot")
     public ApiResponse<List<SchoolArticleResponse>> getHotSchoolArticles(
-            @AuthenticationPrincipal Integer userId
-    ) {
+            @AuthenticationPrincipal Integer userId) {
         return ApiResponse.success(schoolArticleService.getHotSchoolArticles(userId));
     }
 
     @GetMapping("/{article_id}")
     public ApiResponse<SchoolArticleDetailResponse> getSchoolArticleDetail(
             @PathVariable(name = "article_id") Integer articleId,
-            @AuthenticationPrincipal Integer userId
-    ) {
+            @AuthenticationPrincipal Integer userId) {
         return ApiResponse.success(schoolArticleService.getSchoolArticleDetail(articleId, userId));
     }
 }

@@ -51,7 +51,8 @@ public class BookmarkService {
                     .build();
         }
 
-        return schoolArticleService.getSchoolArticlesByIds(articleIds, categoryIds, keyword, null, null, page, size,
+        return schoolArticleService.getSchoolArticlesByIds(articleIds, categoryIds, keyword, null, null, null, page,
+                size,
                 userId);
     }
 
