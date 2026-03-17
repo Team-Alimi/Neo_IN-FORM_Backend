@@ -6,7 +6,7 @@ WORKDIR /app
 
 # 빌드된 jar 파일을 컨테이너 내부로 복사
 # GitHub Actions 빌드 결과물 위치에 맞춤
-COPY build/libs/*-SNAPSHOT.jar app.jar
+COPY *-SNAPSHOT.jar app.jar
 
 # 서버 포트 개방
 EXPOSE 8080

@@ -24,24 +24,30 @@ public class BookmarkController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(name = "category_id", required = false) List<Integer> categoryIds,
-            @RequestParam(required = false) String keyword
-    ) {
-        return ApiResponse.success(bookmarkService.getBookmarkedSchoolArticles(userId, categoryIds, keyword, page, size));
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse
+                .success(bookmarkService.getBookmarkedSchoolArticles(userId, categoryIds, keyword, page, size));
     }
 
     @DeleteMapping("/school/all")
     public ApiResponse<Void> deleteAllBookmarkedSchoolArticles(
-            @AuthenticationPrincipal Integer userId
-    ) {
+            @AuthenticationPrincipal Integer userId) {
         bookmarkService.deleteAllBookmarkedSchoolArticles(userId);
+        return ApiResponse.success(null);
+    }
+
+    @DeleteMapping("/school/{article_id}")
+    public ApiResponse<Void> deleteBookmarkedSchoolArticle(
+            @AuthenticationPrincipal Integer userId,
+            @PathVariable("article_id") Integer articleId) {
+        bookmarkService.deleteBookmarkedSchoolArticle(userId, articleId);
         return ApiResponse.success(null);
     }
 
     @PostMapping
     public ApiResponse<Boolean> toggleBookmark(
             @AuthenticationPrincipal Integer userId,
-            @RequestBody BookmarkRequest request
-    ) {
+            @RequestBody BookmarkRequest request) {
         boolean isBookmarked = bookmarkService.toggleBookmark(userId, request.getArticleType(), request.getArticleId());
         return ApiResponse.success(isBookmarked);
     }

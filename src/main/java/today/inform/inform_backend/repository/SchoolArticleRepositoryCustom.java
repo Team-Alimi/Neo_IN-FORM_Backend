@@ -8,45 +8,43 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface SchoolArticleRepositoryCustom {
-    Page<SchoolArticle> findAllWithFiltersAndSorting(
-            List<Integer> categoryIds,
-            List<Integer> vendorIds,
-            String keyword,
-            LocalDate startDate,
-            LocalDate endDate,
-            LocalDate today,
-            LocalDate upcomingLimit,
-            LocalDate endingSoonLimit,
-            Pageable pageable
-    );
+        Page<SchoolArticle> findAllWithFiltersAndSorting(
+                        List<Integer> categoryIds,
+                        List<Integer> vendorIds,
+                        String keyword,
+                        LocalDate startDate,
+                        LocalDate endDate,
+                        String status,
+                        LocalDate today,
+                        LocalDate upcomingLimit,
+                        LocalDate endingSoonLimit,
+                        Pageable pageable);
 
-    Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
-            List<Integer> articleIds,
-            List<Integer> categoryIds,
-            String keyword,
-            LocalDate startDate,
-            LocalDate endDate,
-            LocalDate today,
-            LocalDate upcomingLimit,
-            LocalDate endingSoonLimit,
-            Pageable pageable
-    );
+        Page<SchoolArticle> findAllByIdsWithFiltersAndSorting(
+                        List<Integer> articleIds,
+                        List<Integer> categoryIds,
+                        String keyword,
+                        LocalDate startDate,
+                        LocalDate endDate,
+                        String status,
+                        LocalDate today,
+                        LocalDate upcomingLimit,
+                        LocalDate endingSoonLimit,
+                        Pageable pageable);
 
-    List<SchoolArticle> findHotArticles(LocalDate today, int limit);
+        List<SchoolArticle> findHotArticles(LocalDate today, int limit);
 
-    List<SchoolArticle> findCalendarArticles(
-            List<Integer> categoryIds,
-            Boolean isMyOnly,
-            Integer userId,
-            LocalDate viewStart,
-            LocalDate viewEnd
-    );
+        List<SchoolArticle> findCalendarArticles(
+                        List<Integer> categoryIds,
+                        Boolean isMyOnly,
+                        Integer userId,
+                        LocalDate viewStart,
+                        LocalDate viewEnd);
 
-    Page<SchoolArticle> findDailyCalendarArticles(
-            LocalDate selectedDate,
-            List<Integer> categoryIds,
-            Boolean isMyOnly,
-            Integer userId,
-            Pageable pageable
-    );
+        Page<SchoolArticle> findDailyCalendarArticles(
+                        LocalDate selectedDate,
+                        List<Integer> categoryIds,
+                        Boolean isMyOnly,
+                        Integer userId,
+                        Pageable pageable);
 }
