@@ -20,6 +20,11 @@ public class SchoolArticleSandboxService {
     private final CategoryRepository categoryRepository;
     private final VendorRepository vendorRepository;
 
+    // 실서비스 운영 테이블 Repository
+    private final SchoolArticleRepository schoolArticleRepository;
+    private final SchoolArticleVendorRepository schoolArticleVendorRepository;
+    private final AttachmentRepository attachmentRepository;
+
     /**
      * 크롤러가 수집한 데이터를 샌드박스에 저장
      */
@@ -173,5 +178,54 @@ public class SchoolArticleSandboxService {
         vendorSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
         attachmentSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
         sandboxRepository.deleteById(sandboxId);
+    }
+
+    /**
+     * [핵심] 샌드박스 -> 실서비스 데이터 배포(Deploy)
+     */
+    @Transactional
+    public Integer deployArticle(Integer sandboxId) {
+        // 1. 샌드박스 데이터 조회 (연관 데이터 포함)
+        SchoolArticleSandbox sandbox = sandboxRepository.findById(sandboxId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+        List<SchoolArticleVendorSandbox> vendorSandboxes = vendorSandboxRepository.findAllBySandboxArticleSandboxId(sandboxId);
+        List<AttachmentSandbox> attachmentSandboxes = attachmentSandboxRepository.findAllBySandboxArticleSandboxId(sandboxId);
+
+        // 2. 실서비스 게시글 생성
+        SchoolArticle article = SchoolArticle.builder()
+                .title(sandbox.getTitle())
+                .content(sandbox.getContent())
+                .startDate(sandbox.getStartDate())
+                .dueDate(sandbox.getDueDate())
+                .category(sandbox.getCategory())
+                .build();
+        
+        article = schoolArticleRepository.save(article);
+        Integer newArticleId = article.getArticleId();
+
+        // 3. 실서비스 제공처 매핑 저장
+        for (SchoolArticleVendorSandbox vs : vendorSandboxes) {
+            SchoolArticleVendor productionVendor = SchoolArticleVendor.builder()
+                    .article(article)
+                    .vendor(vs.getVendor())
+                    .originalUrl(vs.getOriginalUrl())
+                    .build();
+            schoolArticleVendorRepository.save(productionVendor);
+        }
+
+        // 4. 실서비스 첨부파일 저장
+        for (AttachmentSandbox as : attachmentSandboxes) {
+            Attachment productionAttachment = Attachment.builder()
+                    .attachmentUrl(as.getAttachmentUrl())
+                    .articleId(newArticleId)
+                    .articleType(VendorType.SCHOOL) // 학교 공지 타입 고정
+                    .build();
+            attachmentRepository.save(productionAttachment);
+        }
+
+        // 5. 샌드박스 데이터 삭제 (청소)
+        deleteArticle(sandboxId);
+
+        return newArticleId;
     }
 }
