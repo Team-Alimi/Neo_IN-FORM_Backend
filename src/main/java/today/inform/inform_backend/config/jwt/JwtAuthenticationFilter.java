@@ -36,11 +36,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String userIdStr = claims.getSubject();
             if (userIdStr != null) {
                 Integer userId = Integer.parseInt(userIdStr);
+                String role = claims.get("role", String.class);
+                
                 // 3. 인증 객체 생성 및 Context 저장
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userId, // Integer 타입으로 저장
+                        userId, 
                         null,
-                        List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                        List.of(new SimpleGrantedAuthority(role != null ? role : "ROLE_USER"))
                 );
                 
                 SecurityContextHolder.getContext().setAuthentication(authentication);

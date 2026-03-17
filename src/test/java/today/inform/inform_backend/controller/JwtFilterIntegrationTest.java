@@ -21,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class JwtFilterIntegrationTest {
 
     private MockMvc mockMvc;
@@ -35,6 +36,18 @@ class JwtFilterIntegrationTest {
     private today.inform.inform_backend.repository.VendorRepository vendorRepository;
 
     @Autowired
+    private today.inform.inform_backend.repository.ClubArticleRepository clubArticleRepository;
+
+    @Autowired
+    private today.inform.inform_backend.repository.SchoolArticleRepository schoolArticleRepository;
+
+    @Autowired
+    private today.inform.inform_backend.repository.BookmarkRepository bookmarkRepository;
+
+    @Autowired
+    private today.inform.inform_backend.repository.NotificationRepository notificationRepository;
+
+    @Autowired
     private JwtProvider jwtProvider;
 
     @BeforeEach
@@ -44,34 +57,41 @@ class JwtFilterIntegrationTest {
                 .apply(springSecurity())
                 .build();
 
+        notificationRepository.deleteAll();
+        bookmarkRepository.deleteAll();
+        clubArticleRepository.deleteAll();
+        schoolArticleRepository.deleteAll();
         userRepository.deleteAll();
         vendorRepository.deleteAll();
 
         // 테스트 데이터 준비
+        String uniqueInitial = "CSE" + System.currentTimeMillis();
         today.inform.inform_backend.entity.Vendor major = vendorRepository.save(today.inform.inform_backend.entity.Vendor.builder()
                 .vendorName("컴퓨터공학과")
-                .vendorInitial("CSE")
+                .vendorInitial(uniqueInitial)
                 .vendorType(today.inform.inform_backend.entity.VendorType.SCHOOL)
                 .build());
 
+        String uniqueEmail = "test" + System.currentTimeMillis() + "@inha.edu";
+        this.testEmail = uniqueEmail; // 이메일 저장
         today.inform.inform_backend.entity.User user = userRepository.save(today.inform.inform_backend.entity.User.builder()
-                .email("test@inha.edu")
+                .email(uniqueEmail)
                 .name("테스터")
                 .major(major)
                 .build());
-
         this.testUserId = user.getUserId();
         this.testMajorId = major.getVendorId();
     }
 
     private Integer testUserId;
     private Integer testMajorId;
+    private String testEmail;
 
     @Test
     @DisplayName("유효한 토큰으로 인증이 필요한 API 호출 시 성공한다.")
     void access_WithValidToken_Success() throws Exception {
         // given
-        String accessToken = jwtProvider.createAccessToken(testUserId, "test@inha.edu");
+        String accessToken = jwtProvider.createAccessToken(testUserId, testEmail, "ROLE_USER");
 
         // when & then
         mockMvc.perform(patch("/api/v1/users/" + testUserId + "/major")
@@ -97,7 +117,7 @@ class JwtFilterIntegrationTest {
     @DisplayName("타인의 ID로 전공 변경을 시도하면 403 에러가 발생한다.")
     void updateMajor_OtherUser_Fail() throws Exception {
         // given
-        String accessToken = jwtProvider.createAccessToken(testUserId, "test@inha.edu");
+        String accessToken = jwtProvider.createAccessToken(testUserId, testEmail, "ROLE_USER");
         Integer otherUserId = testUserId + 999;
 
         // when & then
