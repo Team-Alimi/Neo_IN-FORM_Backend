@@ -15,6 +15,7 @@ import today.inform.inform_backend.entity.SchoolArticle;
 import today.inform.inform_backend.entity.SchoolArticleVendor;
 import today.inform.inform_backend.entity.Attachment;
 import today.inform.inform_backend.entity.VendorType;
+import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
 
 import today.inform.inform_backend.repository.SchoolArticleSandboxRepository;
 import today.inform.inform_backend.repository.SchoolArticleVendorSandboxRepository;
@@ -133,29 +134,42 @@ public class SchoolArticleSandboxService {
      * 관리자 검수 및 수정 (메인 정보 + 제공처/첨부파일 목록 전체 업데이트)
      */
     @Transactional
-    public void updateArticle(Integer sandboxId, String title, String content, 
-                             Integer categoryId, AdminStatus status, 
-                             java.time.LocalDate startDate, java.time.LocalDate dueDate,
-                             List<Integer> vendorIds, List<String> originalUrls, 
-                             List<String> attachmentUrls) {
+    public void updateArticle(Integer sandboxId, SandboxArticleUpdateRequest request) {
         SchoolArticleSandbox sandbox = sandboxRepository.findById(sandboxId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
         Category category = null;
-        if (categoryId != null) {
-            category = categoryRepository.findById(categoryId).orElse(null);
+        if (request.getCategoryId() != null) {
+            category = categoryRepository.findById(request.getCategoryId()).orElse(null);
         }
 
-        // 1. 메인 정보 업데이트
-        sandbox.update(title, content, category, status, startDate, dueDate);
+        // 1. 메인 정보 업데이트 (null이 아닌 필드만 업데이트)
+        AdminStatus status = null;
+        if (request.getAdminStatus() != null) {
+            try {
+                status = AdminStatus.valueOf(request.getAdminStatus());
+            } catch (IllegalArgumentException e) {
+                // 무시하거나 예외 처리
+            }
+        }
+
+        String title = request.getTitle() != null ? request.getTitle() : sandbox.getTitle();
+        String content = request.getContent() != null ? request.getContent() : sandbox.getContent();
+        Category finalCategory = category != null ? category : sandbox.getCategory();
+        AdminStatus finalStatus = status != null ? status : sandbox.getAdminStatus();
+        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : sandbox.getStartDate();
+        LocalDate dueDate = request.getDueDate() != null ? request.getDueDate() : sandbox.getDueDate();
+
+        sandbox.update(title, content, finalCategory, finalStatus, startDate, dueDate);
 
         // 2. 벤더 정보 업데이트 (전체 삭제 후 재등록 방식)
-        if (vendorIds != null) {
+        if (request.getVendorIds() != null) {
             vendorSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
-            for (int i = 0; i < vendorIds.size(); i++) {
-                Vendor vendor = vendorRepository.findById(vendorIds.get(i))
+            for (int i = 0; i < request.getVendorIds().size(); i++) {
+                Vendor vendor = vendorRepository.findById(request.getVendorIds().get(i))
                         .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
-                String originalUrl = (originalUrls != null && originalUrls.size() > i) ? originalUrls.get(i) : null;
+                String originalUrl = (request.getOriginalUrls() != null && request.getOriginalUrls().size() > i) 
+                                     ? request.getOriginalUrls().get(i) : null;
 
                 SchoolArticleVendorSandbox vendorSandbox = SchoolArticleVendorSandbox.builder()
                         .sandboxArticle(sandbox)
@@ -167,9 +181,9 @@ public class SchoolArticleSandboxService {
         }
 
         // 3. 첨부파일 업데이트 (전체 삭제 후 재등록 방식)
-        if (attachmentUrls != null) {
+        if (request.getAttachmentUrls() != null) {
             attachmentSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
-            for (String url : attachmentUrls) {
+            for (String url : request.getAttachmentUrls()) {
                 AttachmentSandbox attachmentSandbox = AttachmentSandbox.builder()
                         .sandboxArticle(sandbox)
                         .attachmentUrl(url)

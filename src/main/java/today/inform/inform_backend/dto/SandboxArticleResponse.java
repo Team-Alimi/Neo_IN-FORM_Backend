@@ -21,5 +21,6 @@ public class SandboxArticleResponse {
     private LocalDateTime createdAt;
     
     private List<String> vendorNames;
+    private List<String> originalUrls;
     private List<String> attachmentUrls;
 }

@@ -14,16 +14,23 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import today.inform.inform_backend.entity.AdminStatus;
 import today.inform.inform_backend.service.SchoolArticleSandboxService;
-
-import java.util.HashMap;
+import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
 import java.util.List;
 import java.util.Map;
-
+import java.util.HashMap;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -82,5 +89,71 @@ class AdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.articles").isArray());
+    }
+
+    @Test
+    @DisplayName("샌드박스 게시글 상세 수정 API 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void updateSandboxArticleTest() throws Exception {
+        // given
+        SandboxArticleUpdateRequest request = SandboxArticleUpdateRequest.builder()
+                .title("수정된 제목")
+                .content("수정된 내용")
+                .build();
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/admin/sandbox/articles/1")
+                        .content("{\"title\":\"수정된 제목\", \"content\":\"수정된 내용\"}")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+        
+        verify(sandboxService, times(1)).updateArticle(eq(1), any(SandboxArticleUpdateRequest.class));
+    }
+
+    @Test
+    @DisplayName("샌드박스 다중 상태 변경 API 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void updateSandboxStatusesTest() throws Exception {
+        // when & then
+        mockMvc.perform(patch("/api/v1/admin/sandbox/articles/status")
+                        .param("ids", "1,2,3")
+                        .param("status", "GARBAGE")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(sandboxService, times(1)).updateStatuses(eq(List.of(1, 2, 3)), eq(AdminStatus.GARBAGE));
+    }
+
+    @Test
+    @DisplayName("샌드박스 다중 실서비스 반영(Deploy) 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void deploySandboxArticlesTest() throws Exception {
+        // given
+        given(sandboxService.deployArticles(List.of(1, 2))).willReturn(List.of(101, 102));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/admin/sandbox/articles/deploy")
+                        .param("ids", "1,2")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0]").value(101));
+    }
+
+    @Test
+    @DisplayName("샌드박스 다중 삭제 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void deleteSandboxArticlesTest() throws Exception {
+        // when & then
+        mockMvc.perform(delete("/api/v1/admin/sandbox/articles")
+                        .param("ids", "1,2,3")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(sandboxService, times(1)).deleteArticles(List.of(1, 2, 3));
     }
 }

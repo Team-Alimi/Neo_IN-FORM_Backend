@@ -9,9 +9,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import today.inform.inform_backend.entity.*;
 import today.inform.inform_backend.repository.*;
 
+import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -66,10 +68,11 @@ class SchoolArticleSandboxServiceTest {
         given(schoolArticleRepository.save(any(SchoolArticle.class))).willReturn(savedArticle);
 
         // when
-        Integer newArticleId = sandboxService.deployArticle(sandboxId);
+        List<Integer> newArticleIds = sandboxService.deployArticles(List.of(sandboxId));
 
         // then
-        assertThat(newArticleId).isEqualTo(100);
+        assertThat(newArticleIds).hasSize(1);
+        assertThat(newArticleIds.get(0)).isEqualTo(100);
         
         // 운영 테이블 저장 확인
         verify(schoolArticleRepository, times(1)).save(any(SchoolArticle.class));
@@ -99,5 +102,42 @@ class SchoolArticleSandboxServiceTest {
         assertThat(counts.get("reflection_waiting")).isEqualTo(3L);
         assertThat(counts.get("suspected_duplicate")).isEqualTo(1L);
         assertThat(counts.get("garbage")).isEqualTo(10L);
+    }
+
+    @Test
+    @DisplayName("샌드박스 게시글 상세 수정 테스트")
+    void updateArticleTest() {
+        // given
+        Integer sandboxId = 1;
+        SandboxArticleUpdateRequest request = SandboxArticleUpdateRequest.builder()
+                .title("수정된 제목")
+                .content("수정된 내용")
+                .categoryId(1)
+                .adminStatus("GARBAGE")
+                .vendorIds(List.of(1))
+                .originalUrls(List.of("https://new-url.com"))
+                .attachmentUrls(List.of("https://s3.url/new-file.pdf"))
+                .build();
+
+        SchoolArticleSandbox sandbox = SchoolArticleSandbox.builder()
+                .sandboxId(sandboxId)
+                .build();
+        
+        Category category = Category.builder().categoryId(1).build();
+        Vendor vendor = Vendor.builder().vendorId(1).build();
+
+        given(sandboxRepository.findById(sandboxId)).willReturn(Optional.of(sandbox));
+        given(categoryRepository.findById(1)).willReturn(Optional.of(category));
+        given(vendorRepository.findById(1)).willReturn(Optional.of(vendor));
+
+        // when
+        sandboxService.updateArticle(sandboxId, request);
+
+        // then
+        verify(sandboxRepository, times(1)).findById(sandboxId);
+        verify(vendorSandboxRepository, times(1)).deleteAllBySandboxArticleSandboxId(sandboxId);
+        verify(vendorSandboxRepository, times(1)).save(any(SchoolArticleVendorSandbox.class));
+        verify(attachmentSandboxRepository, times(1)).deleteAllBySandboxArticleSandboxId(sandboxId);
+        verify(attachmentSandboxRepository, times(1)).save(any(AttachmentSandbox.class));
     }
 }

@@ -16,8 +16,10 @@ public class SandboxArticleUpdateRequest {
     private String title;
     private String content;
     private Integer categoryId;
+    private String adminStatus;
     private LocalDate startDate;
     private LocalDate dueDate;
     private List<Integer> vendorIds;
+    private List<String> originalUrls;
     private List<String> attachmentUrls;
 }
