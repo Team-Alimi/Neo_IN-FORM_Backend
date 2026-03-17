@@ -5,10 +5,30 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform_backend.common.exception.BusinessException;
 import today.inform.inform_backend.common.exception.ErrorCode;
-import today.inform.inform_backend.entity.*;
-import today.inform.inform_backend.repository.*;
+import today.inform.inform_backend.entity.AdminStatus;
+import today.inform.inform_backend.entity.SchoolArticleSandbox;
+import today.inform.inform_backend.entity.SchoolArticleVendorSandbox;
+import today.inform.inform_backend.entity.AttachmentSandbox;
+import today.inform.inform_backend.entity.Category;
+import today.inform.inform_backend.entity.Vendor;
+import today.inform.inform_backend.entity.SchoolArticle;
+import today.inform.inform_backend.entity.SchoolArticleVendor;
+import today.inform.inform_backend.entity.Attachment;
+import today.inform.inform_backend.entity.VendorType;
+
+import today.inform.inform_backend.repository.SchoolArticleSandboxRepository;
+import today.inform.inform_backend.repository.SchoolArticleVendorSandboxRepository;
+import today.inform.inform_backend.repository.AttachmentSandboxRepository;
+import today.inform.inform_backend.repository.CategoryRepository;
+import today.inform.inform_backend.repository.VendorRepository;
+import today.inform.inform_backend.repository.SchoolArticleRepository;
+import today.inform.inform_backend.repository.SchoolArticleVendorRepository;
+import today.inform.inform_backend.repository.AttachmentRepository;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -163,18 +183,26 @@ public class SchoolArticleSandboxService {
      * 상태만 변경
      */
     @Transactional
-    public void updateStatus(Integer sandboxId, AdminStatus status) {
-        SchoolArticleSandbox sandbox = sandboxRepository.findById(sandboxId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+    public void updateStatuses(List<Integer> sandboxIds, AdminStatus status) {
+        List<SchoolArticleSandbox> sandboxes = sandboxRepository.findAllById(sandboxIds);
+        if (sandboxes.isEmpty()) {
+            throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
+        }
         
-        sandbox.updateStatus(status);
+        sandboxes.forEach(sandbox -> sandbox.updateStatus(status));
     }
 
     /**
      * 샌드박스 게시글 삭제 (영구 삭제)
      */
     @Transactional
-    public void deleteArticle(Integer sandboxId) {
+    public void deleteArticles(List<Integer> sandboxIds) {
+        for (Integer id : sandboxIds) {
+            deleteSingleArticle(id);
+        }
+    }
+
+    private void deleteSingleArticle(Integer sandboxId) {
         vendorSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
         attachmentSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
         sandboxRepository.deleteById(sandboxId);
@@ -184,7 +212,15 @@ public class SchoolArticleSandboxService {
      * [핵심] 샌드박스 -> 실서비스 데이터 배포(Deploy)
      */
     @Transactional
-    public Integer deployArticle(Integer sandboxId) {
+    public List<Integer> deployArticles(List<Integer> sandboxIds) {
+        List<Integer> newArticleIds = new java.util.ArrayList<>();
+        for (Integer id : sandboxIds) {
+            newArticleIds.add(deploySingleArticle(id));
+        }
+        return newArticleIds;
+    }
+
+    private Integer deploySingleArticle(Integer sandboxId) {
         // 1. 샌드박스 데이터 조회 (연관 데이터 포함)
         SchoolArticleSandbox sandbox = sandboxRepository.findById(sandboxId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
@@ -218,14 +254,27 @@ public class SchoolArticleSandboxService {
             Attachment productionAttachment = Attachment.builder()
                     .attachmentUrl(as.getAttachmentUrl())
                     .articleId(newArticleId)
-                    .articleType(VendorType.SCHOOL) // 학교 공지 타입 고정
+                    .articleType(VendorType.SCHOOL)
                     .build();
             attachmentRepository.save(productionAttachment);
         }
 
         // 5. 샌드박스 데이터 삭제 (청소)
-        deleteArticle(sandboxId);
+        deleteSingleArticle(sandboxId);
 
         return newArticleId;
+    }
+
+    /**
+     * 상태별 게시글 통계 (개수) 조회
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Long> getSandboxCounts() {
+        java.util.Map<String, Long> counts = new java.util.HashMap<>();
+        counts.put("inspected_yet", sandboxRepository.countByAdminStatus(AdminStatus.INSPECTED_YET));
+        counts.put("reflection_waiting", sandboxRepository.countByAdminStatus(AdminStatus.REFLECTION_WAITING));
+        counts.put("suspected_duplicate", sandboxRepository.countByAdminStatus(AdminStatus.SUSPECTED_DUPLICATE));
+        counts.put("garbage", sandboxRepository.countByAdminStatus(AdminStatus.GARBAGE));
+        return counts;
     }
 }
