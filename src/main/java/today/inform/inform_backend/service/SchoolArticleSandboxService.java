@@ -1,0 +1,177 @@
+package today.inform.inform_backend.service;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import today.inform.inform_backend.common.exception.BusinessException;
+import today.inform.inform_backend.common.exception.ErrorCode;
+import today.inform.inform_backend.entity.*;
+import today.inform.inform_backend.repository.*;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class SchoolArticleSandboxService {
+
+    private final SchoolArticleSandboxRepository sandboxRepository;
+    private final SchoolArticleVendorSandboxRepository vendorSandboxRepository;
+    private final AttachmentSandboxRepository attachmentSandboxRepository;
+    private final CategoryRepository categoryRepository;
+    private final VendorRepository vendorRepository;
+
+    /**
+     * 크롤러가 수집한 데이터를 샌드박스에 저장
+     */
+    @Transactional
+    public Integer createSandboxArticle(String title, String content, Integer categoryId, 
+                                      List<Integer> vendorIds, List<String> originalUrls, 
+                                      List<String> attachmentUrls) {
+        Category category = null;
+        if (categoryId != null) {
+            category = categoryRepository.findById(categoryId).orElse(null);
+        }
+
+        SchoolArticleSandbox sandbox = SchoolArticleSandbox.builder()
+                .title(title)
+                .content(content)
+                .category(category)
+                .adminStatus(AdminStatus.INSPECTED_YET)
+                .build();
+
+        sandbox = sandboxRepository.save(sandbox);
+
+        // 벤더 정보 저장
+        if (vendorIds != null) {
+            for (int i = 0; i < vendorIds.size(); i++) {
+                Vendor vendor = vendorRepository.findById(vendorIds.get(i))
+                        .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
+                String originalUrl = (originalUrls != null && originalUrls.size() > i) ? originalUrls.get(i) : null;
+
+                SchoolArticleVendorSandbox vendorSandbox = SchoolArticleVendorSandbox.builder()
+                        .sandboxArticle(sandbox)
+                        .vendor(vendor)
+                        .originalUrl(originalUrl)
+                        .build();
+                vendorSandboxRepository.save(vendorSandbox);
+            }
+        }
+
+        // 첨부파일 저장
+        if (attachmentUrls != null) {
+            for (String url : attachmentUrls) {
+                AttachmentSandbox attachmentSandbox = AttachmentSandbox.builder()
+                        .sandboxArticle(sandbox)
+                        .attachmentUrl(url)
+                        .build();
+                attachmentSandboxRepository.save(attachmentSandbox);
+            }
+        }
+
+        return sandbox.getSandboxId();
+    }
+
+    /**
+     * 상태별 샌드박스 게시글 목록 조회
+     */
+    @Transactional(readOnly = true)
+    public List<SchoolArticleSandbox> getArticlesByStatus(AdminStatus status) {
+        return sandboxRepository.findAllByAdminStatusOrderByCreatedAtAsc(status);
+    }
+
+    /**
+     * 샌드박스 게시글 상세 조회
+     */
+    @Transactional(readOnly = true)
+    public SchoolArticleSandbox getArticleDetail(Integer sandboxId) {
+        return sandboxRepository.findById(sandboxId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+    }
+
+    /**
+     * 연관된 벤더 정보 조회
+     */
+    @Transactional(readOnly = true)
+    public List<SchoolArticleVendorSandbox> getVendors(Integer sandboxId) {
+        return vendorSandboxRepository.findAllBySandboxArticleSandboxId(sandboxId);
+    }
+
+    /**
+     * 연관된 첨부파일 정보 조회
+     */
+    @Transactional(readOnly = true)
+    public List<AttachmentSandbox> getAttachments(Integer sandboxId) {
+        return attachmentSandboxRepository.findAllBySandboxArticleSandboxId(sandboxId);
+    }
+
+    /**
+     * 관리자 검수 및 수정 (메인 정보 + 제공처/첨부파일 목록 전체 업데이트)
+     */
+    @Transactional
+    public void updateArticle(Integer sandboxId, String title, String content, 
+                             Integer categoryId, AdminStatus status, 
+                             java.time.LocalDate startDate, java.time.LocalDate dueDate,
+                             List<Integer> vendorIds, List<String> originalUrls, 
+                             List<String> attachmentUrls) {
+        SchoolArticleSandbox sandbox = sandboxRepository.findById(sandboxId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+        Category category = null;
+        if (categoryId != null) {
+            category = categoryRepository.findById(categoryId).orElse(null);
+        }
+
+        // 1. 메인 정보 업데이트
+        sandbox.update(title, content, category, status, startDate, dueDate);
+
+        // 2. 벤더 정보 업데이트 (전체 삭제 후 재등록 방식)
+        if (vendorIds != null) {
+            vendorSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
+            for (int i = 0; i < vendorIds.size(); i++) {
+                Vendor vendor = vendorRepository.findById(vendorIds.get(i))
+                        .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
+                String originalUrl = (originalUrls != null && originalUrls.size() > i) ? originalUrls.get(i) : null;
+
+                SchoolArticleVendorSandbox vendorSandbox = SchoolArticleVendorSandbox.builder()
+                        .sandboxArticle(sandbox)
+                        .vendor(vendor)
+                        .originalUrl(originalUrl)
+                        .build();
+                vendorSandboxRepository.save(vendorSandbox);
+            }
+        }
+
+        // 3. 첨부파일 업데이트 (전체 삭제 후 재등록 방식)
+        if (attachmentUrls != null) {
+            attachmentSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
+            for (String url : attachmentUrls) {
+                AttachmentSandbox attachmentSandbox = AttachmentSandbox.builder()
+                        .sandboxArticle(sandbox)
+                        .attachmentUrl(url)
+                        .build();
+                attachmentSandboxRepository.save(attachmentSandbox);
+            }
+        }
+    }
+
+    /**
+     * 상태만 변경
+     */
+    @Transactional
+    public void updateStatus(Integer sandboxId, AdminStatus status) {
+        SchoolArticleSandbox sandbox = sandboxRepository.findById(sandboxId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+        
+        sandbox.updateStatus(status);
+    }
+
+    /**
+     * 샌드박스 게시글 삭제 (영구 삭제)
+     */
+    @Transactional
+    public void deleteArticle(Integer sandboxId) {
+        vendorSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
+        attachmentSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
+        sandboxRepository.deleteById(sandboxId);
+    }
+}

@@ -39,4 +39,17 @@ public class SchoolArticleSandbox extends BaseTimeEntity {
     @Column(nullable = false)
     @Builder.Default
     private AdminStatus adminStatus = AdminStatus.INSPECTED_YET;
+
+    public void update(String title, String content, Category category, AdminStatus adminStatus, LocalDate startDate, LocalDate dueDate) {
+        this.title = title;
+        this.content = content;
+        this.category = category;
+        this.adminStatus = adminStatus;
+        this.startDate = startDate;
+        this.dueDate = dueDate;
+    }
+
+    public void updateStatus(AdminStatus adminStatus) {
+        this.adminStatus = adminStatus;
+    }
 }
