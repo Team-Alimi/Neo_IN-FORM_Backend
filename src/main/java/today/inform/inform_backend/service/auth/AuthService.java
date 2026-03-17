@@ -44,8 +44,8 @@ public class AuthService {
             user.updateName(userInfo.getName());
         }
 
-        String accessToken = jwtProvider.createAccessToken(user.getUserId(), user.getEmail());
-        String refreshToken = jwtProvider.createRefreshToken(user.getUserId(), user.getEmail());
+        String accessToken = jwtProvider.createAccessToken(user.getUserId(), user.getEmail(), user.getRole().name());
+        String refreshToken = jwtProvider.createRefreshToken(user.getUserId(), user.getEmail(), user.getRole().name());
 
         saveRefreshToken(user.getEmail(), refreshToken);
 
@@ -57,6 +57,7 @@ public class AuthService {
                         .userId(user.getUserId())
                         .email(user.getEmail())
                         .name(user.getName())
+                        .role(user.getRole().name())
                         .major(user.getMajor() != null ? VendorListResponse.builder()
                                 .vendorId(user.getMajor().getVendorId())
                                 .vendorName(user.getMajor().getVendorName())
@@ -88,8 +89,11 @@ public class AuthService {
         }
 
         // 4. 새로운 토큰 쌍 발급 (RT Rotation)
-        String newAccessToken = jwtProvider.createAccessToken(userId, email);
-        String newRefreshToken = jwtProvider.createRefreshToken(userId, email);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        String newAccessToken = jwtProvider.createAccessToken(userId, email, user.getRole().name());
+        String newRefreshToken = jwtProvider.createRefreshToken(userId, email, user.getRole().name());
 
         saveRefreshToken(email, newRefreshToken);
 

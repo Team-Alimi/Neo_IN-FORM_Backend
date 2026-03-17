@@ -24,7 +24,7 @@ class JwtProviderTest {
     @Test
     @DisplayName("토큰 생성 및 검증 테스트")
     void createAndValidateToken() {
-        String token = jwtProvider.createAccessToken(1, "test@inha.edu");
+        String token = jwtProvider.createAccessToken(1, "test@inha.edu", "ROLE_USER");
         assertThat(jwtProvider.validateToken(token)).isTrue();
         assertThat(jwtProvider.getClaims(token).getSubject()).isEqualTo("1");
     }
