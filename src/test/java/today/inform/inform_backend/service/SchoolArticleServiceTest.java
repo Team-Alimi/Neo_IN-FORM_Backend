@@ -13,9 +13,15 @@ import today.inform.inform_backend.common.exception.ErrorCode;
 import today.inform.inform_backend.dto.SchoolArticleDetailResponse;
 import today.inform.inform_backend.dto.SchoolArticleResponse;
 import today.inform.inform_backend.entity.SchoolArticle;
+import today.inform.inform_backend.entity.SchoolArticleVendor;
 import today.inform.inform_backend.entity.User;
 import today.inform.inform_backend.entity.VendorType;
+import today.inform.inform_backend.entity.Category;
+import today.inform.inform_backend.entity.Vendor;
+import today.inform.inform_backend.entity.Attachment;
 import today.inform.inform_backend.repository.*;
+import today.inform.inform_backend.dto.AdminArticleCreateRequest;
+import today.inform.inform_backend.dto.AdminArticleUpdateRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -42,6 +48,10 @@ class SchoolArticleServiceTest {
         private BookmarkRepository bookmarkRepository;
         @Mock
         private UserRepository userRepository;
+        @Mock
+        private CategoryRepository categoryRepository;
+        @Mock
+        private VendorRepository vendorRepository;
 
         @Test
         @DisplayName("인기 게시물 상위 10개를 조회한다.")
@@ -173,5 +183,127 @@ class SchoolArticleServiceTest {
                 verify(schoolArticleRepository, times(1))
                                 .findAllWithFiltersAndSorting(any(), eq(vendorIds), any(), any(), any(), any(), any(),
                                                 any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("기존 게시글 ID 존재 여부를 확인한다.")
+        void checkArticleIdExists_Success() {
+                // given
+                Integer articleId = 100;
+                when(schoolArticleRepository.existsById(articleId)).thenReturn(true);
+
+                // when
+                boolean exists = schoolArticleService.checkArticleIdExists(articleId);
+
+                // then
+                assertThat(exists).isTrue();
+        }
+
+        @Test
+        @DisplayName("ID를 지정하지 않고 게시글을 직접 생성한다.")
+        void createArticleDirectly_WithoutId() {
+                // given
+                AdminArticleCreateRequest request = AdminArticleCreateRequest.builder()
+                                .title("Direct Title")
+                                .content("Direct Content")
+                                .categoryId(1)
+                                .startDate(LocalDate.now())
+                                .vendors(List.of(new AdminArticleCreateRequest.VendorRequest(1, null)))
+                                .build();
+
+                Category category = Category.builder().categoryId(1).build();
+                Vendor vendor = Vendor.builder().vendorId(1).build();
+                SchoolArticle article = SchoolArticle.builder().articleId(101).build();
+
+                when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
+                when(vendorRepository.findById(1)).thenReturn(Optional.of(vendor));
+                when(schoolArticleRepository.save(any(SchoolArticle.class))).thenReturn(article);
+
+                // when
+                Integer resultId = schoolArticleService.createArticleDirectly(request);
+
+                // then
+                assertThat(resultId).isEqualTo(101);
+                verify(schoolArticleRepository, times(1)).save(any(SchoolArticle.class));
+                verify(schoolArticleVendorRepository, times(1)).save(any(SchoolArticleVendor.class));
+        }
+
+        @Test
+        @DisplayName("ID를 명시하여 게시글을 직접 생성한다.")
+        void createArticleDirectly_WithId() {
+                // given
+                Integer articleId = 200;
+                AdminArticleCreateRequest request = AdminArticleCreateRequest.builder()
+                                .articleId(articleId)
+                                .title("Direct With ID")
+                                .content("Direct Content")
+                                .categoryId(1)
+                                .startDate(LocalDate.now())
+                                .vendors(List.of(new AdminArticleCreateRequest.VendorRequest(1, null)))
+                                .build();
+
+                Category category = Category.builder().categoryId(1).build();
+                Vendor vendor = Vendor.builder().vendorId(1).build();
+                SchoolArticle article = SchoolArticle.builder().articleId(articleId).build();
+
+                when(schoolArticleRepository.existsById(articleId)).thenReturn(false);
+                when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
+                when(vendorRepository.findById(1)).thenReturn(Optional.of(vendor));
+                when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+
+                // when
+                Integer resultId = schoolArticleService.createArticleDirectly(request);
+
+                // then
+                assertThat(resultId).isEqualTo(articleId);
+                verify(schoolArticleRepository, times(1)).insertArticleDirectly(eq(articleId), any(), any(), eq(1), any(), any());
+                verify(schoolArticleVendorRepository, times(1)).save(any(SchoolArticleVendor.class));
+        }
+
+        @Test
+        @DisplayName("이미 존재하는 ID로 게시글 생성을 시도하면 예외를 던진다.")
+        void createArticleDirectly_DuplicateId_ThrowsException() {
+                // given
+                Integer articleId = 200;
+                AdminArticleCreateRequest request = AdminArticleCreateRequest.builder()
+                                .articleId(articleId)
+                                .build();
+
+                when(schoolArticleRepository.existsById(articleId)).thenReturn(true);
+
+                // when & then
+                assertThatThrownBy(() -> schoolArticleService.createArticleDirectly(request))
+                                .isInstanceOf(BusinessException.class)
+                                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_EXIST_ARTICLE);
+        }
+
+        @Test
+        @DisplayName("기존 게시글을 직접 수정한다.")
+        void updateArticleDirectly_Success() {
+                // given
+                Integer articleId = 300;
+                AdminArticleUpdateRequest request = AdminArticleUpdateRequest.builder()
+                                .title("Updated Title")
+                                .categoryId(2)
+                                .vendors(List.of(new AdminArticleUpdateRequest.VendorRequest(1, null)))
+                                .attachmentUrls(List.of("http://file.com"))
+                                .build();
+
+                Category category = Category.builder().categoryId(2).build();
+                Vendor vendor = Vendor.builder().vendorId(1).build();
+                SchoolArticle article = SchoolArticle.builder().articleId(articleId).build();
+
+                when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+                when(categoryRepository.findById(2)).thenReturn(Optional.of(category));
+                when(vendorRepository.findById(1)).thenReturn(Optional.of(vendor));
+
+                // when
+                schoolArticleService.updateArticleDirectly(articleId, request);
+
+                // then
+                verify(schoolArticleVendorRepository, times(1)).deleteAllByArticle(article);
+                verify(attachmentRepository, times(1)).deleteAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
+                verify(schoolArticleVendorRepository, times(1)).save(any(SchoolArticleVendor.class));
+                verify(attachmentRepository, times(1)).save(any(Attachment.class));
         }
 }

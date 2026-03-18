@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import today.inform.inform_backend.entity.AdminStatus;
 import today.inform.inform_backend.service.SchoolArticleSandboxService;
+import today.inform.inform_backend.service.SchoolArticleService;
 import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,9 @@ class AdminControllerTest {
 
     @MockitoBean
     private SchoolArticleSandboxService sandboxService;
+
+    @MockitoBean
+    private SchoolArticleService schoolArticleService;
 
     @BeforeEach
     void setUp() {
@@ -199,5 +203,51 @@ class AdminControllerTest {
                 .andExpect(jsonPath("$.success").value(true));
 
         verify(sandboxService, times(1)).deleteArticles(List.of(1, 2, 3));
+    }
+
+    @Test
+    @DisplayName("서비스 게시글 직접 등록 API 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void createArticleDirectlyTest() throws Exception {
+        // given
+        given(schoolArticleService.createArticleDirectly(any())).willReturn(101);
+
+        // when & then
+        mockMvc.perform(post("/api/v1/admin/articles")
+                        .content("{\"title\":\"직접 제목\", \"content\":\"직접 내용\", \"category_id\":1, \"start_date\":\"2026-03-18\", \"vendors\":[{\"vendor_id\":1}]}")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value(101));
+    }
+
+    @Test
+    @DisplayName("서비스 게시글 ID 중복 확인 API 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void checkArticleIdExistsTest() throws Exception {
+        // given
+        given(schoolArticleService.checkArticleIdExists(999)).willReturn(true);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/admin/articles/check-id")
+                        .param("article_id", "999")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value(true));
+    }
+
+    @Test
+    @DisplayName("서비스 게시글 직접 수정 API 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void updateArticleDirectlyTest() throws Exception {
+        // when & then
+        mockMvc.perform(patch("/api/v1/admin/articles/101")
+                        .content("{\"title\":\"수정된 직접 제목\"}")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(schoolArticleService, times(1)).updateArticleDirectly(eq(101), any());
     }
 }

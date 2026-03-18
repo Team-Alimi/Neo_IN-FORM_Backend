@@ -34,4 +34,12 @@ public class SchoolArticle extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     private Category category;
+
+    public void update(String title, String content, LocalDate startDate, LocalDate dueDate, Category category) {
+        if (title != null) this.title = title;
+        if (content != null) this.content = content;
+        this.startDate = startDate;
+        this.dueDate = dueDate;
+        this.category = category;
+    }
 }

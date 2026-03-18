@@ -13,7 +13,10 @@ import today.inform.inform_backend.entity.SchoolArticleVendorSandbox;
 import today.inform.inform_backend.entity.AttachmentSandbox;
 import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
 import today.inform.inform_backend.dto.SandboxArticleDetailResponse;
+import today.inform.inform_backend.dto.AdminArticleCreateRequest;
+import today.inform.inform_backend.dto.AdminArticleUpdateRequest;
 import today.inform.inform_backend.service.SchoolArticleSandboxService;
+import today.inform.inform_backend.service.SchoolArticleService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
@@ -28,6 +31,7 @@ import java.util.stream.Collectors;
 public class AdminController {
 
     private final SchoolArticleSandboxService sandboxService;
+    private final SchoolArticleService schoolArticleService;
 
     @GetMapping("/check")
     public ResponseEntity<ApiResponse<String>> checkAdmin() {
@@ -189,6 +193,37 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Void>> deleteSandboxArticles(
             @RequestParam("ids") List<Integer> ids) {
         sandboxService.deleteArticles(ids);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * 관리자: 서비스 DB 직접 등록
+     */
+    @PostMapping("/articles")
+    public ResponseEntity<ApiResponse<Integer>> createArticleDirectly(
+            @RequestBody AdminArticleCreateRequest request) {
+        Integer articleId = schoolArticleService.createArticleDirectly(request);
+        return ResponseEntity.ok(ApiResponse.success(articleId));
+    }
+
+    /**
+     * 관리자: 서비스 DB 게시글 중복 ID 확인
+     */
+    @GetMapping("/articles/check-id")
+    public ResponseEntity<ApiResponse<Boolean>> checkArticleIdExists(
+            @RequestParam("article_id") Integer articleId) {
+        boolean exists = schoolArticleService.checkArticleIdExists(articleId);
+        return ResponseEntity.ok(ApiResponse.success(exists));
+    }
+
+    /**
+     * 관리자: 서비스 DB 직접 수정
+     */
+    @PatchMapping("/articles/{id}")
+    public ResponseEntity<ApiResponse<Void>> updateArticleDirectly(
+            @PathVariable("id") Integer id,
+            @RequestBody AdminArticleUpdateRequest request) {
+        schoolArticleService.updateArticleDirectly(id, request);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

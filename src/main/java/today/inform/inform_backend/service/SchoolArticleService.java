@@ -18,6 +18,13 @@ import today.inform.inform_backend.entity.VendorType;
 import today.inform.inform_backend.repository.AttachmentRepository;
 import today.inform.inform_backend.repository.SchoolArticleRepository;
 import today.inform.inform_backend.repository.SchoolArticleVendorRepository;
+import today.inform.inform_backend.repository.CategoryRepository;
+import today.inform.inform_backend.repository.VendorRepository;
+import today.inform.inform_backend.entity.Category;
+import today.inform.inform_backend.entity.Vendor;
+import today.inform.inform_backend.entity.Attachment;
+import today.inform.inform_backend.dto.AdminArticleCreateRequest;
+import today.inform.inform_backend.dto.AdminArticleUpdateRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -33,6 +40,8 @@ public class SchoolArticleService {
         private final AttachmentRepository attachmentRepository;
         private final today.inform.inform_backend.repository.BookmarkRepository bookmarkRepository;
         private final today.inform.inform_backend.repository.UserRepository userRepository;
+        private final CategoryRepository categoryRepository;
+        private final VendorRepository vendorRepository;
 
         @Transactional(readOnly = true)
         public SchoolArticleDetailResponse getSchoolArticleDetail(Integer articleId, Integer userId) {
@@ -324,4 +333,132 @@ public class SchoolArticleService {
                                                 obj -> (Integer) obj[0],
                                                 obj -> (Long) obj[1]));
         }
+
+        // ===================== Admin Direct Maintenance Methods ===================== //
+
+        @Transactional(readOnly = true)
+        public boolean checkArticleIdExists(Integer articleId) {
+                return schoolArticleRepository.existsById(articleId);
+        }
+
+        @Transactional
+        public Integer createArticleDirectly(AdminArticleCreateRequest request) {
+                if (request.getArticleId() != null && schoolArticleRepository.existsById(request.getArticleId())) {
+                        throw new BusinessException(ErrorCode.ALREADY_EXIST_ARTICLE);
+                }
+
+                Category category = null;
+                if (request.getCategoryId() != null) {
+                        category = categoryRepository.findById(request.getCategoryId())
+                                        .orElseThrow(() -> new BusinessException(ErrorCode.CATEGORY_NOT_FOUND));
+                }
+
+                Integer finalArticleId = request.getArticleId();
+                SchoolArticle article;
+
+                if (finalArticleId != null) {
+                        // 강제 삽입 (Native Query)
+                        schoolArticleRepository.insertArticleDirectly(
+                                finalArticleId,
+                                request.getTitle(),
+                                request.getContent(),
+                                request.getCategoryId(),
+                                request.getStartDate(),
+                                request.getDueDate()
+                        );
+                        article = schoolArticleRepository.findById(finalArticleId)
+                                .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
+                } else {
+                        // 일반 삽입
+                        article = SchoolArticle.builder()
+                                .title(request.getTitle())
+                                .content(request.getContent())
+                                .startDate(request.getStartDate())
+                                .dueDate(request.getDueDate())
+                                .category(category)
+                                .build();
+                        article = schoolArticleRepository.save(article);
+                        finalArticleId = article.getArticleId();
+                }
+
+                // 벤더 매핑 저장
+                if (request.getVendors() != null) {
+                        for (AdminArticleCreateRequest.VendorRequest vr : request.getVendors()) {
+                                Vendor vendor = vendorRepository.findById(vr.getVendorId())
+                                        .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
+                                SchoolArticleVendor articleVendor = SchoolArticleVendor.builder()
+                                        .article(article)
+                                        .vendor(vendor)
+                                        .originalUrl(vr.getOriginalUrl())
+                                        .build();
+                                schoolArticleVendorRepository.save(articleVendor);
+                        }
+                }
+
+                // 첨부파일 저장
+                if (request.getAttachmentUrls() != null) {
+                        for (String attUrl : request.getAttachmentUrls()) {
+                                Attachment attachment = Attachment.builder()
+                                        .articleId(finalArticleId)
+                                        .articleType(VendorType.SCHOOL)
+                                        .attachmentUrl(attUrl)
+                                        .build();
+                                attachmentRepository.save(attachment);
+                        }
+                }
+
+                return finalArticleId;
+        }
+
+        @Transactional
+        public void updateArticleDirectly(Integer articleId, AdminArticleUpdateRequest request) {
+                SchoolArticle article = schoolArticleRepository.findById(articleId)
+                                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+                Category category = null;
+                if (request.getCategoryId() != null) {
+                        category = categoryRepository.findById(request.getCategoryId())
+                                        .orElseThrow(() -> new BusinessException(ErrorCode.CATEGORY_NOT_FOUND));
+                }
+
+                // 엔티티 필드 수정
+                article.update(
+                        request.getTitle(),
+                        request.getContent(),
+                        request.getStartDate(),
+                        request.getDueDate(),
+                        category
+                );
+
+                // 연관 데이터 기존 것 모두 삭제 후 재생성
+                schoolArticleVendorRepository.deleteAllByArticle(article);
+                attachmentRepository.deleteAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
+
+                // 벤더 매핑 다시 저장
+                if (request.getVendors() != null) {
+                        for (AdminArticleUpdateRequest.VendorRequest vr : request.getVendors()) {
+                                Vendor vendor = vendorRepository.findById(vr.getVendorId())
+                                        .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
+                                SchoolArticleVendor articleVendor = SchoolArticleVendor.builder()
+                                        .article(article)
+                                        .vendor(vendor)
+                                        .originalUrl(vr.getOriginalUrl())
+                                        .build();
+                                schoolArticleVendorRepository.save(articleVendor);
+                        }
+                }
+
+                // 첨부파일 다시 저장
+                if (request.getAttachmentUrls() != null) {
+                        for (String attUrl : request.getAttachmentUrls()) {
+                                Attachment attachment = Attachment.builder()
+                                        .articleId(articleId)
+                                        .articleType(VendorType.SCHOOL)
+                                        .attachmentUrl(attUrl)
+                                        .build();
+                                attachmentRepository.save(attachment);
+                        }
+                }
+        }
 }
+
