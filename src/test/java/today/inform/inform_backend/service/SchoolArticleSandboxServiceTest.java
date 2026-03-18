@@ -14,6 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -114,8 +118,10 @@ class SchoolArticleSandboxServiceTest {
                 .content("수정된 내용")
                 .categoryId(1)
                 .adminStatus("GARBAGE")
-                .vendorIds(List.of(1))
-                .originalUrls(List.of("https://new-url.com"))
+                .vendors(List.of(SandboxArticleUpdateRequest.VendorRequest.builder()
+                        .vendorId(1)
+                        .originalUrl("https://new-url.com")
+                        .build()))
                 .attachmentUrls(List.of("https://s3.url/new-file.pdf"))
                 .build();
 
@@ -139,5 +145,40 @@ class SchoolArticleSandboxServiceTest {
         verify(vendorSandboxRepository, times(1)).save(any(SchoolArticleVendorSandbox.class));
         verify(attachmentSandboxRepository, times(1)).deleteAllBySandboxArticleSandboxId(sandboxId);
         verify(attachmentSandboxRepository, times(1)).save(any(AttachmentSandbox.class));
+    }
+
+    @Test
+    @DisplayName("샌드박스 게시글 목록 페이징 조회 테스트")
+    void getArticlesByStatusTest() {
+        // given
+        AdminStatus status = AdminStatus.INSPECTED_YET;
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<SchoolArticleSandbox> page = new PageImpl<>(List.of());
+        
+        given(sandboxRepository.findAllByAdminStatusOrderByCreatedAtAsc(status, pageable)).willReturn(page);
+
+        // when
+        Page<SchoolArticleSandbox> result = sandboxService.getArticlesByStatus(status, pageable);
+
+        // then
+        assertThat(result).isNotNull();
+        verify(sandboxRepository, times(1)).findAllByAdminStatusOrderByCreatedAtAsc(status, pageable);
+    }
+
+    @Test
+    @DisplayName("샌드박스 게시글 상세 조회 테스트")
+    void getArticleDetailTest() {
+        // given
+        Integer id = 1;
+        SchoolArticleSandbox sandbox = SchoolArticleSandbox.builder().sandboxId(id).build();
+        given(sandboxRepository.findById(id)).willReturn(Optional.of(sandbox));
+
+        // when
+        SchoolArticleSandbox result = sandboxService.getArticleDetail(id);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.getSandboxId()).isEqualTo(id);
+        verify(sandboxRepository, times(1)).findById(id);
     }
 }

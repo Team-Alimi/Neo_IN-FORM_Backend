@@ -8,9 +8,10 @@ import java.util.List;
 
 @Getter
 @Builder
-public class SandboxArticleResponse {
+public class SandboxArticleDetailResponse {
     private Integer sandboxId;
     private String title;
+    private String content;
     private String adminStatus;
     private LocalDate startDate;
     private LocalDate dueDate;
@@ -21,8 +22,9 @@ public class SandboxArticleResponse {
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime updatedAt;
     
-    private List<VendorResponse> vendors;
     private CategoryResponse categories;
+    private List<VendorResponse> vendors;
+    private List<AttachmentResponse> attachments;
 
     @Getter
     @Builder
@@ -31,6 +33,7 @@ public class SandboxArticleResponse {
         private String vendorName;
         private String vendorInitial;
         private String vendorType;
+        private String originalUrl;
     }
 
     @Getter
@@ -38,5 +41,12 @@ public class SandboxArticleResponse {
     public static class CategoryResponse {
         private Integer categoryId;
         private String categoryName;
+    }
+
+    @Getter
+    @Builder
+    public static class AttachmentResponse {
+        private Integer fileId;
+        private String attachmentUrl;
     }
 }

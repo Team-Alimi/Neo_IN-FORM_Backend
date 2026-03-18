@@ -9,11 +9,17 @@ import today.inform.inform_backend.dto.SandboxArticleResponse;
 import today.inform.inform_backend.dto.SandboxCountsResponse;
 import today.inform.inform_backend.entity.AdminStatus;
 import today.inform.inform_backend.entity.SchoolArticleSandbox;
+import today.inform.inform_backend.entity.SchoolArticleVendorSandbox;
+import today.inform.inform_backend.entity.AttachmentSandbox;
 import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
+import today.inform.inform_backend.dto.SandboxArticleDetailResponse;
 import today.inform.inform_backend.service.SchoolArticleSandboxService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 @RestController
@@ -44,39 +50,104 @@ public class AdminController {
     }
 
     /**
-     * 샌드박스 상태별 목록 조회
+     * 샌드박스 상태별 목록 조회 (페이징 지원)
      */
     @GetMapping("/sandbox/articles")
     public ResponseEntity<ApiResponse<SandboxArticleListResponse>> getSandboxArticles(
-            @RequestParam("status") AdminStatus status) {
+            @RequestParam("status") AdminStatus status,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size) {
         
-        List<SchoolArticleSandbox> articles = sandboxService.getArticlesByStatus(status);
+        Page<SchoolArticleSandbox> articlePage = sandboxService.getArticlesByStatus(status, PageRequest.of(page - 1, size));
         
-        List<SandboxArticleResponse> articleResponses = articles.stream()
-                .map(article -> SandboxArticleResponse.builder()
-                        .sandboxId(article.getSandboxId())
-                        .title(article.getTitle())
-                        .content(article.getContent())
-                        .categoryName(article.getCategory() != null ? article.getCategory().getCategoryName() : null)
-                        .adminStatus(article.getAdminStatus().name())
-                        .startDate(article.getStartDate())
-                        .dueDate(article.getDueDate())
-                        .createdAt(article.getCreatedAt())
-                        .vendorNames(sandboxService.getVendors(article.getSandboxId()).stream()
-                                .map(v -> v.getVendor().getVendorName())
-                                .collect(Collectors.toList()))
-                        .originalUrls(sandboxService.getVendors(article.getSandboxId()).stream()
-                                .map(v -> v.getOriginalUrl())
-                                .collect(Collectors.toList()))
-                        .attachmentUrls(sandboxService.getAttachments(article.getSandboxId()).stream()
-                                .map(a -> a.getAttachmentUrl())
-                                .collect(Collectors.toList()))
-                        .build())
-                .collect(Collectors.toList());
+        List<SandboxArticleResponse> articleResponses = new ArrayList<>();
+        for (SchoolArticleSandbox article : articlePage.getContent()) {
+            List<SchoolArticleVendorSandbox> vendors = sandboxService.getVendors(article.getSandboxId());
+            
+            List<SandboxArticleResponse.VendorResponse> vendorResponses = vendors.stream()
+                    .map(v -> SandboxArticleResponse.VendorResponse.builder()
+                            .vendorId(v.getVendor().getVendorId())
+                            .vendorName(v.getVendor().getVendorName())
+                            .vendorInitial(v.getVendor().getVendorInitial())
+                            .vendorType(v.getVendor().getVendorType().name())
+                            .build())
+                    .collect(Collectors.toList());
 
-        return ResponseEntity.ok(ApiResponse.success(SandboxArticleListResponse.builder()
-                .articles(articleResponses)
-                .build()));
+            SandboxArticleResponse.CategoryResponse categoryResponse = article.getCategory() != null ? 
+                    SandboxArticleResponse.CategoryResponse.builder()
+                            .categoryId(article.getCategory().getCategoryId())
+                            .categoryName(article.getCategory().getCategoryName())
+                            .build() : null;
+
+            articleResponses.add(SandboxArticleResponse.builder()
+                    .sandboxId(article.getSandboxId())
+                    .title(article.getTitle())
+                    .categories(categoryResponse)
+                    .adminStatus(article.getAdminStatus().name())
+                    .startDate(article.getStartDate())
+                    .dueDate(article.getDueDate())
+                    .createdAt(article.getCreatedAt())
+                    .updatedAt(article.getUpdatedAt())
+                    .vendors(vendorResponses)
+                    .build());
+        }
+
+        SandboxArticleListResponse.PageInfo pageInfo = SandboxArticleListResponse.PageInfo.builder()
+                .currentPage(page)
+                .totalPages(articlePage.getTotalPages())
+                .totalArticles(articlePage.getTotalElements())
+                .hasNext(articlePage.hasNext())
+                .build();
+
+        SandboxArticleListResponse response = SandboxArticleListResponse.builder()
+                .pageInfo(pageInfo)
+                .sandboxArticles(articleResponses)
+                .build();
+
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * 샌드박스 게시글 상세 조회
+     */
+    @GetMapping("/sandbox/articles/{id}")
+    public ResponseEntity<ApiResponse<SandboxArticleDetailResponse>> getSandboxArticle(@PathVariable("id") Integer id) {
+        SchoolArticleSandbox article = sandboxService.getArticleDetail(id);
+        
+        SandboxArticleDetailResponse.CategoryResponse categoryResponse = article.getCategory() != null ? 
+                SandboxArticleDetailResponse.CategoryResponse.builder()
+                        .categoryId(article.getCategory().getCategoryId())
+                        .categoryName(article.getCategory().getCategoryName())
+                        .build() : null;
+        
+        SandboxArticleDetailResponse response = SandboxArticleDetailResponse.builder()
+                .sandboxId(article.getSandboxId())
+                .title(article.getTitle())
+                .content(article.getContent())
+                .categories(categoryResponse)
+                .adminStatus(article.getAdminStatus().name())
+                .startDate(article.getStartDate())
+                .dueDate(article.getDueDate())
+                .createdAt(article.getCreatedAt())
+                .updatedAt(article.getUpdatedAt())
+                .vendors(sandboxService.getVendors(id).stream()
+                        .map(v -> SandboxArticleDetailResponse.VendorResponse.builder()
+                                .vendorId(v.getVendor().getVendorId())
+                                .vendorName(v.getVendor().getVendorName())
+                                .vendorInitial(v.getVendor().getVendorInitial())
+                                .vendorType(v.getVendor().getVendorType().name())
+                                .originalUrl(v.getOriginalUrl())
+                                .build())
+                        .collect(Collectors.toList()))
+                .attachments(sandboxService.getAttachments(id).stream()
+                        .map(a -> SandboxArticleDetailResponse.AttachmentResponse.builder()
+                                .fileId(a.getId())
+                                .attachmentUrl(a.getAttachmentUrl())
+                                .build())
+                        .collect(Collectors.toList()))
+                .build();
+                
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**

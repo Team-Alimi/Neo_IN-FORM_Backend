@@ -19,6 +19,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import today.inform.inform_backend.entity.SchoolArticleSandbox;
+import today.inform.inform_backend.dto.SandboxArticleResponse;
+import today.inform.inform_backend.dto.SandboxArticleDetailResponse;
+import java.util.Collections;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -76,34 +83,71 @@ class AdminControllerTest {
     }
 
     @Test
-    @DisplayName("샌드박스 목록 조회 API 테스트")
+    @DisplayName("샌드박스 목록 조회 API 테스트 (페이징)")
     @WithMockUser(roles = "ADMIN")
     void getSandboxArticlesTest() throws Exception {
         // given
-        given(sandboxService.getArticlesByStatus(AdminStatus.INSPECTED_YET)).willReturn(List.of());
+        Page<SchoolArticleSandbox> page = new PageImpl<>(List.of());
+        given(sandboxService.getArticlesByStatus(eq(AdminStatus.INSPECTED_YET), any(PageRequest.class))).willReturn(page);
 
         // when & then
         mockMvc.perform(get("/api/v1/admin/sandbox/articles")
                         .param("status", "INSPECTED_YET")
+                        .param("page", "1")
+                        .param("size", "10")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.articles").isArray());
+                .andExpect(jsonPath("$.data.sandbox_articles").isArray())
+                .andExpect(jsonPath("$.data.page_info").exists())
+                .andExpect(jsonPath("$.data.page_info.current_page").value(1));
+    }
+
+    @Test
+    @DisplayName("샌드박스 게시글 상세 조회 API 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void getSandboxArticleDetailTest() throws Exception {
+        // given
+        Integer id = 1;
+        SchoolArticleSandbox sandbox = SchoolArticleSandbox.builder()
+                .sandboxId(id)
+                .title("테스트 제목")
+                .content("테스트 내용")
+                .adminStatus(AdminStatus.INSPECTED_YET)
+                .build();
+        
+        given(sandboxService.getArticleDetail(id)).willReturn(sandbox);
+        given(sandboxService.getVendors(id)).willReturn(List.of());
+        given(sandboxService.getAttachments(id)).willReturn(List.of());
+
+        // when & then
+        mockMvc.perform(get("/api/v1/admin/sandbox/articles/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.sandbox_id").value(id))
+                .andExpect(jsonPath("$.data.title").value("테스트 제목"))
+                .andExpect(jsonPath("$.data.content").value("테스트 내용"));
     }
 
     @Test
     @DisplayName("샌드박스 게시글 상세 수정 API 테스트")
     @WithMockUser(roles = "ADMIN")
     void updateSandboxArticleTest() throws Exception {
-        // given
+        SandboxArticleUpdateRequest.VendorRequest vendorRequest = SandboxArticleUpdateRequest.VendorRequest.builder()
+                .vendorId(1)
+                .originalUrl("http://example.com")
+                .build();
+
         SandboxArticleUpdateRequest request = SandboxArticleUpdateRequest.builder()
                 .title("수정된 제목")
                 .content("수정된 내용")
+                .vendors(List.of(vendorRequest))
                 .build();
 
         // when & then
         mockMvc.perform(patch("/api/v1/admin/sandbox/articles/1")
-                        .content("{\"title\":\"수정된 제목\", \"content\":\"수정된 내용\"}")
+                        .content("{\"title\":\"수정된 제목\", \"content\":\"수정된 내용\", \"vendors\":[{\"vendor_id\":1, \"original_url\":\"http://example.com\"}]}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));

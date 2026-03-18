@@ -29,7 +29,10 @@ import today.inform.inform_backend.repository.AttachmentRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.time.LocalDate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
@@ -51,7 +54,7 @@ public class SchoolArticleSandboxService {
      */
     @Transactional
     public Integer createSandboxArticle(String title, String content, Integer categoryId, 
-                                      List<Integer> vendorIds, List<String> originalUrls, 
+                                      List<SandboxArticleUpdateRequest.VendorRequest> vendors, 
                                       List<String> attachmentUrls) {
         Category category = null;
         if (categoryId != null) {
@@ -68,16 +71,15 @@ public class SchoolArticleSandboxService {
         sandbox = sandboxRepository.save(sandbox);
 
         // 벤더 정보 저장
-        if (vendorIds != null) {
-            for (int i = 0; i < vendorIds.size(); i++) {
-                Vendor vendor = vendorRepository.findById(vendorIds.get(i))
+        if (vendors != null) {
+            for (SandboxArticleUpdateRequest.VendorRequest vr : vendors) {
+                Vendor vendor = vendorRepository.findById(vr.getVendorId())
                         .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
-                String originalUrl = (originalUrls != null && originalUrls.size() > i) ? originalUrls.get(i) : null;
 
                 SchoolArticleVendorSandbox vendorSandbox = SchoolArticleVendorSandbox.builder()
                         .sandboxArticle(sandbox)
                         .vendor(vendor)
-                        .originalUrl(originalUrl)
+                        .originalUrl(vr.getOriginalUrl())
                         .build();
                 vendorSandboxRepository.save(vendorSandbox);
             }
@@ -98,11 +100,11 @@ public class SchoolArticleSandboxService {
     }
 
     /**
-     * 상태별 샌드박스 게시글 목록 조회
+     * 상태별 샌드박스 게시글 목록 조회 (페이징 지원)
      */
     @Transactional(readOnly = true)
-    public List<SchoolArticleSandbox> getArticlesByStatus(AdminStatus status) {
-        return sandboxRepository.findAllByAdminStatusOrderByCreatedAtAsc(status);
+    public Page<SchoolArticleSandbox> getArticlesByStatus(AdminStatus status, Pageable pageable) {
+        return sandboxRepository.findAllByAdminStatusOrderByCreatedAtAsc(status, pageable);
     }
 
     /**
@@ -163,18 +165,16 @@ public class SchoolArticleSandboxService {
         sandbox.update(title, content, finalCategory, finalStatus, startDate, dueDate);
 
         // 2. 벤더 정보 업데이트 (전체 삭제 후 재등록 방식)
-        if (request.getVendorIds() != null) {
+        if (request.getVendors() != null) {
             vendorSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
-            for (int i = 0; i < request.getVendorIds().size(); i++) {
-                Vendor vendor = vendorRepository.findById(request.getVendorIds().get(i))
+            for (SandboxArticleUpdateRequest.VendorRequest vr : request.getVendors()) {
+                Vendor vendor = vendorRepository.findById(vr.getVendorId())
                         .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
-                String originalUrl = (request.getOriginalUrls() != null && request.getOriginalUrls().size() > i) 
-                                     ? request.getOriginalUrls().get(i) : null;
 
                 SchoolArticleVendorSandbox vendorSandbox = SchoolArticleVendorSandbox.builder()
                         .sandboxArticle(sandbox)
                         .vendor(vendor)
-                        .originalUrl(originalUrl)
+                        .originalUrl(vr.getOriginalUrl())
                         .build();
                 vendorSandboxRepository.save(vendorSandbox);
             }

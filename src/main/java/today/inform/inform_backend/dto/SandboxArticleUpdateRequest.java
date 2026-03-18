@@ -19,7 +19,15 @@ public class SandboxArticleUpdateRequest {
     private String adminStatus;
     private LocalDate startDate;
     private LocalDate dueDate;
-    private List<Integer> vendorIds;
-    private List<String> originalUrls;
+    private List<VendorRequest> vendors;
     private List<String> attachmentUrls;
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VendorRequest {
+        private Integer vendorId;
+        private String originalUrl;
+    }
 }
