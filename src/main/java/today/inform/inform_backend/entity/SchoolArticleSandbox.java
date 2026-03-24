@@ -40,6 +40,9 @@ public class SchoolArticleSandbox extends BaseTimeEntity {
     @Builder.Default
     private AdminStatus adminStatus = AdminStatus.INSPECTED_YET;
 
+    @Enumerated(EnumType.STRING)
+    private AdminStatus previousStatus;
+
     public void update(String title, String content, Category category, AdminStatus adminStatus, LocalDate startDate, LocalDate dueDate) {
         this.title = title;
         this.content = content;
@@ -51,5 +54,19 @@ public class SchoolArticleSandbox extends BaseTimeEntity {
 
     public void updateStatus(AdminStatus adminStatus) {
         this.adminStatus = adminStatus;
+    }
+
+    public void moveToGarbage() {
+        this.previousStatus = this.adminStatus;
+        this.adminStatus = AdminStatus.GARBAGE;
+    }
+
+    public void restore() {
+        if (this.previousStatus != null) {
+            this.adminStatus = this.previousStatus;
+        } else {
+            this.adminStatus = AdminStatus.INSPECTED_YET;
+        }
+        this.previousStatus = null;
     }
 }

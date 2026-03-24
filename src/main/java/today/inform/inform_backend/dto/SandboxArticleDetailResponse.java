@@ -13,6 +13,7 @@ public class SandboxArticleDetailResponse {
     private String title;
     private String content;
     private String adminStatus;
+    private String previousStatus;
     private LocalDate startDate;
     private LocalDate dueDate;
     

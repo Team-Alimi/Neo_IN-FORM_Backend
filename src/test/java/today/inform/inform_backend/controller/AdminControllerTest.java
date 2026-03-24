@@ -206,6 +206,20 @@ class AdminControllerTest {
     }
 
     @Test
+    @DisplayName("샌드박스 휴지통 복구 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void restoreSandboxArticlesTest() throws Exception {
+        // when & then
+        mockMvc.perform(patch("/api/v1/admin/sandbox/articles/restore")
+                        .param("ids", "1,2")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(sandboxService, times(1)).restoreArticles(List.of(1, 2));
+    }
+
+    @Test
     @DisplayName("서비스 게시글 직접 등록 API 테스트")
     @WithMockUser(roles = "ADMIN")
     void createArticleDirectlyTest() throws Exception {

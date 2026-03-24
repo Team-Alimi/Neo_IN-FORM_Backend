@@ -88,6 +88,7 @@ public class AdminController {
                     .title(article.getTitle())
                     .categories(categoryResponse)
                     .adminStatus(article.getAdminStatus().name())
+                    .previousStatus(article.getPreviousStatus() != null ? article.getPreviousStatus().name() : null)
                     .startDate(article.getStartDate())
                     .dueDate(article.getDueDate())
                     .createdAt(article.getCreatedAt())
@@ -130,6 +131,7 @@ public class AdminController {
                 .content(article.getContent())
                 .categories(categoryResponse)
                 .adminStatus(article.getAdminStatus().name())
+                .previousStatus(article.getPreviousStatus() != null ? article.getPreviousStatus().name() : null)
                 .startDate(article.getStartDate())
                 .dueDate(article.getDueDate())
                 .createdAt(article.getCreatedAt())
@@ -193,6 +195,16 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Void>> deleteSandboxArticles(
             @RequestParam("ids") List<Integer> ids) {
         sandboxService.deleteArticles(ids);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * 휴지통 게시글 복구 - 단건/다중 지원
+     */
+    @PatchMapping("/sandbox/articles/restore")
+    public ResponseEntity<ApiResponse<Void>> restoreSandboxArticles(
+            @RequestParam("ids") List<Integer> ids) {
+        sandboxService.restoreArticles(ids);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

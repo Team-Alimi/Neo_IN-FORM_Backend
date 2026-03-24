@@ -194,7 +194,7 @@ public class SchoolArticleSandboxService {
     }
 
     /**
-     * 상태만 변경
+     * 상태만 변경 (GARBAGE로 변경 시 이전 상태 자동 보존)
      */
     @Transactional
     public void updateStatuses(List<Integer> sandboxIds, AdminStatus status) {
@@ -202,8 +202,31 @@ public class SchoolArticleSandboxService {
         if (sandboxes.isEmpty()) {
             throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
         }
-        
-        sandboxes.forEach(sandbox -> sandbox.updateStatus(status));
+
+        if (status == AdminStatus.GARBAGE) {
+            sandboxes.forEach(SchoolArticleSandbox::moveToGarbage);
+        } else {
+            sandboxes.forEach(sandbox -> sandbox.updateStatus(status));
+        }
+    }
+
+    /**
+     * 휴지통 게시글 복구 (이전 상태로 되돌림)
+     */
+    @Transactional
+    public void restoreArticles(List<Integer> sandboxIds) {
+        List<SchoolArticleSandbox> sandboxes = sandboxRepository.findAllById(sandboxIds);
+        if (sandboxes.isEmpty()) {
+            throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
+        }
+
+        for (SchoolArticleSandbox sandbox : sandboxes) {
+            if (sandbox.getAdminStatus() != AdminStatus.GARBAGE) {
+                throw new BusinessException(ErrorCode.NOT_IN_GARBAGE);
+            }
+        }
+
+        sandboxes.forEach(SchoolArticleSandbox::restore);
     }
 
     /**

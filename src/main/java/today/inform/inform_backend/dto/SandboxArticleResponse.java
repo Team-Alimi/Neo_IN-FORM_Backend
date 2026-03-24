@@ -12,6 +12,7 @@ public class SandboxArticleResponse {
     private Integer sandboxId;
     private String title;
     private String adminStatus;
+    private String previousStatus;
     private LocalDate startDate;
     private LocalDate dueDate;
     
