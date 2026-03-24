@@ -196,7 +196,7 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void deleteSandboxArticlesTest() throws Exception {
         // when & then
-        mockMvc.perform(delete("/api/v1/admin/sandbox/articles")
+        mockMvc.perform(delete("/api/v1/admin/sandbox/articles/delete")
                         .param("ids", "1,2,3")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())

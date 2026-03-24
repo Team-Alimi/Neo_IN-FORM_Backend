@@ -189,7 +189,7 @@ public class AdminController {
     /**
      * 샌드박스 게시글 삭제 - 단건/다중 지원
      */
-    @DeleteMapping("/sandbox/articles")
+    @DeleteMapping("/sandbox/articles/delete")
     public ResponseEntity<ApiResponse<Void>> deleteSandboxArticles(
             @RequestParam("ids") List<Integer> ids) {
         sandboxService.deleteArticles(ids);
