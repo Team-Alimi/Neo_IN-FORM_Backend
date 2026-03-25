@@ -27,7 +27,10 @@ import today.inform.inform_backend.dto.AdminArticleCreateRequest;
 import today.inform.inform_backend.dto.AdminUnifiedDetailResponse;
 import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
 
+import today.inform.inform_backend.entity.AdminStatus;
+
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,6 +46,11 @@ public class SchoolArticleService {
         private final today.inform.inform_backend.repository.UserRepository userRepository;
         private final CategoryRepository categoryRepository;
         private final VendorRepository vendorRepository;
+
+        @Transactional(readOnly = true)
+        public List<SchoolArticleVendor> getVendorsByArticle(SchoolArticle article) {
+                return schoolArticleVendorRepository.findAllByArticle(article);
+        }
 
         @Transactional(readOnly = true)
         public SchoolArticleDetailResponse getSchoolArticleDetail(Integer articleId, Integer userId) {
@@ -335,7 +343,7 @@ public class SchoolArticleService {
                                                 obj -> (Long) obj[1]));
         }
 
-        // ===================== Admin Direct Maintenance Methods ===================== //
+        // ===================== Admin Methods ===================== //
 
         /**
          * 관리자용 상세조회 (북마크 등 사용자 정보 제외)
@@ -349,10 +357,12 @@ public class SchoolArticleService {
                 var attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
 
                 return AdminUnifiedDetailResponse.builder()
-                                .source("service")
                                 .id(article.getArticleId())
                                 .title(article.getTitle())
                                 .content(article.getContent())
+                                .isPublished(article.isPublished())
+                                .adminStatus(article.getAdminStatus().name())
+                                .previousStatus(article.getPreviousStatus() != null ? article.getPreviousStatus().name() : null)
                                 .startDate(article.getStartDate())
                                 .dueDate(article.getDueDate())
                                 .createdAt(article.getCreatedAt())
@@ -385,6 +395,9 @@ public class SchoolArticleService {
                 return schoolArticleRepository.existsById(articleId);
         }
 
+        /**
+         * 관리자: 서비스 DB 직접 등록 (is_published=true)
+         */
         @Transactional
         public Integer createArticleDirectly(AdminArticleCreateRequest request) {
                 if (request.getArticleId() != null && schoolArticleRepository.existsById(request.getArticleId())) {
@@ -401,31 +414,32 @@ public class SchoolArticleService {
                 SchoolArticle article;
 
                 if (finalArticleId != null) {
-                        // 강제 삽입 (Native Query)
                         schoolArticleRepository.insertArticleDirectly(
                                 finalArticleId,
                                 request.getTitle(),
                                 request.getContent(),
                                 request.getCategoryId(),
                                 request.getStartDate(),
-                                request.getDueDate()
+                                request.getDueDate(),
+                                true,
+                                AdminStatus.REFLECTION_WAITING.name()
                         );
                         article = schoolArticleRepository.findById(finalArticleId)
                                 .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
                 } else {
-                        // 일반 삽입
                         article = SchoolArticle.builder()
                                 .title(request.getTitle())
                                 .content(request.getContent())
                                 .startDate(request.getStartDate())
                                 .dueDate(request.getDueDate())
                                 .category(category)
+                                .isPublished(true)
+                                .adminStatus(AdminStatus.REFLECTION_WAITING)
                                 .build();
                         article = schoolArticleRepository.save(article);
                         finalArticleId = article.getArticleId();
                 }
 
-                // 벤더 매핑 저장
                 if (request.getVendors() != null) {
                         for (AdminArticleCreateRequest.VendorRequest vr : request.getVendors()) {
                                 Vendor vendor = vendorRepository.findById(vr.getVendorId())
@@ -439,7 +453,6 @@ public class SchoolArticleService {
                         }
                 }
 
-                // 첨부파일 저장
                 if (request.getAttachmentUrls() != null) {
                         for (String attUrl : request.getAttachmentUrls()) {
                                 Attachment attachment = Attachment.builder()
@@ -454,8 +467,11 @@ public class SchoolArticleService {
                 return finalArticleId;
         }
 
+        /**
+         * 관리자: 게시글 수정 (배포/미배포 공통)
+         */
         @Transactional
-        public void updateArticleDirectly(Integer articleId, AdminUnifiedUpdateRequest request) {
+        public void updateArticle(Integer articleId, AdminUnifiedUpdateRequest request) {
                 SchoolArticle article = schoolArticleRepository.findById(articleId)
                                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
@@ -465,7 +481,6 @@ public class SchoolArticleService {
                                         .orElseThrow(() -> new BusinessException(ErrorCode.CATEGORY_NOT_FOUND));
                 }
 
-                // null이 아닌 필드만 업데이트 (부분 수정 지원)
                 LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : article.getStartDate();
                 LocalDate dueDate = request.getDueDate() != null ? request.getDueDate() : article.getDueDate();
                 Category finalCategory = category != null ? category : article.getCategory();
@@ -478,7 +493,16 @@ public class SchoolArticleService {
                         finalCategory
                 );
 
-                // 벤더 매핑 업데이트 (전체 삭제 후 재등록 방식, null이면 기존 유지)
+                // admin_status는 미배포 게시글에만 적용
+                if (!article.isPublished() && request.getAdminStatus() != null) {
+                        try {
+                                AdminStatus status = AdminStatus.valueOf(request.getAdminStatus());
+                                article.updateStatus(status);
+                        } catch (IllegalArgumentException e) {
+                                // 잘못된 status 값은 무시
+                        }
+                }
+
                 if (request.getVendors() != null) {
                         schoolArticleVendorRepository.deleteAllByArticle(article);
                         for (AdminUnifiedUpdateRequest.VendorRequest vr : request.getVendors()) {
@@ -493,7 +517,6 @@ public class SchoolArticleService {
                         }
                 }
 
-                // 첨부파일 업데이트 (전체 삭제 후 재등록 방식, null이면 기존 유지)
                 if (request.getAttachmentUrls() != null) {
                         attachmentRepository.deleteAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
                         for (String attUrl : request.getAttachmentUrls()) {
@@ -505,6 +528,144 @@ public class SchoolArticleService {
                                 attachmentRepository.save(attachment);
                         }
                 }
+        }
+
+        // ===================== 기존 SandboxService 통합 메서드 ===================== //
+
+        /**
+         * 크롤러가 수집한 데이터 저장 (미배포 상태)
+         */
+        @Transactional
+        public Integer createUnpublishedArticle(String title, String content, Integer categoryId,
+                                                List<AdminUnifiedUpdateRequest.VendorRequest> vendors,
+                                                List<String> attachmentUrls) {
+                Category category = null;
+                if (categoryId != null) {
+                        category = categoryRepository.findById(categoryId).orElse(null);
+                }
+
+                SchoolArticle article = SchoolArticle.builder()
+                                .title(title)
+                                .content(content)
+                                .category(category)
+                                .isPublished(false)
+                                .adminStatus(AdminStatus.INSPECTED_YET)
+                                .build();
+                article = schoolArticleRepository.save(article);
+
+                if (vendors != null) {
+                        for (AdminUnifiedUpdateRequest.VendorRequest vr : vendors) {
+                                Vendor vendor = vendorRepository.findById(vr.getVendorId())
+                                        .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
+                                SchoolArticleVendor articleVendor = SchoolArticleVendor.builder()
+                                        .article(article)
+                                        .vendor(vendor)
+                                        .originalUrl(vr.getOriginalUrl())
+                                        .build();
+                                schoolArticleVendorRepository.save(articleVendor);
+                        }
+                }
+
+                if (attachmentUrls != null) {
+                        for (String url : attachmentUrls) {
+                                Attachment attachment = Attachment.builder()
+                                        .articleId(article.getArticleId())
+                                        .articleType(VendorType.SCHOOL)
+                                        .attachmentUrl(url)
+                                        .build();
+                                attachmentRepository.save(attachment);
+                        }
+                }
+
+                return article.getArticleId();
+        }
+
+        /**
+         * 미배포 게시글 상태별 목록 조회
+         */
+        @Transactional(readOnly = true)
+        public Page<SchoolArticle> getUnpublishedArticlesByStatus(AdminStatus status, Pageable pageable) {
+                return schoolArticleRepository.findAllByIsPublishedFalseAndAdminStatusOrderByCreatedAtAsc(status, pageable);
+        }
+
+        /**
+         * 미배포 게시글 상태별 통계
+         */
+        @Transactional(readOnly = true)
+        public Map<String, Long> getUnpublishedCounts() {
+                Map<String, Long> counts = new HashMap<>();
+                counts.put("inspected_yet", schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.INSPECTED_YET));
+                counts.put("reflection_waiting", schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.REFLECTION_WAITING));
+                counts.put("suspected_duplicate", schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.SUSPECTED_DUPLICATE));
+                counts.put("garbage", schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.GARBAGE));
+                return counts;
+        }
+
+        /**
+         * 상태 일괄 변경 (GARBAGE 이동 시 이전 상태 보존)
+         */
+        @Transactional
+        public void updateStatuses(List<Integer> articleIds, AdminStatus status) {
+                List<SchoolArticle> articles = schoolArticleRepository.findAllById(articleIds);
+                if (articles.isEmpty()) {
+                        throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
+                }
+
+                if (status == AdminStatus.GARBAGE) {
+                        articles.forEach(SchoolArticle::moveToGarbage);
+                } else {
+                        articles.forEach(article -> article.updateStatus(status));
+                }
+        }
+
+        /**
+         * 미배포 → 서비스 배포 (is_published = true)
+         */
+        @Transactional
+        public List<Integer> deployArticles(List<Integer> articleIds) {
+                List<SchoolArticle> articles = schoolArticleRepository.findAllById(articleIds);
+                if (articles.isEmpty()) {
+                        throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
+                }
+
+                articles.forEach(SchoolArticle::deploy);
+
+                return articles.stream()
+                                .map(SchoolArticle::getArticleId)
+                                .collect(Collectors.toList());
+        }
+
+        /**
+         * 게시글 영구 삭제
+         */
+        @Transactional
+        public void deleteArticles(List<Integer> articleIds) {
+                for (Integer id : articleIds) {
+                        schoolArticleVendorRepository.deleteAllByArticle(
+                                schoolArticleRepository.findById(id)
+                                        .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND)));
+                        attachmentRepository.deleteAllByArticleIdAndArticleType(id, VendorType.SCHOOL);
+                        schoolArticleRepository.deleteById(id);
+                }
+        }
+
+        /**
+         * 휴지통 복구 (이전 상태로 되돌림)
+         */
+        @Transactional
+        public void restoreArticles(List<Integer> articleIds) {
+                List<SchoolArticle> articles = schoolArticleRepository.findAllById(articleIds);
+                if (articles.isEmpty()) {
+                        throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
+                }
+
+                for (SchoolArticle article : articles) {
+                        if (article.getAdminStatus() != AdminStatus.GARBAGE) {
+                                throw new BusinessException(ErrorCode.NOT_IN_GARBAGE);
+                        }
+                }
+
+                articles.forEach(SchoolArticle::restore);
         }
 }
 

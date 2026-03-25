@@ -256,7 +256,7 @@ class SchoolArticleServiceTest {
 
                 // then
                 assertThat(resultId).isEqualTo(articleId);
-                verify(schoolArticleRepository, times(1)).insertArticleDirectly(eq(articleId), any(), any(), eq(1), any(), any());
+                verify(schoolArticleRepository, times(1)).insertArticleDirectly(eq(articleId), any(), any(), eq(1), any(), any(), eq(true), any());
                 verify(schoolArticleVendorRepository, times(1)).save(any(SchoolArticleVendor.class));
         }
 
@@ -279,7 +279,7 @@ class SchoolArticleServiceTest {
 
         @Test
         @DisplayName("기존 게시글을 직접 수정한다.")
-        void updateArticleDirectly_Success() {
+        void updateArticle_Success() {
                 // given
                 Integer articleId = 300;
                 AdminUnifiedUpdateRequest request = AdminUnifiedUpdateRequest.builder()
@@ -298,7 +298,7 @@ class SchoolArticleServiceTest {
                 when(vendorRepository.findById(1)).thenReturn(Optional.of(vendor));
 
                 // when
-                schoolArticleService.updateArticleDirectly(articleId, request);
+                schoolArticleService.updateArticle(articleId, request);
 
                 // then
                 verify(schoolArticleVendorRepository, times(1)).deleteAllByArticle(article);

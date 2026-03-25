@@ -9,12 +9,12 @@ import java.util.List;
 @Getter
 @Builder
 public class AdminUnifiedDetailResponse {
-    private String source;          // "sandbox" 또는 "service"
     private Integer id;
     private String title;
     private String content;
-    private String adminStatus;     // sandbox만 해당 (service는 null)
-    private String previousStatus;  // sandbox만 해당 (service는 null)
+    private boolean isPublished;
+    private String adminStatus;
+    private String previousStatus;
     private LocalDate startDate;
     private LocalDate dueDate;
 

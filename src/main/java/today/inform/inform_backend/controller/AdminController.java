@@ -4,17 +4,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import today.inform.inform_backend.common.response.ApiResponse;
-import today.inform.inform_backend.dto.SandboxArticleListResponse;
-import today.inform.inform_backend.dto.SandboxArticleResponse;
 import today.inform.inform_backend.dto.SandboxCountsResponse;
 import today.inform.inform_backend.entity.AdminStatus;
-import today.inform.inform_backend.entity.SchoolArticleSandbox;
-import today.inform.inform_backend.entity.SchoolArticleVendorSandbox;
-import today.inform.inform_backend.entity.AttachmentSandbox;
+import today.inform.inform_backend.entity.SchoolArticle;
+import today.inform.inform_backend.entity.SchoolArticleVendor;
 import today.inform.inform_backend.dto.AdminUnifiedDetailResponse;
 import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
 import today.inform.inform_backend.dto.AdminArticleCreateRequest;
-import today.inform.inform_backend.service.SchoolArticleSandboxService;
+import today.inform.inform_backend.dto.SchoolArticleListResponse;
+import today.inform.inform_backend.dto.SchoolArticleResponse;
 import today.inform.inform_backend.service.SchoolArticleService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,7 +27,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminController {
 
-    private final SchoolArticleSandboxService sandboxService;
     private final SchoolArticleService schoolArticleService;
 
     @GetMapping("/check")
@@ -38,11 +35,11 @@ public class AdminController {
     }
 
     /**
-     * 샌드박스 상태별 통계 조회
+     * 미배포 게시글 상태별 통계 조회
      */
-    @GetMapping("/sandbox/counts")
-    public ResponseEntity<ApiResponse<SandboxCountsResponse>> getSandboxCounts() {
-        Map<String, Long> counts = sandboxService.getSandboxCounts();
+    @GetMapping("/articles/counts")
+    public ResponseEntity<ApiResponse<SandboxCountsResponse>> getUnpublishedCounts() {
+        Map<String, Long> counts = schoolArticleService.getUnpublishedCounts();
         SandboxCountsResponse response = SandboxCountsResponse.builder()
                 .inspectedYet(counts.get("inspected_yet"))
                 .reflectionWaiting(counts.get("reflection_waiting"))
@@ -53,22 +50,22 @@ public class AdminController {
     }
 
     /**
-     * 샌드박스 상태별 목록 조회 (페이징 지원)
+     * 미배포 게시글 상태별 목록 조회 (페이징)
      */
-    @GetMapping("/sandbox/articles")
-    public ResponseEntity<ApiResponse<SandboxArticleListResponse>> getSandboxArticles(
+    @GetMapping("/articles")
+    public ResponseEntity<ApiResponse<SchoolArticleListResponse>> getUnpublishedArticles(
             @RequestParam("status") AdminStatus status,
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
-        
-        Page<SchoolArticleSandbox> articlePage = sandboxService.getArticlesByStatus(status, PageRequest.of(page - 1, size));
-        
-        List<SandboxArticleResponse> articleResponses = new ArrayList<>();
-        for (SchoolArticleSandbox article : articlePage.getContent()) {
-            List<SchoolArticleVendorSandbox> vendors = sandboxService.getVendors(article.getSandboxId());
-            
-            List<SandboxArticleResponse.VendorResponse> vendorResponses = vendors.stream()
-                    .map(v -> SandboxArticleResponse.VendorResponse.builder()
+
+        Page<SchoolArticle> articlePage = schoolArticleService.getUnpublishedArticlesByStatus(status, PageRequest.of(page - 1, size));
+
+        List<SchoolArticleResponse> articleResponses = new ArrayList<>();
+        for (SchoolArticle article : articlePage.getContent()) {
+            List<SchoolArticleVendor> vendors = schoolArticleService.getVendorsByArticle(article);
+
+            List<SchoolArticleResponse.VendorResponse> vendorResponses = vendors.stream()
+                    .map(v -> SchoolArticleResponse.VendorResponse.builder()
                             .vendorId(v.getVendor().getVendorId())
                             .vendorName(v.getVendor().getVendorName())
                             .vendorInitial(v.getVendor().getVendorInitial())
@@ -76,14 +73,14 @@ public class AdminController {
                             .build())
                     .collect(Collectors.toList());
 
-            SandboxArticleResponse.CategoryResponse categoryResponse = article.getCategory() != null ? 
-                    SandboxArticleResponse.CategoryResponse.builder()
+            SchoolArticleResponse.CategoryResponse categoryResponse = article.getCategory() != null ?
+                    SchoolArticleResponse.CategoryResponse.builder()
                             .categoryId(article.getCategory().getCategoryId())
                             .categoryName(article.getCategory().getCategoryName())
                             .build() : null;
 
-            articleResponses.add(SandboxArticleResponse.builder()
-                    .sandboxId(article.getSandboxId())
+            articleResponses.add(SchoolArticleResponse.builder()
+                    .articleId(article.getArticleId())
                     .title(article.getTitle())
                     .categories(categoryResponse)
                     .adminStatus(article.getAdminStatus().name())
@@ -96,104 +93,87 @@ public class AdminController {
                     .build());
         }
 
-        SandboxArticleListResponse.PageInfo pageInfo = SandboxArticleListResponse.PageInfo.builder()
+        SchoolArticleListResponse.PageInfo pageInfo = SchoolArticleListResponse.PageInfo.builder()
                 .currentPage(page)
                 .totalPages(articlePage.getTotalPages())
                 .totalArticles(articlePage.getTotalElements())
                 .hasNext(articlePage.hasNext())
                 .build();
 
-        SandboxArticleListResponse response = SandboxArticleListResponse.builder()
+        SchoolArticleListResponse response = SchoolArticleListResponse.builder()
                 .pageInfo(pageInfo)
-                .sandboxArticles(articleResponses)
+                .schoolArticles(articleResponses)
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
-     * [통합] 관리자 게시글 상세 조회 (sandbox/service 통합)
+     * 관리자 게시글 상세 조회
      */
-    @GetMapping("/articles/{source}/{id}")
-    public ResponseEntity<ApiResponse<AdminUnifiedDetailResponse>> getUnifiedArticleDetail(
-            @PathVariable("source") String source,
+    @GetMapping("/articles/{id}")
+    public ResponseEntity<ApiResponse<AdminUnifiedDetailResponse>> getArticleDetail(
             @PathVariable("id") Integer id) {
-        AdminUnifiedDetailResponse response;
-        if ("sandbox".equals(source)) {
-            response = sandboxService.getAdminSandboxDetail(id);
-        } else if ("service".equals(source)) {
-            response = schoolArticleService.getAdminArticleDetail(id);
-        } else {
-            throw new today.inform.inform_backend.common.exception.BusinessException(
-                    today.inform.inform_backend.common.exception.ErrorCode.INVALID_INPUT_VALUE);
-        }
+        AdminUnifiedDetailResponse response = schoolArticleService.getAdminArticleDetail(id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
-     * [통합] 관리자 게시글 수정 (sandbox/service 통합)
+     * 관리자 게시글 수정 (배포/미배포 공통)
      */
-    @PatchMapping("/articles/{source}/{id}")
-    public ResponseEntity<ApiResponse<Void>> updateUnifiedArticle(
-            @PathVariable("source") String source,
+    @PatchMapping("/articles/{id}")
+    public ResponseEntity<ApiResponse<Void>> updateArticle(
             @PathVariable("id") Integer id,
             @RequestBody AdminUnifiedUpdateRequest request) {
-        if ("sandbox".equals(source)) {
-            sandboxService.updateArticle(id, request);
-        } else if ("service".equals(source)) {
-            schoolArticleService.updateArticleDirectly(id, request);
-        } else {
-            throw new today.inform.inform_backend.common.exception.BusinessException(
-                    today.inform.inform_backend.common.exception.ErrorCode.INVALID_INPUT_VALUE);
-        }
+        schoolArticleService.updateArticle(id, request);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     /**
-     * 샌드박스 게시글 상태 변경
+     * 게시글 상태 변경 (일괄)
      */
-    @PatchMapping("/sandbox/articles/status")
-    public ResponseEntity<ApiResponse<Void>> updateSandboxStatuses(
+    @PatchMapping("/articles/status")
+    public ResponseEntity<ApiResponse<Void>> updateStatuses(
             @RequestParam("ids") List<Integer> ids,
             @RequestParam("status") AdminStatus status) {
-        sandboxService.updateStatuses(ids, status);
+        schoolArticleService.updateStatuses(ids, status);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     /**
-     * [핵심] 샌드박스 게시글 실서비스 반영 (Deploy) - 단건/다중 지원
+     * 게시글 서비스 배포 (Deploy)
      */
-    @PostMapping("/sandbox/articles/deploy")
-    public ResponseEntity<ApiResponse<List<Integer>>> deploySandboxArticles(
+    @PostMapping("/articles/deploy")
+    public ResponseEntity<ApiResponse<List<Integer>>> deployArticles(
             @RequestParam("ids") List<Integer> ids) {
-        List<Integer> newArticleIds = sandboxService.deployArticles(ids);
-        return ResponseEntity.ok(ApiResponse.success(newArticleIds));
+        List<Integer> deployedIds = schoolArticleService.deployArticles(ids);
+        return ResponseEntity.ok(ApiResponse.success(deployedIds));
     }
 
     /**
-     * 샌드박스 게시글 삭제 - 단건/다중 지원
+     * 게시글 영구 삭제
      */
-    @DeleteMapping("/sandbox/articles/delete")
-    public ResponseEntity<ApiResponse<Void>> deleteSandboxArticles(
+    @DeleteMapping("/articles/delete")
+    public ResponseEntity<ApiResponse<Void>> deleteArticles(
             @RequestParam("ids") List<Integer> ids) {
-        sandboxService.deleteArticles(ids);
+        schoolArticleService.deleteArticles(ids);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     /**
-     * 휴지통 게시글 복구 - 단건/다중 지원
+     * 휴지통 게시글 복구
      */
-    @PatchMapping("/sandbox/articles/restore")
-    public ResponseEntity<ApiResponse<Void>> restoreSandboxArticles(
+    @PatchMapping("/articles/restore")
+    public ResponseEntity<ApiResponse<Void>> restoreArticles(
             @RequestParam("ids") List<Integer> ids) {
-        sandboxService.restoreArticles(ids);
+        schoolArticleService.restoreArticles(ids);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     /**
      * 관리자: 서비스 DB 직접 등록
      */
-    @PostMapping("/articles")
+    @PostMapping("/articles/create")
     public ResponseEntity<ApiResponse<Integer>> createArticleDirectly(
             @RequestBody AdminArticleCreateRequest request) {
         Integer articleId = schoolArticleService.createArticleDirectly(request);
@@ -201,7 +181,7 @@ public class AdminController {
     }
 
     /**
-     * 관리자: 서비스 DB 게시글 중복 ID 확인
+     * 관리자: 게시글 ID 중복 확인
      */
     @GetMapping("/articles/check-id")
     public ResponseEntity<ApiResponse<Boolean>> checkArticleIdExists(

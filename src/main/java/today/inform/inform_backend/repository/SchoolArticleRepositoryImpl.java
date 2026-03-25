@@ -37,6 +37,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                                                                 .and(bookmark.articleType.eq(VendorType.SCHOOL)))
                                 .leftJoin(schoolArticle.category, category).fetchJoin()
                                 .where(
+                                                schoolArticle.isPublished.eq(true),
                                                 schoolArticle.dueDate.goe(today).or(schoolArticle.dueDate.isNull()))
                                 .groupBy(schoolArticle.articleId)
                                 .orderBy(
@@ -62,6 +63,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                                 .selectFrom(schoolArticle)
                                 .leftJoin(schoolArticle.category, category).fetchJoin()
                                 .where(
+                                                schoolArticle.isPublished.eq(true),
                                                 schoolArticle.articleId.in(articleIds),
                                                 categoryIn(categoryIds),
                                                 titleContains(keyword),
@@ -78,6 +80,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                                 .select(schoolArticle.count())
                                 .from(schoolArticle)
                                 .where(
+                                                schoolArticle.isPublished.eq(true),
                                                 schoolArticle.articleId.in(articleIds),
                                                 categoryIn(categoryIds),
                                                 titleContains(keyword),
@@ -104,6 +107,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                                 .selectFrom(schoolArticle)
                                 .leftJoin(schoolArticle.category, category).fetchJoin()
                                 .where(
+                                                schoolArticle.isPublished.eq(true),
                                                 categoryIn(categoryIds),
                                                 vendorIn(vendorIds),
                                                 titleContains(keyword),
@@ -120,6 +124,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                                 .select(schoolArticle.count())
                                 .from(schoolArticle)
                                 .where(
+                                                schoolArticle.isPublished.eq(true),
                                                 categoryIn(categoryIds),
                                                 vendorIn(vendorIds),
                                                 titleContains(keyword),
@@ -137,6 +142,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                                 .selectFrom(schoolArticle)
                                 .leftJoin(schoolArticle.category, category).fetchJoin()
                                 .where(
+                                                schoolArticle.isPublished.eq(true),
                                                 calendarCategoryFilter(categoryIds, isMyOnly, userId),
                                                 dateRangeFilter(viewStart, viewEnd))
                                 .fetch();
@@ -149,6 +155,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                                 .selectFrom(schoolArticle)
                                 .leftJoin(schoolArticle.category, category).fetchJoin()
                                 .where(
+                                                schoolArticle.isPublished.eq(true),
                                                 calendarCategoryFilter(categoryIds, isMyOnly, userId),
                                                 dateRangeFilter(selectedDate, selectedDate))
                                 .orderBy(schoolArticle.createdAt.desc())
@@ -160,6 +167,7 @@ public class SchoolArticleRepositoryImpl implements SchoolArticleRepositoryCusto
                                 .select(schoolArticle.count())
                                 .from(schoolArticle)
                                 .where(
+                                                schoolArticle.isPublished.eq(true),
                                                 calendarCategoryFilter(categoryIds, isMyOnly, userId),
                                                 dateRangeFilter(selectedDate, selectedDate))
                                 .fetchOne();

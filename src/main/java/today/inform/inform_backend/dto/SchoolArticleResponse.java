@@ -26,6 +26,8 @@ public class SchoolArticleResponse implements Serializable {
 
     private Boolean isBookmarked;
     private Long bookmarkCount;
+    private String adminStatus;
+    private String previousStatus;
     private List<VendorResponse> vendors;
     private CategoryResponse categories;
 
