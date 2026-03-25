@@ -24,7 +24,8 @@ import today.inform.inform_backend.entity.Category;
 import today.inform.inform_backend.entity.Vendor;
 import today.inform.inform_backend.entity.Attachment;
 import today.inform.inform_backend.dto.AdminArticleCreateRequest;
-import today.inform.inform_backend.dto.AdminArticleUpdateRequest;
+import today.inform.inform_backend.dto.AdminUnifiedDetailResponse;
+import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -336,6 +337,49 @@ public class SchoolArticleService {
 
         // ===================== Admin Direct Maintenance Methods ===================== //
 
+        /**
+         * 관리자용 상세조회 (북마크 등 사용자 정보 제외)
+         */
+        @Transactional(readOnly = true)
+        public AdminUnifiedDetailResponse getAdminArticleDetail(Integer articleId) {
+                SchoolArticle article = schoolArticleRepository.findById(articleId)
+                                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+                List<SchoolArticleVendor> vendors = schoolArticleVendorRepository.findAllByArticle(article);
+                var attachments = attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
+
+                return AdminUnifiedDetailResponse.builder()
+                                .source("service")
+                                .id(article.getArticleId())
+                                .title(article.getTitle())
+                                .content(article.getContent())
+                                .startDate(article.getStartDate())
+                                .dueDate(article.getDueDate())
+                                .createdAt(article.getCreatedAt())
+                                .updatedAt(article.getUpdatedAt())
+                                .categories(article.getCategory() == null ? null
+                                                : AdminUnifiedDetailResponse.CategoryResponse.builder()
+                                                                .categoryId(article.getCategory().getCategoryId())
+                                                                .categoryName(article.getCategory().getCategoryName())
+                                                                .build())
+                                .vendors(vendors.stream()
+                                                .map(sav -> AdminUnifiedDetailResponse.VendorResponse.builder()
+                                                                .vendorId(sav.getVendor().getVendorId())
+                                                                .vendorName(sav.getVendor().getVendorName())
+                                                                .vendorInitial(sav.getVendor().getVendorInitial())
+                                                                .vendorType(sav.getVendor().getVendorType().name())
+                                                                .originalUrl(sav.getOriginalUrl())
+                                                                .build())
+                                                .collect(Collectors.toList()))
+                                .attachments(attachments.stream()
+                                                .map(att -> AdminUnifiedDetailResponse.AttachmentResponse.builder()
+                                                                .fileId(att.getId())
+                                                                .attachmentUrl(att.getAttachmentUrl())
+                                                                .build())
+                                                .collect(Collectors.toList()))
+                                .build();
+        }
+
         @Transactional(readOnly = true)
         public boolean checkArticleIdExists(Integer articleId) {
                 return schoolArticleRepository.existsById(articleId);
@@ -411,7 +455,7 @@ public class SchoolArticleService {
         }
 
         @Transactional
-        public void updateArticleDirectly(Integer articleId, AdminArticleUpdateRequest request) {
+        public void updateArticleDirectly(Integer articleId, AdminUnifiedUpdateRequest request) {
                 SchoolArticle article = schoolArticleRepository.findById(articleId)
                                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
@@ -421,22 +465,23 @@ public class SchoolArticleService {
                                         .orElseThrow(() -> new BusinessException(ErrorCode.CATEGORY_NOT_FOUND));
                 }
 
-                // 엔티티 필드 수정
+                // null이 아닌 필드만 업데이트 (부분 수정 지원)
+                LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : article.getStartDate();
+                LocalDate dueDate = request.getDueDate() != null ? request.getDueDate() : article.getDueDate();
+                Category finalCategory = category != null ? category : article.getCategory();
+
                 article.update(
                         request.getTitle(),
                         request.getContent(),
-                        request.getStartDate(),
-                        request.getDueDate(),
-                        category
+                        startDate,
+                        dueDate,
+                        finalCategory
                 );
 
-                // 연관 데이터 기존 것 모두 삭제 후 재생성
-                schoolArticleVendorRepository.deleteAllByArticle(article);
-                attachmentRepository.deleteAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
-
-                // 벤더 매핑 다시 저장
+                // 벤더 매핑 업데이트 (전체 삭제 후 재등록 방식, null이면 기존 유지)
                 if (request.getVendors() != null) {
-                        for (AdminArticleUpdateRequest.VendorRequest vr : request.getVendors()) {
+                        schoolArticleVendorRepository.deleteAllByArticle(article);
+                        for (AdminUnifiedUpdateRequest.VendorRequest vr : request.getVendors()) {
                                 Vendor vendor = vendorRepository.findById(vr.getVendorId())
                                         .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
                                 SchoolArticleVendor articleVendor = SchoolArticleVendor.builder()
@@ -448,8 +493,9 @@ public class SchoolArticleService {
                         }
                 }
 
-                // 첨부파일 다시 저장
+                // 첨부파일 업데이트 (전체 삭제 후 재등록 방식, null이면 기존 유지)
                 if (request.getAttachmentUrls() != null) {
+                        attachmentRepository.deleteAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL);
                         for (String attUrl : request.getAttachmentUrls()) {
                                 Attachment attachment = Attachment.builder()
                                         .articleId(articleId)

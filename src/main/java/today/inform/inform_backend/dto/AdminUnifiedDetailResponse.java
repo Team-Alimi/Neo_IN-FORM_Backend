@@ -8,21 +8,22 @@ import java.util.List;
 
 @Getter
 @Builder
-public class SandboxArticleDetailResponse {
-    private Integer sandboxId;
+public class AdminUnifiedDetailResponse {
+    private String source;          // "sandbox" 또는 "service"
+    private Integer id;
     private String title;
     private String content;
-    private String adminStatus;
-    private String previousStatus;
+    private String adminStatus;     // sandbox만 해당 (service는 null)
+    private String previousStatus;  // sandbox만 해당 (service는 null)
     private LocalDate startDate;
     private LocalDate dueDate;
-    
+
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime createdAt;
-    
+
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime updatedAt;
-    
+
     private CategoryResponse categories;
     private List<VendorResponse> vendors;
     private List<AttachmentResponse> attachments;

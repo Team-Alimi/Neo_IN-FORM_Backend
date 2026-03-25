@@ -15,7 +15,8 @@ import today.inform.inform_backend.entity.SchoolArticle;
 import today.inform.inform_backend.entity.SchoolArticleVendor;
 import today.inform.inform_backend.entity.Attachment;
 import today.inform.inform_backend.entity.VendorType;
-import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
+import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
+import today.inform.inform_backend.dto.AdminUnifiedDetailResponse;
 
 import today.inform.inform_backend.repository.SchoolArticleSandboxRepository;
 import today.inform.inform_backend.repository.SchoolArticleVendorSandboxRepository;
@@ -54,7 +55,7 @@ public class SchoolArticleSandboxService {
      */
     @Transactional
     public Integer createSandboxArticle(String title, String content, Integer categoryId, 
-                                      List<SandboxArticleUpdateRequest.VendorRequest> vendors, 
+                                      List<AdminUnifiedUpdateRequest.VendorRequest> vendors, 
                                       List<String> attachmentUrls) {
         Category category = null;
         if (categoryId != null) {
@@ -72,7 +73,7 @@ public class SchoolArticleSandboxService {
 
         // 벤더 정보 저장
         if (vendors != null) {
-            for (SandboxArticleUpdateRequest.VendorRequest vr : vendors) {
+            for (AdminUnifiedUpdateRequest.VendorRequest vr : vendors) {
                 Vendor vendor = vendorRepository.findById(vr.getVendorId())
                         .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
 
@@ -117,6 +118,51 @@ public class SchoolArticleSandboxService {
     }
 
     /**
+     * 샌드박스 게시글 통합 상세 조회 (AdminUnifiedDetailResponse 반환)
+     */
+    @Transactional(readOnly = true)
+    public AdminUnifiedDetailResponse getAdminSandboxDetail(Integer sandboxId) {
+        SchoolArticleSandbox article = sandboxRepository.findById(sandboxId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+        List<SchoolArticleVendorSandbox> vendors = vendorSandboxRepository.findAllBySandboxArticleSandboxId(sandboxId);
+        List<AttachmentSandbox> attachments = attachmentSandboxRepository.findAllBySandboxArticleSandboxId(sandboxId);
+
+        return AdminUnifiedDetailResponse.builder()
+                .source("sandbox")
+                .id(article.getSandboxId())
+                .title(article.getTitle())
+                .content(article.getContent())
+                .adminStatus(article.getAdminStatus().name())
+                .previousStatus(article.getPreviousStatus() != null ? article.getPreviousStatus().name() : null)
+                .startDate(article.getStartDate())
+                .dueDate(article.getDueDate())
+                .createdAt(article.getCreatedAt())
+                .updatedAt(article.getUpdatedAt())
+                .categories(article.getCategory() == null ? null
+                        : AdminUnifiedDetailResponse.CategoryResponse.builder()
+                                .categoryId(article.getCategory().getCategoryId())
+                                .categoryName(article.getCategory().getCategoryName())
+                                .build())
+                .vendors(vendors.stream()
+                        .map(v -> AdminUnifiedDetailResponse.VendorResponse.builder()
+                                .vendorId(v.getVendor().getVendorId())
+                                .vendorName(v.getVendor().getVendorName())
+                                .vendorInitial(v.getVendor().getVendorInitial())
+                                .vendorType(v.getVendor().getVendorType().name())
+                                .originalUrl(v.getOriginalUrl())
+                                .build())
+                        .collect(java.util.stream.Collectors.toList()))
+                .attachments(attachments.stream()
+                        .map(a -> AdminUnifiedDetailResponse.AttachmentResponse.builder()
+                                .fileId(a.getId())
+                                .attachmentUrl(a.getAttachmentUrl())
+                                .build())
+                        .collect(java.util.stream.Collectors.toList()))
+                .build();
+    }
+
+    /**
      * 연관된 벤더 정보 조회
      */
     @Transactional(readOnly = true)
@@ -136,7 +182,7 @@ public class SchoolArticleSandboxService {
      * 관리자 검수 및 수정 (메인 정보 + 제공처/첨부파일 목록 전체 업데이트)
      */
     @Transactional
-    public void updateArticle(Integer sandboxId, SandboxArticleUpdateRequest request) {
+    public void updateArticle(Integer sandboxId, AdminUnifiedUpdateRequest request) {
         SchoolArticleSandbox sandbox = sandboxRepository.findById(sandboxId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
@@ -167,7 +213,7 @@ public class SchoolArticleSandboxService {
         // 2. 벤더 정보 업데이트 (전체 삭제 후 재등록 방식)
         if (request.getVendors() != null) {
             vendorSandboxRepository.deleteAllBySandboxArticleSandboxId(sandboxId);
-            for (SandboxArticleUpdateRequest.VendorRequest vr : request.getVendors()) {
+            for (AdminUnifiedUpdateRequest.VendorRequest vr : request.getVendors()) {
                 Vendor vendor = vendorRepository.findById(vr.getVendorId())
                         .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
 

@@ -9,7 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import today.inform.inform_backend.entity.*;
 import today.inform.inform_backend.repository.*;
 
-import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
+import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -113,12 +113,12 @@ class SchoolArticleSandboxServiceTest {
     void updateArticleTest() {
         // given
         Integer sandboxId = 1;
-        SandboxArticleUpdateRequest request = SandboxArticleUpdateRequest.builder()
+        AdminUnifiedUpdateRequest request = AdminUnifiedUpdateRequest.builder()
                 .title("수정된 제목")
                 .content("수정된 내용")
                 .categoryId(1)
                 .adminStatus("GARBAGE")
-                .vendors(List.of(SandboxArticleUpdateRequest.VendorRequest.builder()
+                .vendors(List.of(AdminUnifiedUpdateRequest.VendorRequest.builder()
                         .vendorId(1)
                         .originalUrl("https://new-url.com")
                         .build()))

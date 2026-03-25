@@ -15,7 +15,9 @@ import org.springframework.web.context.WebApplicationContext;
 import today.inform.inform_backend.entity.AdminStatus;
 import today.inform.inform_backend.service.SchoolArticleSandboxService;
 import today.inform.inform_backend.service.SchoolArticleService;
-import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
+import today.inform.inform_backend.dto.AdminUnifiedDetailResponse;
+import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -25,8 +27,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import today.inform.inform_backend.entity.SchoolArticleSandbox;
 import today.inform.inform_backend.dto.SandboxArticleResponse;
-import today.inform.inform_backend.dto.SandboxArticleDetailResponse;
-import java.util.Collections;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -108,55 +108,81 @@ class AdminControllerTest {
     }
 
     @Test
-    @DisplayName("샌드박스 게시글 상세 조회 API 테스트")
+    @DisplayName("[통합] sandbox 게시글 상세 조회 API 테스트")
     @WithMockUser(roles = "ADMIN")
-    void getSandboxArticleDetailTest() throws Exception {
+    void getUnifiedSandboxDetailTest() throws Exception {
         // given
         Integer id = 1;
-        SchoolArticleSandbox sandbox = SchoolArticleSandbox.builder()
-                .sandboxId(id)
+        AdminUnifiedDetailResponse response = AdminUnifiedDetailResponse.builder()
+                .source("sandbox")
+                .id(id)
                 .title("테스트 제목")
                 .content("테스트 내용")
-                .adminStatus(AdminStatus.INSPECTED_YET)
+                .adminStatus("INSPECTED_YET")
                 .build();
-        
-        given(sandboxService.getArticleDetail(id)).willReturn(sandbox);
-        given(sandboxService.getVendors(id)).willReturn(List.of());
-        given(sandboxService.getAttachments(id)).willReturn(List.of());
+
+        given(sandboxService.getAdminSandboxDetail(id)).willReturn(response);
 
         // when & then
-        mockMvc.perform(get("/api/v1/admin/sandbox/articles/{id}", id)
+        mockMvc.perform(get("/api/v1/admin/articles/sandbox/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.sandbox_id").value(id))
-                .andExpect(jsonPath("$.data.title").value("테스트 제목"))
-                .andExpect(jsonPath("$.data.content").value("테스트 내용"));
+                .andExpect(jsonPath("$.data.source").value("sandbox"))
+                .andExpect(jsonPath("$.data.id").value(id))
+                .andExpect(jsonPath("$.data.title").value("테스트 제목"));
     }
 
     @Test
-    @DisplayName("샌드박스 게시글 상세 수정 API 테스트")
+    @DisplayName("[통합] service 게시글 상세 조회 API 테스트")
     @WithMockUser(roles = "ADMIN")
-    void updateSandboxArticleTest() throws Exception {
-        SandboxArticleUpdateRequest.VendorRequest vendorRequest = SandboxArticleUpdateRequest.VendorRequest.builder()
-                .vendorId(1)
-                .originalUrl("http://example.com")
+    void getUnifiedServiceDetailTest() throws Exception {
+        // given
+        Integer id = 101;
+        AdminUnifiedDetailResponse response = AdminUnifiedDetailResponse.builder()
+                .source("service")
+                .id(id)
+                .title("서비스 제목")
+                .content("서비스 내용")
                 .build();
 
-        SandboxArticleUpdateRequest request = SandboxArticleUpdateRequest.builder()
-                .title("수정된 제목")
-                .content("수정된 내용")
-                .vendors(List.of(vendorRequest))
-                .build();
+        given(schoolArticleService.getAdminArticleDetail(id)).willReturn(response);
 
         // when & then
-        mockMvc.perform(patch("/api/v1/admin/sandbox/articles/1")
-                        .content("{\"title\":\"수정된 제목\", \"content\":\"수정된 내용\", \"vendors\":[{\"vendor_id\":1, \"original_url\":\"http://example.com\"}]}")
+        mockMvc.perform(get("/api/v1/admin/articles/service/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.source").value("service"))
+                .andExpect(jsonPath("$.data.id").value(id));
+    }
+
+    @Test
+    @DisplayName("[통합] sandbox 게시글 수정 API 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void updateUnifiedSandboxTest() throws Exception {
+        // when & then
+        mockMvc.perform(patch("/api/v1/admin/articles/sandbox/1")
+                        .content("{\"title\":\"수정된 제목\", \"content\":\"수정된 내용\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
-        
-        verify(sandboxService, times(1)).updateArticle(eq(1), any(SandboxArticleUpdateRequest.class));
+
+        verify(sandboxService, times(1)).updateArticle(eq(1), any(AdminUnifiedUpdateRequest.class));
+    }
+
+    @Test
+    @DisplayName("[통합] service 게시글 수정 API 테스트")
+    @WithMockUser(roles = "ADMIN")
+    void updateUnifiedServiceTest() throws Exception {
+        // when & then
+        mockMvc.perform(patch("/api/v1/admin/articles/service/101")
+                        .content("{\"title\":\"수정된 직접 제목\"}")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(schoolArticleService, times(1)).updateArticleDirectly(eq(101), any(AdminUnifiedUpdateRequest.class));
     }
 
     @Test
@@ -249,19 +275,5 @@ class AdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").value(true));
-    }
-
-    @Test
-    @DisplayName("서비스 게시글 직접 수정 API 테스트")
-    @WithMockUser(roles = "ADMIN")
-    void updateArticleDirectlyTest() throws Exception {
-        // when & then
-        mockMvc.perform(patch("/api/v1/admin/articles/101")
-                        .content("{\"title\":\"수정된 직접 제목\"}")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
-
-        verify(schoolArticleService, times(1)).updateArticleDirectly(eq(101), any());
     }
 }

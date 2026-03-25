@@ -11,10 +11,9 @@ import today.inform.inform_backend.entity.AdminStatus;
 import today.inform.inform_backend.entity.SchoolArticleSandbox;
 import today.inform.inform_backend.entity.SchoolArticleVendorSandbox;
 import today.inform.inform_backend.entity.AttachmentSandbox;
-import today.inform.inform_backend.dto.SandboxArticleUpdateRequest;
-import today.inform.inform_backend.dto.SandboxArticleDetailResponse;
+import today.inform.inform_backend.dto.AdminUnifiedDetailResponse;
+import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
 import today.inform.inform_backend.dto.AdminArticleCreateRequest;
-import today.inform.inform_backend.dto.AdminArticleUpdateRequest;
 import today.inform.inform_backend.service.SchoolArticleSandboxService;
 import today.inform.inform_backend.service.SchoolArticleService;
 import org.springframework.data.domain.Page;
@@ -113,57 +112,40 @@ public class AdminController {
     }
 
     /**
-     * 샌드박스 게시글 상세 조회
+     * [통합] 관리자 게시글 상세 조회 (sandbox/service 통합)
      */
-    @GetMapping("/sandbox/articles/{id}")
-    public ResponseEntity<ApiResponse<SandboxArticleDetailResponse>> getSandboxArticle(@PathVariable("id") Integer id) {
-        SchoolArticleSandbox article = sandboxService.getArticleDetail(id);
-        
-        SandboxArticleDetailResponse.CategoryResponse categoryResponse = article.getCategory() != null ? 
-                SandboxArticleDetailResponse.CategoryResponse.builder()
-                        .categoryId(article.getCategory().getCategoryId())
-                        .categoryName(article.getCategory().getCategoryName())
-                        .build() : null;
-        
-        SandboxArticleDetailResponse response = SandboxArticleDetailResponse.builder()
-                .sandboxId(article.getSandboxId())
-                .title(article.getTitle())
-                .content(article.getContent())
-                .categories(categoryResponse)
-                .adminStatus(article.getAdminStatus().name())
-                .previousStatus(article.getPreviousStatus() != null ? article.getPreviousStatus().name() : null)
-                .startDate(article.getStartDate())
-                .dueDate(article.getDueDate())
-                .createdAt(article.getCreatedAt())
-                .updatedAt(article.getUpdatedAt())
-                .vendors(sandboxService.getVendors(id).stream()
-                        .map(v -> SandboxArticleDetailResponse.VendorResponse.builder()
-                                .vendorId(v.getVendor().getVendorId())
-                                .vendorName(v.getVendor().getVendorName())
-                                .vendorInitial(v.getVendor().getVendorInitial())
-                                .vendorType(v.getVendor().getVendorType().name())
-                                .originalUrl(v.getOriginalUrl())
-                                .build())
-                        .collect(Collectors.toList()))
-                .attachments(sandboxService.getAttachments(id).stream()
-                        .map(a -> SandboxArticleDetailResponse.AttachmentResponse.builder()
-                                .fileId(a.getId())
-                                .attachmentUrl(a.getAttachmentUrl())
-                                .build())
-                        .collect(Collectors.toList()))
-                .build();
-                
+    @GetMapping("/articles/{source}/{id}")
+    public ResponseEntity<ApiResponse<AdminUnifiedDetailResponse>> getUnifiedArticleDetail(
+            @PathVariable("source") String source,
+            @PathVariable("id") Integer id) {
+        AdminUnifiedDetailResponse response;
+        if ("sandbox".equals(source)) {
+            response = sandboxService.getAdminSandboxDetail(id);
+        } else if ("service".equals(source)) {
+            response = schoolArticleService.getAdminArticleDetail(id);
+        } else {
+            throw new today.inform.inform_backend.common.exception.BusinessException(
+                    today.inform.inform_backend.common.exception.ErrorCode.INVALID_INPUT_VALUE);
+        }
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
-     * 샌드박스 게시글 상세 정보 수정
+     * [통합] 관리자 게시글 수정 (sandbox/service 통합)
      */
-    @PatchMapping("/sandbox/articles/{id}")
-    public ResponseEntity<ApiResponse<Void>> updateSandboxArticle(
+    @PatchMapping("/articles/{source}/{id}")
+    public ResponseEntity<ApiResponse<Void>> updateUnifiedArticle(
+            @PathVariable("source") String source,
             @PathVariable("id") Integer id,
-            @RequestBody SandboxArticleUpdateRequest request) {
-        sandboxService.updateArticle(id, request);
+            @RequestBody AdminUnifiedUpdateRequest request) {
+        if ("sandbox".equals(source)) {
+            sandboxService.updateArticle(id, request);
+        } else if ("service".equals(source)) {
+            schoolArticleService.updateArticleDirectly(id, request);
+        } else {
+            throw new today.inform.inform_backend.common.exception.BusinessException(
+                    today.inform.inform_backend.common.exception.ErrorCode.INVALID_INPUT_VALUE);
+        }
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -226,16 +208,5 @@ public class AdminController {
             @RequestParam("article_id") Integer articleId) {
         boolean exists = schoolArticleService.checkArticleIdExists(articleId);
         return ResponseEntity.ok(ApiResponse.success(exists));
-    }
-
-    /**
-     * 관리자: 서비스 DB 직접 수정
-     */
-    @PatchMapping("/articles/{id}")
-    public ResponseEntity<ApiResponse<Void>> updateArticleDirectly(
-            @PathVariable("id") Integer id,
-            @RequestBody AdminArticleUpdateRequest request) {
-        schoolArticleService.updateArticleDirectly(id, request);
-        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

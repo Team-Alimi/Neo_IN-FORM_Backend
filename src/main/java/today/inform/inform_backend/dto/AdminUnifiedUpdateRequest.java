@@ -12,14 +12,13 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AdminArticleUpdateRequest {
-
+public class AdminUnifiedUpdateRequest {
     private String title;
     private String content;
     private Integer categoryId;
+    private String adminStatus;     // sandbox 수정 시에만 사용
     private LocalDate startDate;
     private LocalDate dueDate;
-    
     private List<VendorRequest> vendors;
     private List<String> attachmentUrls;
 

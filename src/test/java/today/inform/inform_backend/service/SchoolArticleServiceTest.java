@@ -21,7 +21,7 @@ import today.inform.inform_backend.entity.Vendor;
 import today.inform.inform_backend.entity.Attachment;
 import today.inform.inform_backend.repository.*;
 import today.inform.inform_backend.dto.AdminArticleCreateRequest;
-import today.inform.inform_backend.dto.AdminArticleUpdateRequest;
+import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -282,10 +282,10 @@ class SchoolArticleServiceTest {
         void updateArticleDirectly_Success() {
                 // given
                 Integer articleId = 300;
-                AdminArticleUpdateRequest request = AdminArticleUpdateRequest.builder()
+                AdminUnifiedUpdateRequest request = AdminUnifiedUpdateRequest.builder()
                                 .title("Updated Title")
                                 .categoryId(2)
-                                .vendors(List.of(new AdminArticleUpdateRequest.VendorRequest(1, null)))
+                                .vendors(List.of(new AdminUnifiedUpdateRequest.VendorRequest(1, null)))
                                 .attachmentUrls(List.of("http://file.com"))
                                 .build();
 
