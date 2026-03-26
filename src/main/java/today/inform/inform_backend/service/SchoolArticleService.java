@@ -606,6 +606,10 @@ public class SchoolArticleService {
          */
         @Transactional(readOnly = true)
         public Page<SchoolArticle> getUnpublishedArticlesByStatus(AdminStatus status, Pageable pageable) {
+                if (status == AdminStatus.INSPECTED_YET) {
+                        return schoolArticleRepository.findAllByIsPublishedFalseAndAdminStatusInOrderByCreatedAtAsc(
+                                List.of(AdminStatus.INSPECTED_YET, AdminStatus.SUSPECTED_DUPLICATE), pageable);
+                }
                 return schoolArticleRepository.findAllByIsPublishedFalseAndAdminStatusOrderByCreatedAtAsc(status, pageable);
         }
 
@@ -615,7 +619,9 @@ public class SchoolArticleService {
         @Transactional(readOnly = true)
         public Map<String, Long> getUnpublishedCounts() {
                 Map<String, Long> counts = new HashMap<>();
-                counts.put("inspected_yet", schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.INSPECTED_YET));
+                counts.put("inspected_yet",
+                        schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.INSPECTED_YET)
+                        + schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.SUSPECTED_DUPLICATE));
                 counts.put("reflection_waiting", schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.REFLECTION_WAITING));
                 counts.put("suspected_duplicate", schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.SUSPECTED_DUPLICATE));
                 counts.put("garbage", schoolArticleRepository.countByIsPublishedFalseAndAdminStatus(AdminStatus.GARBAGE));

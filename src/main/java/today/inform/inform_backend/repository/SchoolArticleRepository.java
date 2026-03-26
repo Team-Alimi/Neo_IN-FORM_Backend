@@ -18,6 +18,8 @@ public interface SchoolArticleRepository extends JpaRepository<SchoolArticle, In
     // 미배포 게시글 조회 (관리자용)
     Page<SchoolArticle> findAllByIsPublishedFalseAndAdminStatusOrderByCreatedAtAsc(AdminStatus adminStatus, Pageable pageable);
 
+    Page<SchoolArticle> findAllByIsPublishedFalseAndAdminStatusInOrderByCreatedAtAsc(List<AdminStatus> adminStatuses, Pageable pageable);
+
     long countByIsPublishedFalseAndAdminStatus(AdminStatus adminStatus);
 
     @Modifying
