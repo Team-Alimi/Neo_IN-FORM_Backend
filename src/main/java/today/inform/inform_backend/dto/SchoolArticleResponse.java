@@ -28,6 +28,11 @@ public class SchoolArticleResponse implements Serializable {
     private Long bookmarkCount;
     private String adminStatus;
     private String previousStatus;
+    private String lastModifiedAdminName;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime adminModifiedAt;
+
     private List<VendorResponse> vendors;
     private CategoryResponse categories;
 

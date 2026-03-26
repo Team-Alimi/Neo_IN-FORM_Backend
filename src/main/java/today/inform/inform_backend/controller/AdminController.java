@@ -2,6 +2,7 @@ package today.inform.inform_backend.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import today.inform.inform_backend.common.response.ApiResponse;
 import today.inform.inform_backend.dto.SandboxCountsResponse;
@@ -89,6 +90,8 @@ public class AdminController {
                     .dueDate(article.getDueDate())
                     .createdAt(article.getCreatedAt())
                     .updatedAt(article.getUpdatedAt())
+                    .lastModifiedAdminName(article.getLastModifiedAdmin() != null ? article.getLastModifiedAdmin().getName() : null)
+                    .adminModifiedAt(article.getAdminModifiedAt())
                     .vendors(vendorResponses)
                     .build());
         }
@@ -124,8 +127,9 @@ public class AdminController {
     @PatchMapping("/articles/{id}")
     public ResponseEntity<ApiResponse<Void>> updateArticle(
             @PathVariable("id") Integer id,
-            @RequestBody AdminUnifiedUpdateRequest request) {
-        schoolArticleService.updateArticle(id, request);
+            @RequestBody AdminUnifiedUpdateRequest request,
+            @AuthenticationPrincipal Integer adminUserId) {
+        schoolArticleService.updateArticle(id, request, adminUserId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -135,8 +139,9 @@ public class AdminController {
     @PatchMapping("/articles/status")
     public ResponseEntity<ApiResponse<Void>> updateStatuses(
             @RequestParam("ids") List<Integer> ids,
-            @RequestParam("status") AdminStatus status) {
-        schoolArticleService.updateStatuses(ids, status);
+            @RequestParam("status") AdminStatus status,
+            @AuthenticationPrincipal Integer adminUserId) {
+        schoolArticleService.updateStatuses(ids, status, adminUserId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -145,8 +150,9 @@ public class AdminController {
      */
     @PostMapping("/articles/deploy")
     public ResponseEntity<ApiResponse<List<Integer>>> deployArticles(
-            @RequestParam("ids") List<Integer> ids) {
-        List<Integer> deployedIds = schoolArticleService.deployArticles(ids);
+            @RequestParam("ids") List<Integer> ids,
+            @AuthenticationPrincipal Integer adminUserId) {
+        List<Integer> deployedIds = schoolArticleService.deployArticles(ids, adminUserId);
         return ResponseEntity.ok(ApiResponse.success(deployedIds));
     }
 
@@ -165,8 +171,9 @@ public class AdminController {
      */
     @PatchMapping("/articles/restore")
     public ResponseEntity<ApiResponse<Void>> restoreArticles(
-            @RequestParam("ids") List<Integer> ids) {
-        schoolArticleService.restoreArticles(ids);
+            @RequestParam("ids") List<Integer> ids,
+            @AuthenticationPrincipal Integer adminUserId) {
+        schoolArticleService.restoreArticles(ids, adminUserId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -175,8 +182,9 @@ public class AdminController {
      */
     @PostMapping("/articles/create")
     public ResponseEntity<ApiResponse<Integer>> createArticleDirectly(
-            @RequestBody AdminArticleCreateRequest request) {
-        Integer articleId = schoolArticleService.createArticleDirectly(request);
+            @RequestBody AdminArticleCreateRequest request,
+            @AuthenticationPrincipal Integer adminUserId) {
+        Integer articleId = schoolArticleService.createArticleDirectly(request, adminUserId);
         return ResponseEntity.ok(ApiResponse.success(articleId));
     }
 

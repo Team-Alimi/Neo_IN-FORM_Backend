@@ -203,6 +203,7 @@ class SchoolArticleServiceTest {
         @DisplayName("ID를 지정하지 않고 게시글을 직접 생성한다.")
         void createArticleDirectly_WithoutId() {
                 // given
+                Integer adminUserId = 1;
                 AdminArticleCreateRequest request = AdminArticleCreateRequest.builder()
                                 .title("Direct Title")
                                 .content("Direct Content")
@@ -213,14 +214,16 @@ class SchoolArticleServiceTest {
 
                 Category category = Category.builder().categoryId(1).build();
                 Vendor vendor = Vendor.builder().vendorId(1).build();
+                User admin = User.builder().userId(adminUserId).name("관리자").build();
                 SchoolArticle article = SchoolArticle.builder().articleId(101).build();
 
+                when(userRepository.findById(adminUserId)).thenReturn(Optional.of(admin));
                 when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
                 when(vendorRepository.findById(1)).thenReturn(Optional.of(vendor));
                 when(schoolArticleRepository.save(any(SchoolArticle.class))).thenReturn(article);
 
                 // when
-                Integer resultId = schoolArticleService.createArticleDirectly(request);
+                Integer resultId = schoolArticleService.createArticleDirectly(request, adminUserId);
 
                 // then
                 assertThat(resultId).isEqualTo(101);
@@ -233,6 +236,7 @@ class SchoolArticleServiceTest {
         void createArticleDirectly_WithId() {
                 // given
                 Integer articleId = 200;
+                Integer adminUserId = 1;
                 AdminArticleCreateRequest request = AdminArticleCreateRequest.builder()
                                 .articleId(articleId)
                                 .title("Direct With ID")
@@ -244,15 +248,17 @@ class SchoolArticleServiceTest {
 
                 Category category = Category.builder().categoryId(1).build();
                 Vendor vendor = Vendor.builder().vendorId(1).build();
+                User admin = User.builder().userId(adminUserId).name("관리자").build();
                 SchoolArticle article = SchoolArticle.builder().articleId(articleId).build();
 
+                when(userRepository.findById(adminUserId)).thenReturn(Optional.of(admin));
                 when(schoolArticleRepository.existsById(articleId)).thenReturn(false);
                 when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
                 when(vendorRepository.findById(1)).thenReturn(Optional.of(vendor));
                 when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
 
                 // when
-                Integer resultId = schoolArticleService.createArticleDirectly(request);
+                Integer resultId = schoolArticleService.createArticleDirectly(request, adminUserId);
 
                 // then
                 assertThat(resultId).isEqualTo(articleId);
@@ -272,7 +278,7 @@ class SchoolArticleServiceTest {
                 when(schoolArticleRepository.existsById(articleId)).thenReturn(true);
 
                 // when & then
-                assertThatThrownBy(() -> schoolArticleService.createArticleDirectly(request))
+                assertThatThrownBy(() -> schoolArticleService.createArticleDirectly(request, 1))
                                 .isInstanceOf(BusinessException.class)
                                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_EXIST_ARTICLE);
         }
@@ -282,6 +288,7 @@ class SchoolArticleServiceTest {
         void updateArticle_Success() {
                 // given
                 Integer articleId = 300;
+                Integer adminUserId = 1;
                 AdminUnifiedUpdateRequest request = AdminUnifiedUpdateRequest.builder()
                                 .title("Updated Title")
                                 .categoryId(2)
@@ -291,14 +298,16 @@ class SchoolArticleServiceTest {
 
                 Category category = Category.builder().categoryId(2).build();
                 Vendor vendor = Vendor.builder().vendorId(1).build();
+                User admin = User.builder().userId(adminUserId).name("관리자").build();
                 SchoolArticle article = SchoolArticle.builder().articleId(articleId).build();
 
+                when(userRepository.findById(adminUserId)).thenReturn(Optional.of(admin));
                 when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
                 when(categoryRepository.findById(2)).thenReturn(Optional.of(category));
                 when(vendorRepository.findById(1)).thenReturn(Optional.of(vendor));
 
                 // when
-                schoolArticleService.updateArticle(articleId, request);
+                schoolArticleService.updateArticle(articleId, request, adminUserId);
 
                 // then
                 verify(schoolArticleVendorRepository, times(1)).deleteAllByArticle(article);

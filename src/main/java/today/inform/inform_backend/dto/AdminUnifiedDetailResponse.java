@@ -24,6 +24,11 @@ public class AdminUnifiedDetailResponse {
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime updatedAt;
 
+    private AdminInfoResponse lastModifiedAdmin;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime adminModifiedAt;
+
     private CategoryResponse categories;
     private List<VendorResponse> vendors;
     private List<AttachmentResponse> attachments;
@@ -50,5 +55,13 @@ public class AdminUnifiedDetailResponse {
     public static class AttachmentResponse {
         private Integer fileId;
         private String attachmentUrl;
+    }
+
+    @Getter
+    @Builder
+    public static class AdminInfoResponse {
+        private Integer userId;
+        private String name;
+        private String email;
     }
 }

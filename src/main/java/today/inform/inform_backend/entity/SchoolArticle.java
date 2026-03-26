@@ -3,6 +3,7 @@ package today.inform.inform_backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(
@@ -48,6 +49,17 @@ public class SchoolArticle extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     private AdminStatus previousStatus;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "last_modified_admin_id")
+    private User lastModifiedAdmin;
+
+    private LocalDateTime adminModifiedAt;
+
+    public void markAdminModified(User admin) {
+        this.lastModifiedAdmin = admin;
+        this.adminModifiedAt = LocalDateTime.now();
+    }
 
     public void update(String title, String content, LocalDate startDate, LocalDate dueDate, Category category) {
         if (title != null) this.title = title;

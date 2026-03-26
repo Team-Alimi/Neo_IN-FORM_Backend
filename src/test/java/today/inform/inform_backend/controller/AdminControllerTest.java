@@ -137,7 +137,7 @@ class AdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(schoolArticleService, times(1)).updateArticle(eq(1), any(AdminUnifiedUpdateRequest.class));
+        verify(schoolArticleService, times(1)).updateArticle(eq(1), any(AdminUnifiedUpdateRequest.class), any());
     }
 
     @Test
@@ -152,7 +152,7 @@ class AdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(schoolArticleService, times(1)).updateStatuses(eq(List.of(1, 2, 3)), eq(AdminStatus.GARBAGE));
+        verify(schoolArticleService, times(1)).updateStatuses(eq(List.of(1, 2, 3)), eq(AdminStatus.GARBAGE), any());
     }
 
     @Test
@@ -160,7 +160,7 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void deployArticlesTest() throws Exception {
         // given
-        given(schoolArticleService.deployArticles(List.of(1, 2))).willReturn(List.of(1, 2));
+        given(schoolArticleService.deployArticles(eq(List.of(1, 2)), any())).willReturn(List.of(1, 2));
 
         // when & then
         mockMvc.perform(post("/api/v1/admin/articles/deploy")
@@ -197,7 +197,7 @@ class AdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(schoolArticleService, times(1)).restoreArticles(List.of(1, 2));
+        verify(schoolArticleService, times(1)).restoreArticles(eq(List.of(1, 2)), any());
     }
 
     @Test
@@ -205,7 +205,7 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void createArticleDirectlyTest() throws Exception {
         // given
-        given(schoolArticleService.createArticleDirectly(any())).willReturn(101);
+        given(schoolArticleService.createArticleDirectly(any(), any())).willReturn(101);
 
         // when & then
         mockMvc.perform(post("/api/v1/admin/articles/create")

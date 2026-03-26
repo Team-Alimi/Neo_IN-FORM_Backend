@@ -28,6 +28,7 @@ import today.inform.inform_backend.dto.AdminUnifiedDetailResponse;
 import today.inform.inform_backend.dto.AdminUnifiedUpdateRequest;
 
 import today.inform.inform_backend.entity.AdminStatus;
+import today.inform.inform_backend.entity.User;
 
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -343,6 +344,11 @@ public class SchoolArticleService {
                                                 obj -> (Long) obj[1]));
         }
 
+        private User findAdminUser(Integer adminUserId) {
+                return userRepository.findById(adminUserId)
+                                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        }
+
         // ===================== Admin Methods ===================== //
 
         /**
@@ -367,6 +373,14 @@ public class SchoolArticleService {
                                 .dueDate(article.getDueDate())
                                 .createdAt(article.getCreatedAt())
                                 .updatedAt(article.getUpdatedAt())
+                                .lastModifiedAdmin(article.getLastModifiedAdmin() != null
+                                                ? AdminUnifiedDetailResponse.AdminInfoResponse.builder()
+                                                                .userId(article.getLastModifiedAdmin().getUserId())
+                                                                .name(article.getLastModifiedAdmin().getName())
+                                                                .email(article.getLastModifiedAdmin().getEmail())
+                                                                .build()
+                                                : null)
+                                .adminModifiedAt(article.getAdminModifiedAt())
                                 .categories(article.getCategory() == null ? null
                                                 : AdminUnifiedDetailResponse.CategoryResponse.builder()
                                                                 .categoryId(article.getCategory().getCategoryId())
@@ -399,10 +413,12 @@ public class SchoolArticleService {
          * 관리자: 서비스 DB 직접 등록 (is_published=true)
          */
         @Transactional
-        public Integer createArticleDirectly(AdminArticleCreateRequest request) {
+        public Integer createArticleDirectly(AdminArticleCreateRequest request, Integer adminUserId) {
                 if (request.getArticleId() != null && schoolArticleRepository.existsById(request.getArticleId())) {
                         throw new BusinessException(ErrorCode.ALREADY_EXIST_ARTICLE);
                 }
+
+                User admin = findAdminUser(adminUserId);
 
                 Category category = null;
                 if (request.getCategoryId() != null) {
@@ -440,6 +456,8 @@ public class SchoolArticleService {
                         finalArticleId = article.getArticleId();
                 }
 
+                article.markAdminModified(admin);
+
                 if (request.getVendors() != null) {
                         for (AdminArticleCreateRequest.VendorRequest vr : request.getVendors()) {
                                 Vendor vendor = vendorRepository.findById(vr.getVendorId())
@@ -471,9 +489,12 @@ public class SchoolArticleService {
          * 관리자: 게시글 수정 (배포/미배포 공통)
          */
         @Transactional
-        public void updateArticle(Integer articleId, AdminUnifiedUpdateRequest request) {
+        public void updateArticle(Integer articleId, AdminUnifiedUpdateRequest request, Integer adminUserId) {
                 SchoolArticle article = schoolArticleRepository.findById(articleId)
                                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+                User admin = findAdminUser(adminUserId);
+                article.markAdminModified(admin);
 
                 Category category = null;
                 if (request.getCategoryId() != null) {
@@ -605,16 +626,24 @@ public class SchoolArticleService {
          * 상태 일괄 변경 (GARBAGE 이동 시 이전 상태 보존)
          */
         @Transactional
-        public void updateStatuses(List<Integer> articleIds, AdminStatus status) {
+        public void updateStatuses(List<Integer> articleIds, AdminStatus status, Integer adminUserId) {
                 List<SchoolArticle> articles = schoolArticleRepository.findAllById(articleIds);
                 if (articles.isEmpty()) {
                         throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
                 }
 
+                User admin = findAdminUser(adminUserId);
+
                 if (status == AdminStatus.GARBAGE) {
-                        articles.forEach(SchoolArticle::moveToGarbage);
+                        articles.forEach(article -> {
+                                article.moveToGarbage();
+                                article.markAdminModified(admin);
+                        });
                 } else {
-                        articles.forEach(article -> article.updateStatus(status));
+                        articles.forEach(article -> {
+                                article.updateStatus(status);
+                                article.markAdminModified(admin);
+                        });
                 }
         }
 
@@ -622,13 +651,17 @@ public class SchoolArticleService {
          * 미배포 → 서비스 배포 (is_published = true)
          */
         @Transactional
-        public List<Integer> deployArticles(List<Integer> articleIds) {
+        public List<Integer> deployArticles(List<Integer> articleIds, Integer adminUserId) {
                 List<SchoolArticle> articles = schoolArticleRepository.findAllById(articleIds);
                 if (articles.isEmpty()) {
                         throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
                 }
 
-                articles.forEach(SchoolArticle::deploy);
+                User admin = findAdminUser(adminUserId);
+                articles.forEach(article -> {
+                        article.deploy();
+                        article.markAdminModified(admin);
+                });
 
                 return articles.stream()
                                 .map(SchoolArticle::getArticleId)
@@ -653,7 +686,7 @@ public class SchoolArticleService {
          * 휴지통 복구 (이전 상태로 되돌림)
          */
         @Transactional
-        public void restoreArticles(List<Integer> articleIds) {
+        public void restoreArticles(List<Integer> articleIds, Integer adminUserId) {
                 List<SchoolArticle> articles = schoolArticleRepository.findAllById(articleIds);
                 if (articles.isEmpty()) {
                         throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
@@ -665,7 +698,11 @@ public class SchoolArticleService {
                         }
                 }
 
-                articles.forEach(SchoolArticle::restore);
+                User admin = findAdminUser(adminUserId);
+                articles.forEach(article -> {
+                        article.restore();
+                        article.markAdminModified(admin);
+                });
         }
 }
 
