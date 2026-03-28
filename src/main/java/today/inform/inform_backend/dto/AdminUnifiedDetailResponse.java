@@ -2,21 +2,21 @@ package today.inform.inform_backend.dto;
 
 import lombok.Builder;
 import lombok.Getter;
-
-import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
 @Builder
-public class SchoolArticleResponse implements Serializable {
-    private static final long serialVersionUID = 1L;
-    private Integer articleId;
+public class AdminUnifiedDetailResponse {
+    private Integer id;
     private String title;
+    private String content;
+    private boolean isPublished;
+    private String adminStatus;
+    private String previousStatus;
     private LocalDate startDate;
     private LocalDate dueDate;
-    private String status;
 
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime createdAt;
@@ -24,33 +24,44 @@ public class SchoolArticleResponse implements Serializable {
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime updatedAt;
 
-    private Boolean isBookmarked;
-    private Long bookmarkCount;
-    private String adminStatus;
-    private String previousStatus;
-    private String lastModifiedAdminName;
+    private AdminInfoResponse lastModifiedAdmin;
 
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime adminModifiedAt;
 
-    private List<VendorResponse> vendors;
     private CategoryResponse categories;
+    private List<VendorResponse> vendors;
+    private List<AttachmentResponse> attachments;
 
     @Getter
     @Builder
-    public static class VendorResponse implements Serializable {
-        private static final long serialVersionUID = 1L;
+    public static class VendorResponse {
         private Integer vendorId;
         private String vendorName;
         private String vendorInitial;
         private String vendorType;
+        private String originalUrl;
     }
 
     @Getter
     @Builder
-    public static class CategoryResponse implements Serializable {
-        private static final long serialVersionUID = 1L;
+    public static class CategoryResponse {
         private Integer categoryId;
         private String categoryName;
+    }
+
+    @Getter
+    @Builder
+    public static class AttachmentResponse {
+        private Integer fileId;
+        private String attachmentUrl;
+    }
+
+    @Getter
+    @Builder
+    public static class AdminInfoResponse {
+        private Integer userId;
+        private String name;
+        private String email;
     }
 }

@@ -19,7 +19,10 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "존재하지 않는 사용자입니다."),
 
     // Article
-    ARTICLE_NOT_FOUND(HttpStatus.NOT_FOUND, "ARTICLE_NOT_FOUND", "존재하지 않는 게시글입니다.");
+    ARTICLE_NOT_FOUND(HttpStatus.NOT_FOUND, "ARTICLE_NOT_FOUND", "존재하지 않는 게시글입니다."),
+    CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CATEGORY_NOT_FOUND", "존재하지 않는 카테고리입니다."),
+    ALREADY_EXIST_ARTICLE(HttpStatus.CONFLICT, "ALREADY_EXIST_ARTICLE", "이미 존재하는 게시글입니다."),
+    NOT_IN_GARBAGE(HttpStatus.BAD_REQUEST, "NOT_IN_GARBAGE", "휴지통 상태가 아닌 게시글은 복구할 수 없습니다.");
 
     private final HttpStatus status;
     private final String code;
