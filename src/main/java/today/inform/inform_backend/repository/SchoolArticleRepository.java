@@ -15,6 +15,10 @@ import java.util.List;
 public interface SchoolArticleRepository extends JpaRepository<SchoolArticle, Integer>, SchoolArticleRepositoryCustom {
     List<SchoolArticle> findAllByDueDate(LocalDate dueDate);
 
+    // 사용자용 - isPublished 체크
+    java.util.Optional<SchoolArticle> findByArticleIdAndIsPublishedTrue(Integer articleId);
+    boolean existsByArticleIdAndIsPublishedTrue(Integer articleId);
+
     // 미배포 게시글 조회 (관리자용)
     Page<SchoolArticle> findAllByIsPublishedFalseAndAdminStatusOrderByCreatedAtAsc(AdminStatus adminStatus, Pageable pageable);
 

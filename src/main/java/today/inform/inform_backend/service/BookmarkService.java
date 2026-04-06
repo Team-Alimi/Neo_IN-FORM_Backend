@@ -108,7 +108,7 @@ public class BookmarkService {
 
     private void validateArticleExists(VendorType articleType, Integer articleId) {
         if (articleType == VendorType.SCHOOL) {
-            if (!schoolArticleRepository.existsById(articleId)) {
+            if (!schoolArticleRepository.existsByArticleIdAndIsPublishedTrue(articleId)) {
                 throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
             }
         }

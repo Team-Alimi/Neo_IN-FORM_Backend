@@ -55,7 +55,7 @@ public class SchoolArticleService {
 
         @Transactional(readOnly = true)
         public SchoolArticleDetailResponse getSchoolArticleDetail(Integer articleId, Integer userId) {
-                SchoolArticle article = schoolArticleRepository.findById(articleId)
+                SchoolArticle article = schoolArticleRepository.findByArticleIdAndIsPublishedTrue(articleId)
                                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
 
                 boolean isBookmarked = false;

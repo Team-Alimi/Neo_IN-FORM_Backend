@@ -100,7 +100,7 @@ class SchoolArticleServiceTest {
 
                 User user = User.builder().userId(userId).build();
 
-                when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+                when(schoolArticleRepository.findByArticleIdAndIsPublishedTrue(articleId)).thenReturn(Optional.of(article));
                 when(userRepository.findById(userId)).thenReturn(Optional.of(user));
                 when(bookmarkRepository.existsByUserAndArticleTypeAndArticleId(user, VendorType.SCHOOL, articleId))
                                 .thenReturn(true);
@@ -130,7 +130,7 @@ class SchoolArticleServiceTest {
                                 .content(content)
                                 .build();
 
-                when(schoolArticleRepository.findById(articleId)).thenReturn(Optional.of(article));
+                when(schoolArticleRepository.findByArticleIdAndIsPublishedTrue(articleId)).thenReturn(Optional.of(article));
                 when(schoolArticleVendorRepository.findAllByArticle(article)).thenReturn(List.of());
                 when(attachmentRepository.findAllByArticleIdAndArticleType(articleId, VendorType.SCHOOL))
                                 .thenReturn(List.of());
