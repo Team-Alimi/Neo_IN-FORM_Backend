@@ -55,7 +55,7 @@ jobs:
         username: ${{ secrets.GCP_SSH_USER }}
         key: ${{ secrets.GCP_SSH_KEY }}
         source: "Dockerfile,nginx,init-letsencrypt.sh"
-        target: "deploy_temp"
+        target: "~/deploy_temp"
 
     - name: Deploy to GCP
       uses: appleboy/ssh-action@v1.0.3
@@ -68,7 +68,7 @@ jobs:
           mkdir -p ~/inform-main
           # 숨김 파일(.env 등)까지 싹 다 옮기기 위해 . 포함
           cp -r ~/deploy_temp/* ~/inform-main/
-          rm -rf ~/deploy_temp
+          rm -rf ~/deploy_temp/*
           
           cd ~/inform-main
           # 2. 캐시 없이 새로운 이미지 강제 빌드
