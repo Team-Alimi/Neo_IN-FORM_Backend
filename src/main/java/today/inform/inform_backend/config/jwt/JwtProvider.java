@@ -20,21 +20,22 @@ public class JwtProvider {
         return Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 
-    public String createAccessToken(Integer userId, String email) {
-        return createToken(userId, email, jwtProperties.getAccessExpiration());
+    public String createAccessToken(Integer userId, String email, String role) {
+        return createToken(userId, email, role, jwtProperties.getAccessExpiration());
     }
 
-    public String createRefreshToken(Integer userId, String email) {
-        return createToken(userId, email, jwtProperties.getRefreshExpiration());
+    public String createRefreshToken(Integer userId, String email, String role) {
+        return createToken(userId, email, role, jwtProperties.getRefreshExpiration());
     }
 
-    private String createToken(Integer userId, String email, long expiration) {
+    private String createToken(Integer userId, String email, String role, long expiration) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expiration);
 
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
+                .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())

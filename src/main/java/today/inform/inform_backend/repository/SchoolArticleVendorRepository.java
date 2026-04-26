@@ -9,4 +9,5 @@ import java.util.List;
 public interface SchoolArticleVendorRepository extends JpaRepository<SchoolArticleVendor, Integer> {
     List<SchoolArticleVendor> findAllByArticleIn(List<SchoolArticle> articles);
     List<SchoolArticleVendor> findAllByArticle(SchoolArticle article);
+    void deleteAllByArticle(SchoolArticle article);
 }

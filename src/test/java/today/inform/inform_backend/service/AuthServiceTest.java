@@ -50,8 +50,8 @@ class AuthServiceTest {
         given(providerFactory.getProvider(SocialType.GOOGLE)).willReturn(oauthProvider);
         given(oauthProvider.verifyToken(token)).willReturn(googleUserInfo);
         given(userRepository.findByEmail(email)).willReturn(Optional.of(user));
-        given(jwtProvider.createAccessToken(any(), anyString())).willReturn("access-token");
-        given(jwtProvider.createRefreshToken(any(), anyString())).willReturn("refresh-token");
+        given(jwtProvider.createAccessToken(any(), anyString(), anyString())).willReturn("access-token");
+        given(jwtProvider.createRefreshToken(any(), anyString(), anyString())).willReturn("refresh-token");
 
         // when
         LoginResponse response = authService.login(SocialType.GOOGLE, token);

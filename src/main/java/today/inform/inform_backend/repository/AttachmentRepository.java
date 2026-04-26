@@ -9,4 +9,5 @@ import java.util.List;
 public interface AttachmentRepository extends JpaRepository<Attachment, Integer> {
     List<Attachment> findAllByArticleIdAndArticleType(Integer articleId, VendorType articleType);
     List<Attachment> findAllByArticleIdInAndArticleType(List<Integer> articleIds, VendorType articleType);
+    void deleteAllByArticleIdAndArticleType(Integer articleId, VendorType articleType);
 }

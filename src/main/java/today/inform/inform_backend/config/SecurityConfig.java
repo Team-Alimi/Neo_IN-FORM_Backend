@@ -51,15 +51,18 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/login/**").permitAll()
                         .requestMatchers("/api/v1/auth/refresh").permitAll()
-                        .requestMatchers("/api/v1/auth/logout").hasRole("USER")
-                        .requestMatchers("/api/v1/club_articles/**").permitAll()
+                        .requestMatchers("/api/v1/auth/logout").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/club_articles/**").permitAll()
+                        .requestMatchers("/api/v1/club_articles/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/vendors/**").permitAll()
                         .requestMatchers("/api/v1/categories/**").permitAll()
                         .requestMatchers("/api/v1/calendar/notices").permitAll()
                         .requestMatchers("/api/v1/calendar/daily-notices").permitAll()
-                        .requestMatchers("/api/v1/users/**").hasRole("USER")
-                        .requestMatchers("/api/v1/school_articles/**").permitAll()
-                        .requestMatchers("/api/v1/bookmarks/**").hasRole("USER")
+                        .requestMatchers("/api/v1/users/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/school_articles/**").permitAll()
+                        .requestMatchers("/api/v1/school_articles/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/bookmarks/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
 
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

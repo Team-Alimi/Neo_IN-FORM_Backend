@@ -28,6 +28,11 @@ public class User extends BaseCreatedTimeEntity { // createdAt만 상속
     @JoinColumn(name = "major_id")
     private Vendor major;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20) default 'ROLE_USER'")
+    @Builder.Default
+    private UserRole role = UserRole.ROLE_USER;
+
     @Builder.Default
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Notification> notifications = new ArrayList<>();
