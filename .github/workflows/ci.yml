@@ -74,6 +74,9 @@ jobs:
           # 2. 캐시 없이 새로운 이미지 강제 빌드
           docker build --no-cache -t inform-main-backend .
           
-          # 3. app 서비스만 안전하게 재시작 (DB, Nginx 등은 건드리지 않음)
-          docker compose up -d --no-deps --force-recreate app
+          # 3. 기존 app 컨테이너 확실히 중지 및 제거 (충돌 방지)
+          docker compose rm -fs app
+          
+          # 4. app 서비스만 새로 띄우기
+          docker compose up -d --no-deps app
 
