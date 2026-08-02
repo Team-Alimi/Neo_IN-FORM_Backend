@@ -37,10 +37,8 @@ out/
 .vscode/
 
 ### Security Data ###
-application.yaml
-application.yml
-application-test.yaml
-application-test.yml
+# v2: application.yml 은 비밀값이 없으므로 커밋한다 (비밀값은 .env 로 주입)
+.env
 
 ### Documents ###
 /docs
