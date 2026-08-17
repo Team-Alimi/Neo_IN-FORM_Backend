@@ -1,3 +1,10 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+
+# Linux 컨테이너 안에서 실행되는 파일은 반드시 LF 여야 한다.
+# core.autocrlf=true 인 Windows 환경에서 clone 하면 CRLF 로 변환되어
+#   - 쉘 스크립트: /bin/bash^M: bad interpreter 로 죽고
+#   - Dockerfile : 줄 끝 백슬래시 뒤에 \r 이 붙어 RUN 명령이 깨진다
+*.sh text eol=lf
+Dockerfile text eol=lf

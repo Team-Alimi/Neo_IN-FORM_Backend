@@ -34,6 +34,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
 	// Migration
+	// ★ Spring Boot 4.0 은 자동설정이 기술별 모듈로 분리되었다.
+	//   spring-boot-flyway 가 없으면 FlywayAutoConfiguration 이 클래스패스에 없어
+	//   application.yml 의 spring.flyway.enabled: true 가 조용히 무시된다
+	//   (경고도 에러도 없이 마이그레이션이 실행되지 않는다).
+	implementation 'org.springframework.boot:spring-boot-flyway'
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 
