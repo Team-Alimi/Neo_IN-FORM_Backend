@@ -29,8 +29,6 @@ CREATE INDEX idx_vendors_type ON vendors (type, is_active);
 -- 활성 사용자끼리만 이메일 유니크. 탈퇴자가 있어도 재가입이 된다.
 CREATE UNIQUE INDEX uk_users_active_email ON users (email) WHERE status = 'ACTIVE';
 
-CREATE INDEX idx_users_major ON users (major_vendor_id) WHERE major_vendor_id IS NOT NULL;
-
 -- 탈퇴 30일 경과 개인정보 마스킹 배치용. WITHDRAWN 비율이 낮아 매우 작다.
 CREATE INDEX idx_users_purge ON users (withdrawn_at) WHERE status = 'WITHDRAWN';
 
@@ -38,6 +36,10 @@ CREATE INDEX idx_users_purge ON users (withdrawn_at) WHERE status = 'WITHDRAWN';
 -- =============================================================================
 -- 개인화 / 추천
 -- =============================================================================
+
+-- user_vendors 는 PK(user_id, vendor_id) 만 둔다.
+-- "내가 구독한 학과 목록"이 유일한 조회 방향이고, 역방향("이 학과를 구독한 사용자")은
+-- 요구사항에 없다. vendor 삭제는 article_vendors 의 RESTRICT 때문에 사실상 발생하지 않는다.
 
 -- 추천 쿼리 방향: user_club_type_interests(user_id, PK) -> vendor_club_types(club_type_id)
 -- 아래 인덱스가 두 번째 단계를 index-only scan 으로 처리한다.

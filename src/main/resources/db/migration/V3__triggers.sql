@@ -16,7 +16,7 @@
 --     IN003  크롤러가 기록한 출처인데 external_key / source_url 누락
 --     IN004  답글의 답글 (depth 위반)
 --     IN005  다른 공지의 댓글을 parent 로 지정
---     IN006  major_vendor 가 SCHOOL 이 아님
+--     IN006  구독 학과·기관이 SCHOOL 유형이 아님
 --     IN007  크롤러가 EXTERNAL 이 아닌 첨부를 기록하려 함
 --     IN008  비활성 club_type 을 신규 선택/태깅
 --     IN009  CLUB 이 아닌 vendor 에 club_type 태깅
@@ -88,28 +88,27 @@ CREATE TRIGGER trg_club_types_10_immutable BEFORE UPDATE ON club_types
 -- 3. users
 -- =============================================================================
 
--- major_vendor 는 SCHOOL 만.
--- vendors.type 이 불변이므로 이 교차 검증은 소급으로 깨지지 않는다.
-CREATE OR REPLACE FUNCTION inform_users_major_vendor_check()
+-- 구독 학과·기관은 SCHOOL 유형만.
+-- vendors.type 이 불변이므로 이 교차 검증은 소급으로 깨지지 않아
+-- BEFORE INSERT OR UPDATE 로 넓게 걸어도 안전하다.
+-- (club_type 의 is_active 검사와 달리 시점 정책이 아니라 영구 불변식이다)
+CREATE OR REPLACE FUNCTION inform_user_vendor_school_check()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
     v_type varchar(20);
 BEGIN
-    IF NEW.major_vendor_id IS NULL THEN
-        RETURN NEW;
-    END IF;
-    SELECT type INTO v_type FROM vendors WHERE id = NEW.major_vendor_id;
+    SELECT type INTO v_type FROM vendors WHERE id = NEW.vendor_id;
     IF v_type <> 'SCHOOL' THEN
-        RAISE EXCEPTION '전공은 학과(SCHOOL)만 선택할 수 있습니다 (vendor_id=%, type=%)',
-                        NEW.major_vendor_id, v_type
+        RAISE EXCEPTION '구독 대상은 학과·기관(SCHOOL)만 가능합니다 (vendor_id=%, type=%)',
+                        NEW.vendor_id, v_type
             USING ERRCODE = 'IN006';
     END IF;
     RETURN NEW;
 END $$;
 
-CREATE TRIGGER trg_users_20_major_vendor
-    BEFORE INSERT OR UPDATE OF major_vendor_id ON users
-    FOR EACH ROW EXECUTE FUNCTION inform_users_major_vendor_check();
+CREATE TRIGGER trg_uv_10_school_check
+    BEFORE INSERT OR UPDATE OF vendor_id ON user_vendors
+    FOR EACH ROW EXECUTE FUNCTION inform_user_vendor_school_check();
 
 
 -- 역할 변경 감사. 앱이 로그를 빠뜨릴 방법이 없도록 트리거가 같은 트랜잭션에서 기록한다.

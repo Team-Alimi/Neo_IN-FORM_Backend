@@ -69,7 +69,6 @@ CREATE TABLE users (
     id                         bigserial     PRIMARY KEY,
     email                      varchar(255)  NOT NULL,
     name                       varchar(50),
-    major_vendor_id            bigint,
     role                       varchar(20)   NOT NULL DEFAULT 'USER',
     status                     varchar(20)   NOT NULL DEFAULT 'ACTIVE',
     email_notification_enabled boolean       NOT NULL DEFAULT true,
@@ -83,13 +82,33 @@ CREATE TABLE users (
     -- 소문자 정규화를 앱에만 맡기면 Kim@inha.ac.kr 과 kim@inha.ac.kr 이 별개 계정이 된다.
     -- 아래 partial unique 가 대소문자를 구분하므로 DB가 막지 못한다.
     CONSTRAINT ck_users_email_lower CHECK (email = lower(email)),
-    CONSTRAINT ck_users_withdrawn   CHECK ((status = 'WITHDRAWN') = (withdrawn_at IS NOT NULL)),
-
-    CONSTRAINT fk_users_major_vendor FOREIGN KEY (major_vendor_id)
-        REFERENCES vendors (id) ON DELETE SET NULL
+    CONSTRAINT ck_users_withdrawn   CHECK ((status = 'WITHDRAWN') = (withdrawn_at IS NOT NULL))
 );
 
 COMMENT ON COLUMN users.onboarding_completed_at IS 'NULL = 온보딩 미완료';
+
+
+-- 사용자가 구독하는 학과·기관. 온보딩 STEP 2.
+--
+-- ★ 복수 선택이다. 복수전공/부전공 학생이 있고, 학과 공지와 학교 공통 기관
+--   (학생처·국제처 등) 공지를 함께 받아야 하기 때문이다.
+--   그래서 users.major_vendor_id 단일 컬럼을 없애고 이 관계 테이블로 옮겼다.
+--
+-- ★ 주/부 전공 구분 플래그는 두지 않는다.
+--   화면에 주·부 표시가 없고, 대표 학과가 필요하면 created_at 순서로 먼저 고른 것을 쓴다.
+--   구분이 실제로 필요해지면 is_primary 를 추가한다.
+CREATE TABLE user_vendors (
+    user_id    bigint      NOT NULL,
+    vendor_id  bigint      NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_user_vendors PRIMARY KEY (user_id, vendor_id),
+    CONSTRAINT fk_uv_user   FOREIGN KEY (user_id)   REFERENCES users (id)   ON DELETE CASCADE,
+    CONSTRAINT fk_uv_vendor FOREIGN KEY (vendor_id) REFERENCES vendors (id) ON DELETE CASCADE
+);
+
+COMMENT ON TABLE user_vendors IS
+    '사용자 구독 학과·기관 (복수). SCHOOL 유형만 허용 — 트리거가 강제';
 
 
 CREATE TABLE user_interest_categories (
