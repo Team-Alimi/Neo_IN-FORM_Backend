@@ -61,7 +61,15 @@ CREATE INDEX idx_articles_feed ON articles (source_type, published_at DESC, id D
 
 -- 검수 큐. 재검수 건은 published_at IS NOT NULL 로 구분한다.
 CREATE INDEX idx_articles_review ON articles (status, created_at DESC, id DESC)
-    WHERE status IN ('PENDING_REVIEW', 'DUPLICATE_SUSPECTED', 'READY_TO_PUBLISH');
+    WHERE status IN ('PENDING_REVIEW', 'READY_TO_PUBLISH');
+
+-- "확인 필요 게시글" — 중복 의심분.
+-- 임계값은 애플리케이션 설정이므로 인덱스 조건에는 넣지 않는다.
+CREATE INDEX idx_articles_similarity ON articles (similarity_score DESC, id DESC)
+    WHERE status = 'PENDING_REVIEW' AND similarity_score IS NOT NULL;
+
+-- 결측 판정(날짜/본문/카테고리/출처)은 컬럼이나 인덱스를 두지 않는다.
+-- 미검수 글은 소수라 idx_articles_review 로 좁힌 뒤 필터링해도 충분하다.
 
 -- 인기순 / 추천순. 카운터는 0~5 에 몰려 동점이 많으므로 id tie-breaker 가 필수다.
 CREATE INDEX idx_articles_popular ON articles (bookmark_count DESC, id DESC)

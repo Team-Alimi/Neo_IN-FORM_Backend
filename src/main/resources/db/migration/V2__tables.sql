@@ -161,6 +161,13 @@ CREATE TABLE articles (
     created_by     bigint,
     summary        text,
 
+    -- 크롤러/AI 가 판정한 기존 공지와의 최고 유사도. NULL = 미판정.
+    -- "확인 필요 게시글" 목록은 이 값과 설정 임계값을 비교해 뽑는다.
+    -- 임계값을 DB 에 박지 않으므로 70%/80% 조정이 마이그레이션 없이 가능하다.
+    similarity_score   numeric(5,2),
+    -- 어느 공지와 비슷한지. 점수만으로는 관리자가 병합 판단을 할 수 없다.
+    similar_article_id bigint,
+
     bookmark_count int           NOT NULL DEFAULT 0,
     like_count     int           NOT NULL DEFAULT 0,
     comment_count  int           NOT NULL DEFAULT 0,
@@ -175,7 +182,7 @@ CREATE TABLE articles (
     -- 상태 "집합"은 DB가 막는다. 상태 "전이"(A->B 허용 여부)는 앱 책임이다.
     CONSTRAINT ck_articles_status_by_source CHECK (
         (source_type = 'SCHOOL' AND status IN
-            ('PENDING_REVIEW', 'DUPLICATE_SUSPECTED', 'READY_TO_PUBLISH', 'PUBLISHED', 'TRASHED'))
+            ('PENDING_REVIEW', 'READY_TO_PUBLISH', 'PUBLISHED', 'TRASHED'))
         OR
         (source_type = 'CLUB'   AND status IN
             ('DRAFT', 'PUBLISHED', 'TRASHED'))
@@ -191,9 +198,15 @@ CREATE TABLE articles (
         bookmark_count >= 0 AND like_count >= 0 AND comment_count >= 0 AND view_count >= 0
     ),
     CONSTRAINT ck_articles_version CHECK (version >= 0),
+    CONSTRAINT ck_articles_similarity CHECK (
+        similarity_score IS NULL OR (similarity_score >= 0 AND similarity_score <= 100)
+    ),
+    CONSTRAINT ck_articles_similar_self CHECK (similar_article_id IS DISTINCT FROM id),
 
     CONSTRAINT fk_articles_created_by FOREIGN KEY (created_by)
-        REFERENCES users (id) ON DELETE SET NULL
+        REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT fk_articles_similar FOREIGN KEY (similar_article_id)
+        REFERENCES articles (id) ON DELETE SET NULL
 );
 
 COMMENT ON COLUMN articles.summary IS
@@ -365,11 +378,11 @@ CREATE TABLE article_status_logs (
     --   빼면 CHECK 가 과거 이력의 존재를 부정하게 되고 재검증이 불가능해진다.
     CONSTRAINT ck_asl_from CHECK (
         from_status IS NULL OR from_status IN
-        ('DRAFT', 'PENDING_REVIEW', 'DUPLICATE_SUSPECTED', 'READY_TO_PUBLISH', 'PUBLISHED', 'TRASHED')
+        ('DRAFT', 'PENDING_REVIEW', 'READY_TO_PUBLISH', 'PUBLISHED', 'TRASHED')
     ),
     CONSTRAINT ck_asl_to CHECK (
         to_status IN
-        ('DRAFT', 'PENDING_REVIEW', 'DUPLICATE_SUSPECTED', 'READY_TO_PUBLISH', 'PUBLISHED', 'TRASHED')
+        ('DRAFT', 'PENDING_REVIEW', 'READY_TO_PUBLISH', 'PUBLISHED', 'TRASHED')
     ),
 
     CONSTRAINT fk_asl_article    FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE,

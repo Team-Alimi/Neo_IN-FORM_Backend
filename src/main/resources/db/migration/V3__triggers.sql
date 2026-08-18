@@ -13,7 +13,7 @@
 --
 --     IN001  불변 컬럼 변경 시도
 --     IN002  article.source_type 과 vendor.type 불일치
---     IN003  SCHOOL 출처인데 external_key / source_url 누락
+--     IN003  크롤러가 기록한 출처인데 external_key / source_url 누락
 --     IN004  답글의 답글 (depth 위반)
 --     IN005  다른 공지의 댓글을 parent 로 지정
 --     IN006  major_vendor 가 SCHOOL 이 아님
@@ -294,9 +294,12 @@ BEGIN
             USING ERRCODE = 'IN002';
     END IF;
 
-    IF v_source_type = 'SCHOOL'
+    -- ★ external_key 필수 조건은 "SCHOOL 공지"가 아니라 "크롤러가 쓴 행"이 기준이다.
+    --   관리자는 화면에서 학과와 URL 만 입력하고 원본 게시판의 글 번호는 알 수 없다.
+    --   source_type 기준으로 걸면 관리자의 출처 수기 추가가 전부 IN003 으로 막힌다.
+    IF session_user = 'inform_crawler'
        AND (NEW.external_key IS NULL OR NEW.source_url IS NULL) THEN
-        RAISE EXCEPTION '수집 공지는 external_key 와 source_url 이 필수입니다'
+        RAISE EXCEPTION '크롤러가 기록하는 출처는 external_key 와 source_url 이 필수입니다'
             USING ERRCODE = 'IN003';
     END IF;
 
