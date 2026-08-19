@@ -1,0 +1,130 @@
+name: DB Migration
+
+# 마이그레이션과 DB 이미지를 실제로 실행해 검증합니다.
+#
+# 왜 필요한가 — 이 프로젝트의 무결성 보장은 대부분 DDL 쪽에 있습니다.
+# 트리거 25개, CHECK 23개, 부분/표현식 인덱스, generated column.
+# 이것들은 읽어서는 맞는지 알 수 없고 돌려봐야 압니다.
+# 실제로 로컬 실행 검증에서 두 건이 잡혔습니다.
+#   - 감사 트리거가 AFTER UPDATE OF status 라 크롤러 강등이 기록되지 않던 문제
+#   - 트리거 함수가 SECURITY INVOKER 라 크롤러의 모든 write 가 실패하던 문제
+#
+# pg_bigm 소스 빌드 때문에 4~5분 걸리므로, 관련 파일이 바뀐 PR 에서만 돕니다.
+
+on:
+  push:
+    branches: [ "main", "v2" ]
+    paths:
+      - 'src/main/resources/db/migration/**'
+      - 'docker/db/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/migration.yml'
+  pull_request:
+    branches: [ "main", "v2" ]
+    paths:
+      - 'src/main/resources/db/migration/**'
+      - 'docker/db/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/migration.yml'
+
+concurrency:
+  group: migration-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DB_PORT: 5432
+  DB_NAME: inform
+  DB_USER: inform
+  DB_PASSWORD: ci-password
+  CRAWLER_PASSWORD: ci-crawler-password
+
+jobs:
+  migrate:
+    name: Apply & Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pg_bigm 을 소스 빌드한 커스텀 이미지를 만듭니다.
+      # 공식 postgres 이미지에는 이 확장이 없고, 없으면 V1 이 명시적으로 실패합니다.
+      - name: Build DB image & start
+        run: docker compose up -d --build db
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 40); do
+            if docker compose exec -T db pg_isready -U "$DB_USER" > /dev/null 2>&1; then
+              echo "ready"; exit 0
+            fi
+            sleep 3
+          done
+          echo "DB 기동 실패"; docker compose logs db; exit 1
+
+      # initdb 스크립트가 슈퍼유저로 확장과 크롤러 롤을 만들었는지 확인합니다.
+      # Flyway 는 앱 계정으로 돌기 때문에 이 둘을 만들 수 없습니다.
+      - name: Verify extension & crawler role
+        run: |
+          docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -c \
+            "SELECT 1 FROM pg_extension WHERE extname='pg_bigm'" | grep -q '1 row' \
+            || { echo "pg_bigm 확장 없음"; exit 1; }
+          docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -c \
+            "SELECT 1 FROM pg_roles WHERE rolname='inform_crawler'" | grep -q '1 row' \
+            || { echo "inform_crawler 롤 없음"; exit 1; }
+
+      # Flyway 순서 그대로 적용합니다. 하나라도 실패하면 즉시 중단됩니다.
+      - name: Apply migrations
+        run: |
+          for f in src/main/resources/db/migration/V*.sql; do
+            echo "── $(basename "$f")"
+            docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -q < "$f"
+          done
+
+      # 개수만 세는 게 아니라 "0 이 아닌지"를 확인합니다.
+      # 마이그레이션이 조용히 아무것도 안 만드는 경우를 잡기 위함입니다.
+      - name: Verify schema objects
+        run: |
+          docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" <<'SQL'
+          \set ON_ERROR_STOP on
+          DO $$
+          DECLARE t int; g int; i int; c int; f int;
+          BEGIN
+            SELECT count(*) INTO t FROM pg_tables  WHERE schemaname='public';
+            SELECT count(*) INTO g FROM pg_trigger WHERE NOT tgisinternal;
+            SELECT count(*) INTO i FROM pg_indexes WHERE schemaname='public';
+            SELECT count(*) INTO c FROM pg_constraint WHERE contype='c' AND connamespace='public'::regnamespace;
+            SELECT count(*) INTO f FROM pg_constraint WHERE contype='f' AND connamespace='public'::regnamespace;
+            RAISE NOTICE 'tables=% triggers=% indexes=% checks=% fkeys=%', t, g, i, c, f;
+            IF t < 15 OR g < 20 OR i < 25 OR c < 15 OR f < 20 THEN
+              RAISE EXCEPTION '스키마 객체 수가 기대보다 적습니다';
+            END IF;
+          END $$;
+          SQL
+
+      # 검색이 인덱스를 타는지 확인합니다.
+      # pg_bigm 없이도 쿼리는 돌기 때문에, 인덱스 사용 여부까지 봐야 의미가 있습니다.
+      - name: Verify search index usage
+        run: |
+          docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -c \
+            "SET enable_seqscan=off;
+             EXPLAIN (COSTS OFF) SELECT id FROM articles
+              WHERE search_text LIKE likequery('장학');" \
+            | grep -q 'idx_articles_search_bigm' \
+            || { echo "한글 2글자 검색이 pg_bigm 인덱스를 타지 않습니다"; exit 1; }
+
+      # 크롤러 롤로 접속해 컬럼 단위 권한이 실제로 막는지 확인합니다.
+      # 이 경계가 "크롤러는 공지를 배포할 수 없다"를 DB 레벨에서 보장합니다.
+      - name: Verify crawler privilege boundary
+        run: |
+          docker compose exec -T -e PGPASSWORD="$CRAWLER_PASSWORD" db \
+            psql -U inform_crawler -d "$DB_NAME" -c \
+            "UPDATE articles SET status='PUBLISHED' WHERE id=-1" 2>&1 \
+            | grep -q 'permission denied' \
+            || { echo "크롤러가 status 를 수정할 수 있습니다 — 권한 경계가 깨졌습니다"; exit 1; }
+
+      - name: Dump DB logs on failure
+        if: failure()
+        run: docker compose logs db

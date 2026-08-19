@@ -1,82 +1,62 @@
-name: Java CI with Gradle
+name: CI
+
+# v1 워크플로는 빌드 후 GCP VM 으로 SCP + SSH 배포까지 수행했습니다.
+# v2 에서 전부 제거했습니다. 이유는 셋입니다.
+#   1) GCP 프로젝트가 소실되었습니다 (v1 데이터 전손). 배포 대상이 존재하지 않습니다.
+#   2) 전송하던 Dockerfile / nginx / init-letsencrypt.sh 가 v2 에 없습니다.
+#   3) v2 인프라는 AWS EC2 + Docker 이며 배포 파이프라인을 새로 설계해야 합니다.
+# 배포는 Phase 1~2 완료 후 별도 워크플로로 추가합니다.
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "v2" ]
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "v2" ]
+
+# 같은 브랜치에 연달아 push 하면 이전 실행을 취소합니다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   build:
+    name: Build & Test
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
-        
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
+      - uses: actions/checkout@v4
 
-    - name: Create Configuration Files
-      run: |
-        mkdir -p ./src/main/resources
-        echo "${{ secrets.APPLICATION_YAML }}" > ./src/main/resources/application.yaml
-        mkdir -p ./src/test/resources
-        echo "${{ secrets.APPLICATION_TEST_YAML }}" > ./src/test/resources/application-test.yaml
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+      # 의존성/빌드 캐시를 알아서 관리합니다.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-    - name: Build with Gradle
-      run: ./gradlew build -Dspring.profiles.active=test --info
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-    - name: Deliver JAR to GCP
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        host: ${{ secrets.GCP_VM_IP }}
-        username: ${{ secrets.GCP_SSH_USER }}
-        key: ${{ secrets.GCP_SSH_KEY }}
-        source: "build/libs/*-SNAPSHOT.jar"
-        target: "~/inform-main"
-        strip_components: 2
+      # application.yml 은 비밀값이 없어 저장소에 커밋되어 있습니다.
+      # 비밀값은 전부 환경변수로 주입하므로 CI 에서 설정 파일을 만들 필요가 없습니다.
+      # (v1 은 secrets.APPLICATION_YAML 로 파일을 생성했습니다)
+      - name: Build
+        run: ./gradlew build --no-daemon
 
-    - name: Deliver Deploy Files to GCP
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        host: ${{ secrets.GCP_VM_IP }}
-        username: ${{ secrets.GCP_SSH_USER }}
-        key: ${{ secrets.GCP_SSH_KEY }}
-        source: "Dockerfile,nginx,init-letsencrypt.sh"
-        target: "~/deploy_temp"
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
+          retention-days: 7
 
-    - name: Deploy to GCP
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.GCP_VM_IP }}
-        username: ${{ secrets.GCP_SSH_USER }}
-        key: ${{ secrets.GCP_SSH_KEY }}
-        script: |
-          # 1. 파일 옮기기 (temp -> real)
-          mkdir -p ~/inform-main
-          # 숨김 파일(.env 등)까지 싹 다 옮기기 위해 . 포함
-          cp -r ~/deploy_temp/* ~/inform-main/
-          rm -rf ~/deploy_temp/*
-          
-          cd ~/inform-main
-          # 2. 캐시 없이 새로운 이미지 강제 빌드
-          docker build --no-cache -t inform-main-backend .
-          
-          # 3. 기존 app 컨테이너 확실히 중지 및 제거 (충돌 방지)
-          docker compose rm -fs app
-          
-          # 4. app 서비스만 새로 띄우기
-          docker compose up -d --no-deps app
-
+# TODO 테스트 추가 시
+#   Testcontainers 로 DB 를 띄울 때 공식 postgres 이미지가 아니라
+#   docker/db/Dockerfile 로 빌드한 pg_bigm 포함 이미지를 써야 합니다.
+#   검색 인덱스(gin_bigm_ops)와 generated column 이 그 확장에 의존합니다.

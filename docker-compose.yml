@@ -10,11 +10,13 @@ services:
     build:
       context: ./docker/db
     environment:
-      POSTGRES_DB: inform
-      POSTGRES_USER: inform
-      POSTGRES_PASSWORD: localpassword
+      # .env 나 셸 환경변수로 덮어쓸 수 있습니다.
+      # CI 는 저장소에 커밋된 로컬 기본값을 쓰지 않고 자체 값을 주입합니다.
+      POSTGRES_DB: ${DB_NAME:-inform}
+      POSTGRES_USER: ${DB_USER:-inform}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-localpassword}
       # initdb 스크립트가 inform_crawler 롤을 만들 때 사용
-      CRAWLER_PASSWORD: localcrawlerpassword
+      CRAWLER_PASSWORD: ${CRAWLER_PASSWORD:-localcrawlerpassword}
     ports:
       # 왼쪽만 호스트에 노출되는 포트다. 컨테이너 안 PostgreSQL 은 항상 5432 다.
       # 로컬에 이미 PostgreSQL 이 떠 있거나 다른 프로젝트 컨테이너와 겹치면
