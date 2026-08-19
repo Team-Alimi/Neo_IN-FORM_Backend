@@ -427,20 +427,18 @@ CREATE TABLE user_role_logs (
 );
 
 
--- 조회수 flush 멱등성 보장용.
+-- 조회수 flush 는 Redis 측 rotate/frozen batch 로만 관리한다 (POLICY 13장).
+--   1) active delta key atomic rotate  2) frozen batch 생성
+--   3) BEGIN  4) view_count += delta  5) COMMIT  6) COMMIT 성공 후 frozen 삭제
+-- DB 적용 실패 시 frozen batch 를 유지해 재시도한다.
 --
--- Redis delta 를 DB에 합산한 뒤 Redis 키를 지우는 순서인데,
--- 합산 COMMIT 과 키 삭제 사이에 프로세스가 죽으면 Redis 에 배치가 남는다.
--- 그때 "아직 안 더한 것"인지 "더했는데 못 지운 것"인지 구별할 방법이 없다.
--- 재처리하면 2배, 버리면 유실인데 view_count 는 재계산 원천이 없어 영구 손상이다.
---
--- 합산과 같은 트랜잭션에서 batch_id 를 INSERT ... ON CONFLICT DO NOTHING 하고
--- 삽입 행이 0이면 이미 반영된 배치이므로 건너뛴다. Redis 키 삭제는 순수 정리 작업이 된다.
-CREATE TABLE view_count_flush_log (
-    batch_id   varchar(64) PRIMARY KEY,
-    applied_at timestamptz NOT NULL DEFAULT now()
-);
-
+-- ★ 잔여 위험 — COMMIT 은 성공했는데 6단계 삭제만 실패한 경우,
+--   남은 frozen 이 "미반영"인지 "반영 후 미삭제"인지 Redis 만으로 구별할 수 없어
+--   재시도 시 해당 배치가 중복 반영된다.
+--   조회수는 재계산 원천이 없으므로 이 오차는 되돌릴 수 없다.
+--   팀이 인지하고 감수하기로 한 트레이드오프다 (별도 반영 이력 테이블 미도입).
+--   frozen key 이름에는 배치 식별자를 넣어, 고정 이름 RENAME 이 미반영 orphan 을
+--   덮어쓰는 사고만은 막는다.
 
 CREATE TABLE shedlock (
     name       varchar(64)  PRIMARY KEY,
