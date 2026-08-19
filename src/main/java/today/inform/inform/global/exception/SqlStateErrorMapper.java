@@ -66,22 +66,45 @@ public final class SqlStateErrorMapper {
     /**
      * 트리거가 {@code RAISE EXCEPTION} 에 담은 한글 메시지를 꺼낸다.
      * 사용자에게 그대로 보여줄 수 있을 만큼 구체적인 문구를 쓰고 있으므로 재활용한다.
+     *
+     * <p><b>{@code IN0xx} 일 때만 꺼낸다.</b> 표준 SQLSTATE(23503 등)의 메시지는
+     * PostgreSQL 이 만든 영문이고 제약 이름({@code fk_uv_vendor})까지 들어 있다.
+     * 사용자에게 쓸모가 없을뿐더러 스키마 내부 구조를 그대로 노출한다.
+     * 그런 경우는 {@link ErrorCode} 의 기본 문구가 낫다.
      */
     @Nullable
     public static String extractDbMessage(@Nullable Throwable throwable) {
-        for (Throwable t = throwable; t != null; t = t.getCause()) {
-            if (t instanceof SQLException sqlException) {
+        // 자기 자신을 원인으로 갖는 예외에 대비해 갱신식에서 끊는다.
+        for (Throwable t = throwable; t != null; t = (t.getCause() == t ? null : t.getCause())) {
+            if (t instanceof SQLException sqlException
+                    && isCustomSqlState(sqlException.getSQLState())) {
                 String message = sqlException.getMessage();
                 if (message != null && !message.isBlank()) {
                     // PostgreSQL 은 여러 줄(Detail/Hint)을 붙여 보내므로 첫 줄만 쓴다
                     int newline = message.indexOf('\n');
-                    return (newline > 0 ? message.substring(0, newline) : message).trim();
+                    String firstLine = (newline > 0 ? message.substring(0, newline) : message).trim();
+                    return stripSeverityPrefix(firstLine);
                 }
-            }
-            if (t.getCause() == t) {
-                break;
             }
         }
         return null;
+    }
+
+    /** 우리가 트리거에 부여한 코드인지. {@code IN001}~{@code IN009}. */
+    private static boolean isCustomSqlState(@Nullable String sqlState) {
+        return sqlState != null && sqlState.startsWith("IN");
+    }
+
+    /**
+     * JDBC 드라이버가 붙이는 {@code "ERROR: "} 접두어를 떼어낸다.
+     * 그대로 두면 응답 메시지가 {@code "ERROR: 구독 대상은 ..."} 으로 나간다.
+     */
+    private static String stripSeverityPrefix(String message) {
+        int colon = message.indexOf(": ");
+        // 접두어는 영문 대문자 한 단어다. 한글 본문에 콜론이 있어도 잘리지 않게 확인한다.
+        if (colon > 0 && message.substring(0, colon).chars().allMatch(Character::isUpperCase)) {
+            return message.substring(colon + 2).trim();
+        }
+        return message;
     }
 }

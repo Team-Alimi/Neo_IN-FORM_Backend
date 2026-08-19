@@ -98,4 +98,26 @@ public class User extends BaseTimeEntity {
             this.name = newName;
         }
     }
+
+    public void changeEmailNotification(boolean enabled) {
+        this.emailNotificationEnabled = enabled;
+    }
+
+    /** 이미 완료한 사용자가 다시 호출해도 최초 시각을 유지합니다. */
+    public void completeOnboarding() {
+        if (this.onboardingCompletedAt == null) {
+            this.onboardingCompletedAt = OffsetDateTime.now();
+        }
+    }
+
+    /**
+     * soft delete.
+     *
+     * <p>DB CHECK 가 {@code (status='WITHDRAWN') = (withdrawn_at IS NOT NULL)} 을 강제하므로
+     * 두 값을 반드시 함께 바꿔야 합니다. 하나만 바꾸면 UPDATE 가 거부됩니다.
+     */
+    public void withdraw() {
+        this.status = UserStatus.WITHDRAWN;
+        this.withdrawnAt = OffsetDateTime.now();
+    }
 }
