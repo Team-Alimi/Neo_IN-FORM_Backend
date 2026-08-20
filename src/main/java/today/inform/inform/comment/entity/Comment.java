@@ -6,10 +6,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.OffsetDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 import today.inform.inform.global.entity.BaseTimeEntity;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
@@ -29,10 +31,18 @@ import today.inform.inform.global.exception.ErrorCode;
  * <p><b>삭제 정책</b>
  * 답글이 달린 댓글을 지우면 스레드가 무너지므로 자리를 남깁니다({@code deleted_at}).
  * 답글이 없으면 흔적을 남길 이유가 없어 행을 지웁니다. 판정은 서비스가 합니다.
+ *
+ * <p><b>왜 {@link Version} 이 필요한가</b>
+ * 수정과 삭제가 동시에 일어나면 수정이 삭제를 덮어씁니다 —
+ * 수정 트랜잭션이 로드 시점의 {@code deleted_at = NULL} 을 그대로 다시 써넣기 때문입니다.
+ * 지운 댓글이 새 본문을 달고 되살아나는데, 갱신 행 수가 1이라 예외도 나지 않고
+ * 카운터 트리거가 개수까지 되돌려 놓아 이상을 알아챌 단서가 없습니다.
+ * version 이 있으면 나중 저장이 0행이 되어 409 로 거부됩니다. (V8 마이그레이션)
  */
 @Getter
 @Entity
 @Table(name = "comments")
+@DynamicUpdate
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Comment extends BaseTimeEntity {
 
@@ -59,6 +69,10 @@ public class Comment extends BaseTimeEntity {
     /** soft delete. 값이 있으면 화면에 자리만 남고 {@code comment_count} 에서도 빠집니다. */
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     private Comment(Long articleId, Long userId, Long parentId, String content) {
         validateContent(content);

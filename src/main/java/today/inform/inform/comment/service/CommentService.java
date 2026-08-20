@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,13 +39,14 @@ public class CommentService {
      * <p>답글까지 페이징하지 않는 이유 — 1단계 제한이라 한 원댓글에 달리는 답글이 많아야 몇 개고,
      * 페이지 경계에서 답글이 잘리면 대화가 끊겨 읽을 수 없게 됩니다.
      *
-     * <p>쿼리는 세 번(원댓글 개수·원댓글·답글) 나가고 댓글 수와 무관하게 고정입니다.
+     * <p>쿼리는 2~4번 나갑니다 — 가시성 확인 1, 원댓글 1, 답글 1(원댓글이 있을 때만),
+     * 전체 개수 1(페이지가 가득 찼을 때만). <b>댓글 수에 비례해 늘어나지 않는 것</b>이 요점입니다.
      */
     @Transactional(readOnly = true)
     public Page<CommentResponse> list(Long articleId, Long viewerId, Pageable pageable) {
         readableChecker.requireReadable(articleId);
 
-        Page<CommentRow> roots = commentRepository.findRoots(articleId, pageable);
+        Page<CommentRow> roots = commentRepository.findRoots(articleId, dropSort(pageable));
         if (roots.isEmpty()) {
             return roots.map(row -> CommentResponse.from(row, viewerId, List.of()));
         }
@@ -54,6 +56,23 @@ public class CommentService {
 
         return roots.map(row -> CommentResponse.from(
                 row, viewerId, repliesByParent.getOrDefault(row.id(), List.of())));
+    }
+
+    /**
+     * 클라이언트가 보낸 정렬을 버립니다.
+     *
+     * <p>댓글 정렬은 시간순으로 고정입니다. 그런데 Spring Data 는 {@code @Query} 의
+     * {@code ORDER BY} <b>뒤에 요청한 정렬을 문자열로 이어 붙입니다.</b> 검증은 하지 않습니다.
+     * {@code ?sort=foo} 하나면 JPQL 이 {@code ... , c.foo asc} 가 되어 파싱 단계에서 터지고,
+     * SQLSTATE 가 없는 예외라 <b>500</b> 으로 나갑니다.
+     * 반대로 {@code ?sort=createdAt,desc} 는 200 이지만 고정 정렬 뒤에 붙어 아무 효과가 없습니다 —
+     * 클라이언트는 내림차순을 요청하고 오름차순을 받습니다.
+     *
+     * <p>공지 목록은 화이트리스트({@code ArticleSortSanitizer})가 있어 안전하지만
+     * 여기는 정렬이 고정이라 받을 이유 자체가 없습니다.
+     */
+    private static Pageable dropSort(Pageable pageable) {
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
     }
 
     /**
@@ -69,8 +88,10 @@ public class CommentService {
 
         Comment saved = commentRepository.save(Comment.create(articleId, userId, parentId, content));
 
-        // 아래 조회가 auto-flush 를 일으키므로 INSERT 가 여기서 실행됩니다.
-        // 상위 댓글 규칙 위반(IN004/IN005)도 이 시점에 트리거가 잡아 400 으로 나갑니다.
+        // IDENTITY 전략이라 id 를 받아야 해서 save() 시점에 INSERT 가 이미 나갑니다.
+        // 상위 댓글 규칙 위반(IN004/IN005)도 거기서 트리거가 잡습니다.
+        // 아래 조회는 작성자 이름이 붙은 응답을 만들기 위한 것입니다.
+        // (식별자 전략을 SEQUENCE 로 바꾸면 INSERT 시점이 flush 로 밀리므로 함께 손봐야 합니다)
         CommentRow row = commentRepository.findRowById(saved.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMMENT_NOT_FOUND));
 

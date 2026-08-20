@@ -77,6 +77,10 @@ public class JwtTokenProvider {
         return refreshTokenValidityMs;
     }
 
+    public long accessTokenValidityMs() {
+        return accessTokenValidityMs;
+    }
+
     /**
      * 서명과 만료를 검증하고 payload 를 돌려줍니다.
      *
@@ -99,8 +103,11 @@ public class JwtTokenProvider {
     /**
      * 인증 필터용. 예외를 던지지 않고 실패 시 {@code null} 을 돌려줍니다.
      * 잘못된 토큰은 "인증 안 된 요청"으로 취급하고 Security 가 401 을 냅니다.
+     *
+     * <p>발급 시각을 함께 돌려주는 이유는 {@code TokenRevocationStore} 때문입니다 —
+     * "이 시각 이전에 발급된 토큰은 무효" 를 판정하려면 {@code iat} 가 필요합니다.
      */
-    public AuthPrincipal parseAccessTokenOrNull(String token) {
+    public AccessToken parseAccessTokenOrNull(String token) {
         try {
             Claims claims = Jwts.parser().verifyWith(key).build()
                     .parseSignedClaims(token).getPayload();
@@ -108,7 +115,10 @@ public class JwtTokenProvider {
             if (role == null) {
                 return null;   // refresh token 을 Authorization 헤더로 보낸 경우
             }
-            return new AuthPrincipal(Long.valueOf(claims.getSubject()), UserRole.valueOf(role));
+            AuthPrincipal principal =
+                    new AuthPrincipal(Long.valueOf(claims.getSubject()), UserRole.valueOf(role));
+            Date issuedAt = claims.getIssuedAt();
+            return new AccessToken(principal, issuedAt == null ? null : issuedAt.toInstant());
         } catch (JwtException | IllegalArgumentException e) {
             return null;
         }

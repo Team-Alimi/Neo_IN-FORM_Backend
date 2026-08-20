@@ -23,6 +23,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <p>principal 로 {@link AuthPrincipal} 을 넣습니다.
  * 감사 행위자 주입({@code AuditAwareTransactionManager})이 이 타입을 읽습니다.
+ *
+ * <p>여기서 요청마다 Redis 를 한 번 읽습니다({@link TokenRevocationStore}).
+ * 그 비용을 내는 이유는 stateless 토큰을 되돌릴 다른 방법이 없기 때문입니다 —
+ * 탈퇴한 사용자가 남은 토큰으로 1시간 동안 계속 글을 쓸 수 있으면 탈퇴가 탈퇴가 아닙니다.
  */
 @Component
 @RequiredArgsConstructor
@@ -32,6 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final TokenRevocationStore revocationStore;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -40,8 +45,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
 
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            AuthPrincipal principal = jwtTokenProvider.parseAccessTokenOrNull(token);
-            if (principal != null) {
+            AccessToken accessToken = jwtTokenProvider.parseAccessTokenOrNull(token);
+
+            // ★ 서명이 유효해도 무효화된 토큰이면 인증하지 않습니다.
+            //   탈퇴·전체 로그아웃 이후 남은 토큰이 만료까지 통하는 걸 막습니다.
+            if (accessToken != null
+                    && !revocationStore.isRevoked(accessToken.principal().userId(), accessToken.issuedAt())) {
+                AuthPrincipal principal = accessToken.principal();
                 var authentication = new UsernamePasswordAuthenticationToken(
                         principal,
                         null,

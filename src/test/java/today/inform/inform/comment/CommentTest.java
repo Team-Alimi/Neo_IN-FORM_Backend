@@ -1,9 +1,11 @@
 package today.inform.inform.comment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,11 +13,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform.article.entity.Article;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.article.repository.ArticleRepository;
 import today.inform.inform.comment.dto.response.CommentResponse;
+import today.inform.inform.comment.entity.Comment;
+import today.inform.inform.comment.repository.CommentRepository;
 import today.inform.inform.comment.service.CommentService;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
@@ -36,6 +41,9 @@ class CommentTest extends IntegrationTest {
 
     @Autowired
     private ArticleRepository articleRepository;
+
+    @Autowired
+    private CommentRepository commentRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -206,6 +214,58 @@ class CommentTest extends IntegrationTest {
 
         assertThatThrownBy(() -> commentService.delete(comment.id(), otherUserId))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 회귀 방지
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("★ 클라이언트가 보낸 정렬은 무시된다 — 그대로 쓰면 JPQL 에 섞여 500 이 난다")
+    void clientSortIsIgnored() {
+        commentService.create(articleId, userId, "댓글", null);
+        em.flush();
+
+        assertThatCode(() -> commentService.list(
+                articleId, userId, PageRequest.of(0, 20, Sort.by("존재하지않는속성"))))
+                .as("Spring Data 가 @Query 의 ORDER BY 뒤에 그대로 이어 붙입니다")
+                .doesNotThrowAnyException();
+    }
+
+    /**
+     * <b>동시 실행이라야 드러나는 문제입니다.</b>
+     *
+     * <p>순차로 부르면 {@code findEditable} 이 다시 읽으면서 삭제 상태를 보고 막습니다.
+     * 실제로 깨지는 건 수정 쪽이 <b>삭제 전에 이미 엔티티를 들고 있는</b> 경우입니다 —
+     * 그때는 낡은 {@code deleted_at = NULL} 이 UPDATE 문에 그대로 실려 나갑니다.
+     *
+     * <p>다른 트랜잭션의 soft delete 를 native UPDATE 로 흉내 냅니다.
+     * 실제 {@code softDelete()} 도 JPA 변경이라 version 을 올리므로 조건이 같습니다.
+     */
+    @Test
+    @DisplayName("★ 수정이 다른 트랜잭션의 삭제를 되돌리지 않는다")
+    void editDoesNotResurrectDeletedComment() {
+        CommentResponse root = commentService.create(articleId, userId, "원댓글", null);
+        commentService.create(articleId, otherUserId, "답글", root.id());
+        em.flush();
+        em.clear();
+
+        // 수정 트랜잭션이 삭제 전에 엔티티를 들고 있는 상태
+        Comment loaded = commentRepository.findById(root.id()).orElseThrow();
+
+        // 그 사이 다른 트랜잭션이 자리를 남기며 지웁니다
+        em.createNativeQuery("""
+                        UPDATE comments SET deleted_at = now(), content = '', version = version + 1
+                         WHERE id = :id
+                        """)
+                .setParameter("id", root.id())
+                .executeUpdate();
+
+        loaded.edit("되살아난 본문");
+
+        assertThatThrownBy(() -> em.flush())
+                .as("version 이 없으면 1행이 갱신되어 지운 댓글이 새 본문을 달고 되살아납니다")
+                .isInstanceOf(OptimisticLockException.class);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

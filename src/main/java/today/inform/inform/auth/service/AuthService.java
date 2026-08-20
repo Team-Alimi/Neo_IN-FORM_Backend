@@ -11,6 +11,7 @@ import today.inform.inform.auth.service.GoogleTokenVerifier.GoogleUser;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
 import today.inform.inform.global.security.JwtTokenProvider;
+import today.inform.inform.global.security.TokenRevocationStore;
 import today.inform.inform.user.entity.User;
 import today.inform.inform.user.entity.UserStatus;
 import today.inform.inform.user.repository.UserRepository;
@@ -29,6 +30,7 @@ public class AuthService {
     private final GoogleTokenVerifier googleTokenVerifier;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
+    private final TokenRevocationStore tokenRevocationStore;
     private final UserRepository userRepository;
 
     /**
@@ -103,10 +105,21 @@ public class AuthService {
         }
     }
 
-    /** AUTH-04 전체 기기 로그아웃. */
+    /**
+     * AUTH-04 전체 기기 로그아웃. 회원 탈퇴(USER-03)도 이 경로를 씁니다.
+     *
+     * <p><b>Refresh Token 을 지우는 것만으로는 부족합니다.</b>
+     * 이미 발급된 Access Token 은 stateless 라 만료(1시간)까지 그대로 통합니다.
+     * "모든 기기에서 로그아웃" 을 눌렀는데 다른 기기가 한 시간 더 동작하면 기능이 거짓말을 하는 것이고,
+     * 탈퇴한 사용자가 그 사이 댓글을 계속 남길 수 있으면 탈퇴가 탈퇴가 아닙니다.
+     *
+     * <p>그래서 남은 Access Token 도 함께 무효화합니다.
+     * 기준이 <b>시각</b>이라 직후에 다시 로그인해 받은 새 토큰은 정상 동작합니다.
+     */
     @Transactional(readOnly = true)
     public void logoutAll(Long userId) {
         refreshTokenStore.revokeAll(userId);
+        tokenRevocationStore.revokeAllBefore(userId);
     }
 
     private TokenResponse issueTokens(User user) {
