@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,13 +20,17 @@ import org.springframework.web.bind.annotation.RestController;
 import today.inform.inform.admin.article.dto.request.AdminArticleSearchCondition;
 import today.inform.inform.admin.article.dto.request.ArticleIdsRequest;
 import today.inform.inform.admin.article.dto.request.ChangeStatusRequest;
+import today.inform.inform.admin.article.dto.request.SaveArticleRequest;
+import today.inform.inform.admin.article.dto.response.AdminArticleDetail;
 import today.inform.inform.admin.article.dto.response.AdminArticleSummary;
 import today.inform.inform.admin.article.dto.response.ReviewStats;
 import today.inform.inform.admin.article.dto.response.StatusLogResponse;
 import today.inform.inform.admin.article.service.AdminArticleService;
+import today.inform.inform.admin.article.service.AdminArticleWriteService;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.global.response.ApiResponse;
 import today.inform.inform.global.response.PageResponse;
+import today.inform.inform.global.security.AuthPrincipal;
 
 /**
  * 관리자 공지 검수. <b>{@code /admin/**} 전체가 {@code hasRole("ADMIN")} 입니다</b>
@@ -41,6 +46,7 @@ import today.inform.inform.global.response.PageResponse;
 public class AdminArticleController {
 
     private final AdminArticleService adminArticleService;
+    private final AdminArticleWriteService writeService;
 
     /** ADM-02 대시보드 카드 세 개. */
     @GetMapping("/stats")
@@ -73,6 +79,43 @@ public class AdminArticleController {
                 status, articleId, title, vendorId, categoryId, startsFrom, endsTo, needsCheck);
 
         return ApiResponse.success(PageResponse.from(adminArticleService.search(condition, pageable)));
+    }
+
+    /**
+     * ADM-06 게시글 번호 중복 확인.
+     *
+     * <p><b>보장이 아니라 힌트입니다.</b> 두 관리자가 같은 번호를 확인하면 둘 다 통과하고
+     * 저장에서 한 명이 409 를 받습니다. 클라이언트는 그때 재입력을 유도해야 합니다.
+     */
+    @GetMapping("/check-id")
+    public ApiResponse<Map<String, Boolean>> checkId(@RequestParam(name = "article_id") Long articleId) {
+        return ApiResponse.success(Map.of("available", writeService.isIdAvailable(articleId)));
+    }
+
+    /** ADM-06 / CLB-01 생성. 번호를 지정하면 시퀀스도 함께 밀어올립니다. */
+    @PostMapping
+    public ApiResponse<AdminArticleDetail> create(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @RequestBody SaveArticleRequest request) {
+        return ApiResponse.success(writeService.create(request, principal.userId()));
+    }
+
+    /** ADM-04 상세. 검수 대기든 휴지통이든 열립니다. */
+    @GetMapping("/{articleId}")
+    public ApiResponse<AdminArticleDetail> detail(@PathVariable Long articleId) {
+        return ApiResponse.success(writeService.getDetail(articleId));
+    }
+
+    /**
+     * ADM-05 / CLB-02 수정.
+     *
+     * <p>상태는 여기서 바꾸지 않습니다 — 전이 규칙과 감사 이력을 타야 하므로
+     * {@code PATCH /admin/articles/status} 로만 갑니다.
+     */
+    @PatchMapping("/{articleId}")
+    public ApiResponse<AdminArticleDetail> update(@PathVariable Long articleId,
+                                                  @Valid @RequestBody SaveArticleRequest request) {
+        return ApiResponse.success(writeService.update(articleId, request));
     }
 
     /** ADM-09 휴지통 목록. "상태" 는 휴지통에 들어가기 직전 상태입니다. */

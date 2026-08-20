@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 import today.inform.inform.admin.article.dto.request.AdminArticleSearchCondition;
+import today.inform.inform.admin.article.dto.response.AdminArticleDetail;
 import today.inform.inform.admin.article.dto.response.AdminArticleSummary;
 import today.inform.inform.admin.article.dto.response.ReviewStats;
 import today.inform.inform.admin.article.dto.response.StatusLogResponse;
@@ -204,6 +206,116 @@ public class AdminArticleQueryRepository {
             }
         }
         return byArticle;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ADM-04 상세
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 관리자 상세. <b>상태를 가리지 않습니다</b> — 검수 대기든 휴지통이든 열려야 합니다.
+     * 그게 사용자 상세와의 본질적인 차이입니다.
+     */
+    public Optional<AdminArticleDetail> findDetail(Long articleId) {
+        Query query = em.createNativeQuery("""
+                        SELECT a.id                 AS id,
+                               a.source_type        AS source_type,
+                               a.status             AS status,
+                               a.title              AS title,
+                               a.content            AS content,
+                               a.summary            AS summary,
+                               a.starts_on          AS starts_on,
+                               a.ends_on            AS ends_on,
+                               a.published_at       AS published_at,
+                               a.similarity_score   AS similarity_score,
+                               a.similar_article_id AS similar_article_id,
+                               a.created_by         AS created_by,
+                               a.created_at         AS created_at,
+                               a.updated_at         AS updated_at
+                          FROM articles a WHERE a.id = :articleId
+                        """)
+                .setParameter("articleId", articleId);
+
+        @SuppressWarnings("unchecked")
+        NativeQuery<Object[]> nativeQuery = query.unwrap(NativeQuery.class);
+        List<Object[]> rows = nativeQuery
+                .addScalar("id", StandardBasicTypes.LONG)
+                .addScalar("source_type", StandardBasicTypes.STRING)
+                .addScalar("status", StandardBasicTypes.STRING)
+                .addScalar("title", StandardBasicTypes.STRING)
+                .addScalar("content", StandardBasicTypes.STRING)
+                .addScalar("summary", StandardBasicTypes.STRING)
+                .addScalar("starts_on", StandardBasicTypes.LOCAL_DATE)
+                .addScalar("ends_on", StandardBasicTypes.LOCAL_DATE)
+                .addScalar("published_at", StandardBasicTypes.OFFSET_DATE_TIME)
+                .addScalar("similarity_score", StandardBasicTypes.BIG_DECIMAL)
+                .addScalar("similar_article_id", StandardBasicTypes.LONG)
+                .addScalar("created_by", StandardBasicTypes.LONG)
+                .addScalar("created_at", StandardBasicTypes.OFFSET_DATE_TIME)
+                .addScalar("updated_at", StandardBasicTypes.OFFSET_DATE_TIME)
+                .getResultList();
+
+        if (rows.isEmpty()) {
+            return Optional.empty();
+        }
+        Object[] row = rows.get(0);
+        return Optional.of(new AdminArticleDetail(
+                (Long) row[0],
+                SourceType.valueOf((String) row[1]),
+                ArticleStatus.valueOf((String) row[2]),
+                (String) row[3],
+                (String) row[4],
+                (String) row[5],
+                (LocalDate) row[6],
+                (LocalDate) row[7],
+                (OffsetDateTime) row[8],
+                (BigDecimal) row[9],
+                (Long) row[10],
+                (Long) row[11],
+                (OffsetDateTime) row[12],
+                (OffsetDateTime) row[13],
+                findDetailCategories(articleId),
+                findDetailVendors(articleId)));
+    }
+
+    private List<AdminArticleDetail.CategoryRef> findDetailCategories(Long articleId) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery("""
+                        SELECT c.id, c.name FROM article_categories ac
+                          JOIN categories c ON c.id = ac.category_id
+                         WHERE ac.article_id = :articleId ORDER BY c.sort_order, c.id
+                        """)
+                .setParameter("articleId", articleId).getResultList();
+
+        List<AdminArticleDetail.CategoryRef> categories = new ArrayList<>(rows.size());
+        for (Object[] row : rows) {
+            categories.add(new AdminArticleDetail.CategoryRef(
+                    ((Number) row[0]).longValue(), (String) row[1]));
+        }
+        return categories;
+    }
+
+    /** 원본 식별자까지 내려줍니다 — 관리자가 수집분과 수기 추가분을 구분해야 합니다. */
+    private List<AdminArticleDetail.VendorRef> findDetailVendors(Long articleId) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery("""
+                        SELECT av.id, v.id, v.name, av.source_url, av.external_key
+                          FROM article_vendors av
+                          JOIN vendors v ON v.id = av.vendor_id
+                         WHERE av.article_id = :articleId ORDER BY av.id
+                        """)
+                .setParameter("articleId", articleId).getResultList();
+
+        List<AdminArticleDetail.VendorRef> vendors = new ArrayList<>(rows.size());
+        for (Object[] row : rows) {
+            vendors.add(new AdminArticleDetail.VendorRef(
+                    ((Number) row[0]).longValue(),
+                    ((Number) row[1]).longValue(),
+                    (String) row[2],
+                    (String) row[3],
+                    (String) row[4]));
+        }
+        return vendors;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

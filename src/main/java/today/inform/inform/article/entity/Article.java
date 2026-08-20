@@ -206,6 +206,26 @@ public class Article extends BaseTimeEntity {
     }
 
     /**
+     * 초기 상태를 지정해 만듭니다. ADM-06 관리자 작성 전용입니다.
+     *
+     * <p><b>전이가 아니라 생성입니다.</b> {@link #changeStatus} 를 거치지 않으므로
+     * "검수 건너뛰기 금지" 규칙이 적용되지 않습니다 — 관리자가 직접 쓴 글은
+     * 검수할 대상이 자기 자신이라 단계를 밟을 이유가 없습니다.
+     * 크롤러도 정상 공지를 곧바로 {@code PUBLISHED} 로 넣습니다(같은 이유).
+     *
+     * <p>대신 <b>출처 유형에 맞는 상태인지는 확인</b>합니다.
+     * DB CHECK 도 막지만 거기까지 가면 23514 로 뭉뚱그려져 어느 값이 문제인지 알 수 없습니다.
+     */
+    public static Article createWithStatus(SourceType sourceType, ArticleStatus initialStatus,
+                                           String title, String content,
+                                           LocalDate startsOn, LocalDate endsOn, Long createdBy) {
+        if (!initialStatus.isAllowedFor(sourceType)) {
+            throw new BusinessException(ErrorCode.INVALID_STATUS_FOR_SOURCE);
+        }
+        return new Article(sourceType, initialStatus, title, content, startsOn, endsOn, createdBy);
+    }
+
+    /**
      * 관리자가 직접 쓴 학교 공지.
      *
      * <p>크롤러 수집분과 같은 {@code PENDING_REVIEW} 로 시작합니다.
