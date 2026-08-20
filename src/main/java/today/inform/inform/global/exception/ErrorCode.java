@@ -65,6 +65,7 @@ public enum ErrorCode {
     // ── Comment / Announcement ──────────────────────────────────────────────
     COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_NOT_FOUND", "존재하지 않는 댓글입니다."),
     ANNOUNCEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "ANNOUNCEMENT_NOT_FOUND", "존재하지 않는 서비스 공지입니다."),
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_NOT_FOUND", "존재하지 않는 알림입니다."),
 
     // ── File ────────────────────────────────────────────────────────────────
     ATTACHMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "ATTACHMENT_NOT_FOUND", "존재하지 않는 첨부파일입니다."),

@@ -35,6 +35,10 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 
     boolean existsByParentId(Long parentId);
 
+    /** 알림 본문에 넣을 공지 제목. 알림 한 건 때문에 공지 엔티티를 통째로 읽지 않습니다. */
+    @Query("SELECT a.title FROM today.inform.inform.article.entity.Article a WHERE a.id = :articleId")
+    Optional<String> findArticleTitle(@Param("articleId") Long articleId);
+
     /**
      * CMT-02 원댓글 목록. 답글은 {@link #findReplies} 가 따로 가져옵니다.
      *

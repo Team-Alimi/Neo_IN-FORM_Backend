@@ -17,6 +17,7 @@ import today.inform.inform.comment.repository.CommentRepository;
 import today.inform.inform.comment.repository.CommentRow;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
+import today.inform.inform.notification.service.NotificationService;
 
 /**
  * CMT-01 ~ CMT-04.
@@ -32,6 +33,7 @@ public class CommentService {
 
     private final CommentRepository commentRepository;
     private final ArticleReadableChecker readableChecker;
+    private final NotificationService notificationService;
 
     /**
      * CMT-02 목록. 원댓글은 시간순으로 페이징하고 답글은 그 아래 전부 붙입니다.
@@ -95,7 +97,26 @@ public class CommentService {
         CommentRow row = commentRepository.findRowById(saved.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMMENT_NOT_FOUND));
 
+        if (saved.isReply()) {
+            notifyParentAuthor(articleId, parentId, saved.getId(), userId, content);
+        }
         return CommentResponse.from(row, userId, List.of());
+    }
+
+    /**
+     * CMT-05 답글 알림.
+     *
+     * <p><b>같은 트랜잭션입니다.</b> 댓글은 남았는데 알림만 사라지는 상태를 만들지 않기 위해서입니다.
+     * 수신자 판정("자기 댓글에 자기가 단 답글은 제외")과 중복 방지는 저장소의 쿼리 한 문장이 합니다.
+     *
+     * <p>공지 제목을 못 찾는 경우는 없습니다 — 바로 위에서 가시성을 확인했습니다.
+     * 그래도 방어적으로 다루는 이유는, 여기서 예외가 나면 <b>댓글 작성 전체가 실패</b>하기 때문입니다.
+     * 알림 본문에 제목을 못 넣는 것이 댓글을 못 쓰는 것보다 낫습니다.
+     */
+    private void notifyParentAuthor(Long articleId, Long parentId, Long replyId,
+                                    Long actorId, String content) {
+        String articleTitle = commentRepository.findArticleTitle(articleId).orElse("공지");
+        notificationService.notifyReply(parentId, replyId, actorId, articleTitle, content);
     }
 
     /** CMT-03 수정. 본인만. */
