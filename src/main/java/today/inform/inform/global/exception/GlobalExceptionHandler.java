@@ -5,6 +5,8 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -97,6 +99,33 @@ public class GlobalExceptionHandler {
      * 존재하지 않는 경로 요청이 전부 서버 장애로 보이고, 프론트는 5xx 를
      * 재시도 대상으로 다루므로 오타 경로에 재시도가 붙습니다.
      */
+    /**
+     * 요청 파라미터·경로 변수를 선언된 타입으로 바꾸지 못한 경우 — 400.
+     *
+     * <p>{@code ?source_type=club}(enum 은 대문자), {@code /articles/abc},
+     * {@code ?starts_from=2026-13-01} 이 여기 해당합니다.
+     *
+     * <p>이 핸들러가 없으면 {@code @ExceptionHandler(Exception.class)} 가 먼저 잡아
+     * <b>500 으로 나갑니다.</b> Spring 의 기본 400 처리는 컨트롤러 어드바이스가
+     * 이미 예외를 처리한 뒤라 도달하지 않습니다.
+     * 프론트가 5xx 를 재시도하면 고쳐질 리 없는 요청을 계속 반복합니다.
+     *
+     * <p>어떤 값이 문제였는지는 알려 주되 예외 원문은 내보내지 않습니다 —
+     * 파라미터 이름과 기대 타입만으로 클라이언트가 고치기에 충분합니다.
+     */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class,
+                       MissingServletRequestParameterException.class})
+    public ResponseEntity<ApiResponse<Void>> handleParameterBindingException(Exception e) {
+        String message = (e instanceof MethodArgumentTypeMismatchException mismatch)
+                ? mismatch.getName() + ": 값의 형식이 올바르지 않습니다."
+                : ((MissingServletRequestParameterException) e).getParameterName() + ": 필수 파라미터입니다.";
+
+        log.warn("Parameter binding failed: {}", e.getMessage());
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
+                .body(ApiResponse.fail(ErrorCode.INVALID_INPUT_VALUE.getCode(), message));
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException e) {
         return toResponse(ErrorCode.RESOURCE_NOT_FOUND);

@@ -37,6 +37,12 @@ public final class SqlStateErrorMapper {
             Map.entry("23503", ErrorCode.RELATED_RESOURCE_NOT_FOUND),  // foreign_key_violation
             Map.entry("23502", ErrorCode.INVALID_INPUT_VALUE),         // not_null_violation
 
+            // 일시적 경합. 재시도하면 성공할 수 있는 실패라 500 과 구분해야 한다.
+            // 500 으로 두면 프론트가 "서버 장애" 로 다루고, 사용자에게는 다시 눌러 보라는
+            // 안내조차 못 준다.
+            Map.entry("40P01", ErrorCode.RESOURCE_BUSY),                // deadlock_detected
+            Map.entry("40001", ErrorCode.RESOURCE_BUSY),                // serialization_failure
+
             // 길이/범위 초과. 앱이 먼저 막는 것이 원칙이지만 빠뜨린 경로가 500 으로 새지 않게 한다.
             Map.entry("22001", ErrorCode.INVALID_INPUT_VALUE),         // string_data_right_truncation
             Map.entry("22003", ErrorCode.INVALID_INPUT_VALUE)          // numeric_value_out_of_range

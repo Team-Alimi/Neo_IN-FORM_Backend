@@ -71,6 +71,10 @@ dependencies {
 
 	// Test
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	// ★ Spring Boot 4.0 은 테스트 자동설정도 기술별 모듈로 분리했다.
+	//   이게 없으면 @AutoConfigureMockMvc 가 클래스패스에 아예 없다
+	//   (spring-boot-flyway 와 같은 이유. starter-test 에 들어 있지 않다).
+	testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
 	testImplementation 'org.springframework.security:spring-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	// Spring Boot 4.0 의 dependency management 는 Testcontainers 버전을 관리하지 않는다.

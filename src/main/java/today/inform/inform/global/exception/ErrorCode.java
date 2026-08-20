@@ -13,6 +13,8 @@ public enum ErrorCode {
     INVALID_STATE_TRANSITION(HttpStatus.BAD_REQUEST, "INVALID_STATE_TRANSITION", "허용되지 않은 상태 변경입니다."),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION",
             "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도해 주세요."),
+    RESOURCE_BUSY(HttpStatus.CONFLICT, "RESOURCE_BUSY",
+            "요청이 일시적으로 충돌했습니다. 잠시 후 다시 시도해 주세요."),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "인증이 필요합니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "권한이 없습니다."),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "존재하지 않는 경로입니다."),

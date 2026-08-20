@@ -13,7 +13,6 @@ import today.inform.inform.article.repository.ArticleQueryRepository;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
 import today.inform.inform.global.security.AuthPrincipal;
-import today.inform.inform.global.support.ArticleSortSanitizer;
 import today.inform.inform.user.entity.UserRole;
 
 /**
@@ -30,6 +29,7 @@ public class ArticleService {
     private static final int POPULAR_MAX_LIMIT = 20;
 
     private final ArticleQueryRepository articleQueryRepository;
+    private final ArticleQueryValidator queryValidator;
     private final ArticleViewCounter viewCounter;
     private final ArticleSummaryGenerator summaryGenerator;
 
@@ -38,7 +38,7 @@ public class ArticleService {
     public Page<ArticleSummaryResponse> search(ArticleSearchCondition condition,
                                                Pageable pageable,
                                                AuthPrincipal principal) {
-        validate(condition, pageable);
+        queryValidator.validate(condition, pageable);
         return articleQueryRepository.search(condition, principal.userId(), pageable);
     }
 
@@ -76,23 +76,4 @@ public class ArticleService {
         return detail;
     }
 
-    /**
-     * 목록 요청의 사전 검증.
-     *
-     * <p>DB 까지 보내면 되는 것도 있지만, 이 둘은 <b>보내면 안 되는</b> 요청입니다.
-     * 한 글자 검색은 인덱스가 후보를 못 좁혀 사실상 전수 확인이 되고,
-     * 마감 필터 없는 마감순 정렬은 부분 인덱스를 벗어나 전체 정렬이 됩니다.
-     * 둘 다 "느린 응답" 이 아니라 "DB 를 붙잡는 요청" 이라 앞에서 막습니다.
-     */
-    private void validate(ArticleSearchCondition condition, Pageable pageable) {
-        if (condition.hasKeyword()
-                && condition.trimmedKeyword().length() < ArticleSearchCondition.MIN_KEYWORD_LENGTH) {
-            throw new BusinessException(ErrorCode.SEARCH_KEYWORD_TOO_SHORT);
-        }
-        if (ArticleSortSanitizer.isDeadlineSort(pageable.getSort()) && !condition.isDeadlineOnly()) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_SORT_PROPERTY,
-                    "마감 임박순은 has_deadline=true 와 함께만 사용할 수 있습니다.");
-        }
-    }
 }

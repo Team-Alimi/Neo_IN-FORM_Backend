@@ -12,6 +12,8 @@ import today.inform.inform.article.entity.SourceType;
  * 항목마다 조회하면 한 페이지에 40번의 추가 쿼리가 나갑니다.
  *
  * @param isBookmarked ART-06. 로그인 사용자 기준
+ * @param underReview  재검수로 내려간 공지. 북마크 목록에서만 true 가 될 수 있고
+ *                     프론트가 "검수 중" 배지를 답니다. 피드에는 애초에 나오지 않습니다.
  */
 public record ArticleSummaryResponse(
         Long id,
@@ -27,6 +29,7 @@ public record ArticleSummaryResponse(
         long viewCount,
         boolean isBookmarked,
         boolean isLiked,
+        boolean underReview,
         List<NamedRef> vendors,
         List<NamedRef> categories) {
 

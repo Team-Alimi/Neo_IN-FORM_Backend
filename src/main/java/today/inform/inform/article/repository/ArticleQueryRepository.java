@@ -67,6 +67,37 @@ public class ArticleQueryRepository {
     private static final String VISIBLE_OR_UNDER_REVIEW =
             "(a.status = 'PUBLISHED' OR (a.status = 'PENDING_REVIEW' AND a.published_at IS NOT NULL))";
 
+    /**
+     * 목록의 성격. 노출 기준과 개인화 필터 적용 여부가 갈립니다.
+     *
+     * <p>기준을 파라미터로 받지 않고 enum 으로 고정한 이유는, 호출부가 실수로
+     * 넓은 기준을 넘기면 <b>미배포 공지가 피드에 새어 나가기</b> 때문입니다.
+     * 넘길 수 있는 값이 둘뿐이면 그 실수를 코드 리뷰에서 볼 수 있습니다.
+     */
+    private enum Scope {
+        /** 일반 피드. 배포된 공지만. "관심 분야만 보기" 토글이 걸립니다. */
+        FEED(VISIBLE, true),
+
+        /**
+         * 북마크 목록. 재검수로 내려간 공지까지 보여 줍니다.
+         *
+         * <p>크롤러가 오탈자 하나만 고쳐도 재검수 대기가 되는데, 피드 기준을 그대로 쓰면
+         * <b>사용자가 저장해 둔 공지가 목록에서 사라집니다.</b>
+         *
+         * <p>관심 분야 필터는 걸지 않습니다. 내가 직접 저장한 목록을
+         * 관심 분야로 다시 거르는 건 사용자가 기대하지 않는 동작입니다.
+         */
+        BOOKMARKS(VISIBLE_OR_UNDER_REVIEW, false);
+
+        private final String visibility;
+        private final boolean interestFilterApplies;
+
+        Scope(String visibility, boolean interestFilterApplies) {
+            this.visibility = visibility;
+            this.interestFilterApplies = interestFilterApplies;
+        }
+    }
+
     private static final String SUMMARY_COLUMNS = """
             a.id                AS id,
             a.source_type       AS source_type,
@@ -82,7 +113,8 @@ public class ArticleQueryRepository {
             EXISTS (SELECT 1 FROM bookmarks b
                      WHERE b.article_id = a.id AND b.user_id = :userId)     AS is_bookmarked,
             EXISTS (SELECT 1 FROM article_likes l
-                     WHERE l.article_id = a.id AND l.user_id = :userId)     AS is_liked
+                     WHERE l.article_id = a.id AND l.user_id = :userId)     AS is_liked,
+            (a.status = 'PENDING_REVIEW')                                   AS under_review
             """;
 
     @PersistenceContext
@@ -92,10 +124,24 @@ public class ArticleQueryRepository {
     // ART-01 / 03 / 04 목록
     // ─────────────────────────────────────────────────────────────────────────
 
+    /** ART-01 / 03 / 04 피드. */
     public Page<ArticleSummaryResponse> search(ArticleSearchCondition condition, Long userId, Pageable pageable) {
+        return search(Scope.FEED, condition, userId, pageable);
+    }
+
+    /**
+     * BMK-02 북마크 목록. 필터·정렬은 피드와 같고 노출 기준만 넓습니다.
+     */
+    public Page<ArticleSummaryResponse> searchBookmarked(ArticleSearchCondition condition,
+                                                         Long userId, Pageable pageable) {
+        return search(Scope.BOOKMARKS, condition, userId, pageable);
+    }
+
+    private Page<ArticleSummaryResponse> search(Scope scope, ArticleSearchCondition condition,
+                                                Long userId, Pageable pageable) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", userId);
-        String where = buildWhere(condition, params);
+        String where = buildWhere(scope, condition, params);
 
         // ★ 정렬 검증을 count 보다 먼저 합니다.
         //   나중에 하면 결과가 0건일 때 아래에서 조기 반환되어 검증이 통째로 건너뛰어집니다.
@@ -139,14 +185,13 @@ public class ArticleQueryRepository {
 
     public Optional<ArticleDetailResponse> findDetail(Long articleId, Long userId) {
         Query query = em.createNativeQuery(
-                "SELECT " + SUMMARY_COLUMNS + ", a.content AS content, a.status AS status"
+                "SELECT " + SUMMARY_COLUMNS + ", a.content AS content"
                         + " FROM articles a WHERE a.id = :articleId AND " + VISIBLE_OR_UNDER_REVIEW);
         query.setParameter("articleId", articleId);
         query.setParameter("userId", userId);
 
         List<Object[]> rows = declareSummaryScalars(query)
                 .addScalar("content", StandardBasicTypes.STRING)
-                .addScalar("status", StandardBasicTypes.STRING)
                 .getResultList();
         if (rows.isEmpty()) {
             return Optional.empty();
@@ -157,7 +202,7 @@ public class ArticleQueryRepository {
                 (Long) row[0],
                 SourceType.valueOf((String) row[1]),
                 (String) row[2],
-                (String) row[13],                       // content
+                (String) row[14],                       // content
                 (String) row[3],                        // summary — null 일 수 있습니다
                 (OffsetDateTime) row[4],
                 (LocalDate) row[5],
@@ -168,7 +213,7 @@ public class ArticleQueryRepository {
                 (Long) row[10],
                 (Boolean) row[11],
                 (Boolean) row[12],
-                "PENDING_REVIEW".equals(row[14]),       // underReview
+                (Boolean) row[13],                      // under_review
                 findCategories(List.of(articleId)).getOrDefault(articleId, List.of()),
                 findSources(articleId),
                 findAttachments(articleId)));
@@ -266,8 +311,13 @@ public class ArticleQueryRepository {
      * count 쿼리와 본문 쿼리가 <b>같은 문자열</b>을 쓰도록 한 곳에서 만듭니다 —
      * 따로 만들면 조건이 어긋나 목록과 총 개수가 맞지 않게 됩니다.
      */
-    private String buildWhere(ArticleSearchCondition condition, Map<String, Object> params) {
-        StringBuilder where = new StringBuilder(VISIBLE);
+    private String buildWhere(Scope scope, ArticleSearchCondition condition, Map<String, Object> params) {
+        StringBuilder where = new StringBuilder(scope.visibility);
+
+        if (scope == Scope.BOOKMARKS) {
+            where.append(" AND EXISTS (SELECT 1 FROM bookmarks bm"
+                    + " WHERE bm.article_id = a.id AND bm.user_id = :userId)");
+        }
 
         if (condition.sourceType() != null) {
             where.append(" AND a.source_type = :sourceType");
@@ -283,7 +333,7 @@ public class ArticleQueryRepository {
                     + " WHERE av.article_id = a.id AND av.vendor_id IN (:vendorIds))");
             params.put("vendorIds", condition.vendorIds());
         }
-        if (condition.isInterestOnly()) {
+        if (scope.interestFilterApplies && condition.isInterestOnly()) {
             where.append(" AND EXISTS (SELECT 1 FROM article_categories ac"
                     + " JOIN user_interest_categories ui ON ui.category_id = ac.category_id"
                     + " WHERE ac.article_id = a.id AND ui.user_id = :userId)");
@@ -381,7 +431,8 @@ public class ArticleQueryRepository {
                 .addScalar("comment_count", StandardBasicTypes.INTEGER)
                 .addScalar("view_count", StandardBasicTypes.LONG)
                 .addScalar("is_bookmarked", StandardBasicTypes.BOOLEAN)
-                .addScalar("is_liked", StandardBasicTypes.BOOLEAN);
+                .addScalar("is_liked", StandardBasicTypes.BOOLEAN)
+                .addScalar("under_review", StandardBasicTypes.BOOLEAN);
     }
 
     private List<ArticleSummaryResponse> toSummaries(List<Object[]> rows) {
@@ -409,6 +460,7 @@ public class ArticleQueryRepository {
                     (Long) row[10],
                     (Boolean) row[11],
                     (Boolean) row[12],
+                    (Boolean) row[13],
                     vendors.getOrDefault(id, Collections.emptyList()),
                     categories.getOrDefault(id, Collections.emptyList())));
         }

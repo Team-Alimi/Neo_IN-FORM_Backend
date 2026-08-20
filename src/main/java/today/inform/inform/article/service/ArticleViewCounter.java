@@ -1,6 +1,7 @@
 package today.inform.inform.article.service;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,9 +85,20 @@ public class ArticleViewCounter {
             // FLUSHING_KEY 가 이미 있었다면 지난 회차가 중간에 죽은 것이므로 이어서 처리합니다.
 
             Map<Object, Object> deltas = redis.opsForHash().entries(FLUSHING_KEY);
-            for (Map.Entry<Object, Object> entry : deltas.entrySet()) {
-                long articleId = Long.parseLong((String) entry.getKey());
-                long delta = Long.parseLong((String) entry.getValue());
+
+            // ★ article_id 오름차순으로 반영합니다. Redis 가 돌려주는 순서를 그대로 쓰면 안 됩니다.
+            //   이 트랜잭션은 주기 동안 조회된 모든 공지 행의 배타 잠금을 커밋까지 쥡니다.
+            //   같은 articles 행 여러 개를 잠그는 트랜잭션이 하나 더 있습니다 —
+            //   북마크 일괄 삭제(BMK-04)가 카운터 트리거를 통해 그렇게 합니다.
+            //   두 쪽의 획득 순서가 엇갈리면 서로를 기다리다 데드락이 납니다.
+            //   순서를 한쪽이라도 고정해 두면 순환이 생길 여지가 줄어듭니다.
+            List<Long> articleIds = deltas.keySet().stream()
+                    .map(key -> Long.parseLong((String) key))
+                    .sorted()
+                    .toList();
+
+            for (Long articleId : articleIds) {
+                long delta = Long.parseLong((String) deltas.get(String.valueOf(articleId)));
                 if (delta > 0) {
                     articleRepository.addViewCount(articleId, delta);
                 }
