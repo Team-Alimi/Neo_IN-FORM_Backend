@@ -12,6 +12,7 @@ import today.inform.inform.global.exception.ErrorCode;
 import today.inform.inform.user.dto.response.SelectedItemResponse;
 import today.inform.inform.user.dto.response.UserProfileResponse;
 import today.inform.inform.user.entity.User;
+import today.inform.inform.user.entity.UserRole;
 import today.inform.inform.user.repository.PreferenceType;
 import today.inform.inform.user.repository.UserPreferenceRepository;
 import today.inform.inform.user.repository.UserRepository;
@@ -107,6 +108,7 @@ public class UserService {
     @Transactional
     public void withdraw(Long userId) {
         User user = findActive(userId);
+        requireNotAdmin(user);
 
         for (PreferenceType type : PreferenceType.values()) {
             preferenceRepository.deleteAll(userId, type);
@@ -116,6 +118,32 @@ public class UserService {
         executeDelete("DELETE FROM notifications WHERE user_id = :userId", userId);
 
         user.withdraw();
+    }
+
+    /**
+     * 관리자는 스스로 탈퇴할 수 없습니다.
+     *
+     * <p>ADM-16 이 "자기 자신의 권한은 못 바꾼다" 로 지키려는 불변식 —
+     * <b>활성 관리자는 최소 한 명 남는다</b> — 이 탈퇴 경로로 그대로 우회됩니다.
+     * 탈퇴해도 {@code role} 은 ADMIN 인 채 {@code status} 만 WITHDRAWN 이 되므로,
+     * 마지막 관리자가 탈퇴하면 <b>활성 관리자가 0명</b>이 됩니다.
+     * 그 상태에서는 권한을 되돌릴 API 를 쓸 수 있는 사람이 없어 DB 를 직접 고쳐야 합니다.
+     *
+     * <p>게다가 {@code uk_users_active_email} 이 {@code status='ACTIVE'} 부분 유니크라
+     * 그 사람이 다시 구글 로그인하면 {@code findByEmailAndStatus(email, ACTIVE)} 가 비어
+     * <b>{@code role='USER'} 인 새 계정</b>이 만들어집니다. 관리자 권한은 영영 돌아오지 않습니다.
+     *
+     * <p>"관리자가 한 명뿐일 때만 막기" 로 세지 않는 이유는 그 판정이 경합에 취약하기 때문입니다.
+     * 두 관리자가 동시에 탈퇴하면 둘 다 "나 말고 한 명 더 있다" 를 보고 통과합니다.
+     * 자기 자신을 무조건 막으면 순서와 무관하게 최소 한 명이 남습니다 — ADM-16 과 같은 논리입니다.
+     */
+    private static void requireNotAdmin(User user) {
+        if (user.getRole() == UserRole.ADMIN) {
+            throw new BusinessException(
+                    ErrorCode.CANNOT_CHANGE_OWN_ROLE,
+                    "관리자 권한을 가진 계정은 탈퇴할 수 없습니다. "
+                            + "다른 관리자에게 권한 해제를 요청한 뒤 다시 시도해 주세요.");
+        }
     }
 
     private void executeDelete(String sql, Long userId) {

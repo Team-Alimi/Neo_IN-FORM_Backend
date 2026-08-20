@@ -26,7 +26,7 @@ public enum ErrorCode {
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "DUPLICATE_RESOURCE", "이미 존재하는 값입니다."),
     RELATED_RESOURCE_NOT_FOUND(HttpStatus.BAD_REQUEST, "RELATED_RESOURCE_NOT_FOUND", "참조 대상이 존재하지 않습니다."),
 
-    // ── DB 트리거 위반 (사용자 정의 SQLSTATE IN001~IN009) ────────────────────
+    // ── DB 트리거 위반 (사용자 정의 SQLSTATE IN001~IN010) ────────────────────
     // POLICY 23장 매핑표와 1:1 대응한다. 여기를 고치면 그 표도 함께 고칠 것.
     IMMUTABLE_FIELD(HttpStatus.BAD_REQUEST, "IMMUTABLE_FIELD", "생성 후 변경할 수 없는 값입니다."),
     VENDOR_TYPE_MISMATCH(HttpStatus.BAD_REQUEST, "VENDOR_TYPE_MISMATCH", "공지 출처와 제공처 유형이 일치하지 않습니다."),
@@ -37,6 +37,7 @@ public enum ErrorCode {
     CRAWLER_STORAGE_POLICY(HttpStatus.BAD_REQUEST, "CRAWLER_STORAGE_POLICY", "허용되지 않은 첨부 저장 방식입니다."),
     INACTIVE_CLUB_TYPE(HttpStatus.BAD_REQUEST, "INACTIVE_CLUB_TYPE", "비활성 동아리 유형은 선택할 수 없습니다."),
     NOT_CLUB_VENDOR(HttpStatus.BAD_REQUEST, "NOT_CLUB_VENDOR", "동아리 유형은 동아리 제공처에만 지정할 수 있습니다."),
+    INACTIVE_CATEGORY(HttpStatus.BAD_REQUEST, "INACTIVE_CATEGORY", "비활성 분류는 선택할 수 없습니다."),
 
     // ── Auth ────────────────────────────────────────────────────────────────
     INVALID_ID_TOKEN(HttpStatus.UNAUTHORIZED, "INVALID_ID_TOKEN", "유효하지 않은 구글 토큰입니다."),
@@ -46,11 +47,16 @@ public enum ErrorCode {
 
     // ── User / 온보딩 ────────────────────────────────────────────────────────
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "존재하지 않는 사용자입니다."),
+    CANNOT_CHANGE_OWN_ROLE(HttpStatus.BAD_REQUEST, "CANNOT_CHANGE_OWN_ROLE",
+            "자신의 권한은 변경할 수 없습니다."),
     ONBOARDING_MIN_SELECTION(HttpStatus.BAD_REQUEST, "ONBOARDING_MIN_SELECTION", "최소 1개 이상 선택해야 합니다."),
 
     // ── Article ─────────────────────────────────────────────────────────────
     ARTICLE_NOT_FOUND(HttpStatus.NOT_FOUND, "ARTICLE_NOT_FOUND", "존재하지 않는 공지입니다."),
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CATEGORY_NOT_FOUND", "존재하지 않는 카테고리입니다."),
+    // 23503(FK 위반)을 그대로 쓰면 RELATED_RESOURCE_NOT_FOUND 로 매핑돼 "참조 대상이 없습니다"(400)가
+    // 나간다. 실제 원인은 정반대 — 참조하는 쪽이 남아 있어 못 지운 것이다. 방향이 다르므로 코드를 나눈다.
+    CATEGORY_IN_USE(HttpStatus.CONFLICT, "CATEGORY_IN_USE", "사용 중인 카테고리는 삭제할 수 없습니다."),
     VENDOR_NOT_FOUND(HttpStatus.NOT_FOUND, "VENDOR_NOT_FOUND", "존재하지 않는 제공처입니다."),
     CLUB_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, "CLUB_TYPE_NOT_FOUND", "존재하지 않는 동아리 유형입니다."),
     NOT_IN_TRASH(HttpStatus.BAD_REQUEST, "NOT_IN_TRASH", "휴지통 상태가 아닌 공지는 복구할 수 없습니다."),

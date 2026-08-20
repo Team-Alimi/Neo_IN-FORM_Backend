@@ -30,6 +30,7 @@ public final class SqlStateErrorMapper {
             Map.entry("IN007", ErrorCode.CRAWLER_STORAGE_POLICY),
             Map.entry("IN008", ErrorCode.INACTIVE_CLUB_TYPE),
             Map.entry("IN009", ErrorCode.NOT_CLUB_VENDOR),
+            Map.entry("IN010", ErrorCode.INACTIVE_CATEGORY),
 
             // 표준 SQLSTATE
             Map.entry("23505", ErrorCode.DUPLICATE_RESOURCE),          // unique_violation
@@ -100,7 +101,7 @@ public final class SqlStateErrorMapper {
         return null;
     }
 
-    /** 우리가 트리거에 부여한 코드인지. {@code IN001}~{@code IN009}. */
+    /** 우리가 트리거에 부여한 코드인지. {@code IN001}~{@code IN010}. */
     private static boolean isCustomSqlState(@Nullable String sqlState) {
         return sqlState != null && sqlState.startsWith("IN");
     }

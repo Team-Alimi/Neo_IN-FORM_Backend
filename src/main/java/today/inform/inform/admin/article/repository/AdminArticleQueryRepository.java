@@ -32,6 +32,7 @@ import today.inform.inform.admin.config.ReviewProperties;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse.NamedRef;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.article.entity.SourceType;
+import today.inform.inform.global.support.LikePattern;
 
 /**
  * 관리자 공지 조회. <b>사용자 조회 저장소와 완전히 분리합니다.</b>
@@ -385,7 +386,7 @@ public class AdminArticleQueryRepository {
             //   패턴 문법으로 해석됩니다 — "100%" 를 찾으면 "100" 으로 시작하는 제목이 전부 걸리고,
             //   "%" 하나면 전체가 걸립니다. 제목에 % 가 들어가는 공지는 드물지 않습니다.
             where.append(" AND a.title ILIKE :title ESCAPE '\\'");
-            params.put("title", "%" + escapeLike(condition.title().trim()) + "%");
+            params.put("title", LikePattern.contains(condition.title().trim()));
         }
         if (condition.vendorId() != null) {
             where.append(" AND EXISTS (SELECT 1 FROM article_vendors av"
@@ -411,14 +412,6 @@ public class AdminArticleQueryRepository {
             params.put("minContentLength", reviewProperties.minContentLength());
         }
         return where.toString();
-    }
-
-    /** LIKE 패턴 문법으로 해석되는 글자를 막습니다. 역슬래시 자신도 이스케이프해야 합니다. */
-    private static String escapeLike(String keyword) {
-        return keyword
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
     }
 
     private long count(String where, Map<String, Object> params) {

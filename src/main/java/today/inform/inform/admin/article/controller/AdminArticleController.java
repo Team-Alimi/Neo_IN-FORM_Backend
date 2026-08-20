@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,13 +21,16 @@ import org.springframework.web.bind.annotation.RestController;
 import today.inform.inform.admin.article.dto.request.AdminArticleSearchCondition;
 import today.inform.inform.admin.article.dto.request.ArticleIdsRequest;
 import today.inform.inform.admin.article.dto.request.ChangeStatusRequest;
+import today.inform.inform.admin.article.dto.request.MergeArticlesRequest;
 import today.inform.inform.admin.article.dto.request.SaveArticleRequest;
 import today.inform.inform.admin.article.dto.response.AdminArticleDetail;
 import today.inform.inform.admin.article.dto.response.AdminArticleSummary;
 import today.inform.inform.admin.article.dto.response.ReviewStats;
+import today.inform.inform.admin.article.dto.response.SimilarComparison;
 import today.inform.inform.admin.article.dto.response.StatusLogResponse;
 import today.inform.inform.admin.article.service.AdminArticleService;
 import today.inform.inform.admin.article.service.AdminArticleWriteService;
+import today.inform.inform.admin.article.service.ArticleMergeService;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.global.response.ApiResponse;
 import today.inform.inform.global.response.PageResponse;
@@ -47,6 +51,7 @@ public class AdminArticleController {
 
     private final AdminArticleService adminArticleService;
     private final AdminArticleWriteService writeService;
+    private final ArticleMergeService mergeService;
 
     /** ADM-02 대시보드 카드 세 개. */
     @GetMapping("/stats")
@@ -150,6 +155,39 @@ public class AdminArticleController {
     public ApiResponse<Map<String, Integer>> moveToTrash(@Valid @RequestBody ArticleIdsRequest request) {
         return ApiResponse.success(Map.of(
                 "changed_count", adminArticleService.moveToTrash(request.articleIds(), request.memo())));
+    }
+
+    /** ADM-12 유사 공지 비교. 병합 판단을 하려면 두 글을 나란히 봐야 합니다. */
+    @GetMapping("/{articleId}/similar")
+    public ApiResponse<SimilarComparison> similar(@PathVariable Long articleId) {
+        return ApiResponse.success(mergeService.compareWithSimilar(articleId));
+    }
+
+    /**
+     * ADM-13 중복 공지 병합.
+     *
+     * <p>흡수된 공지는 <b>삭제됩니다.</b> 딸린 북마크·좋아요·댓글·첨부·출처는 대상으로 옮겨집니다.
+     */
+    @PostMapping("/merge")
+    public ApiResponse<Map<String, Integer>> merge(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @RequestBody MergeArticlesRequest request) {
+        int merged = mergeService.merge(
+                request.targetId(), request.sourceIds(), request.memo(), principal.userId());
+        return ApiResponse.success(Map.of("merged_count", merged));
+    }
+
+    /**
+     * ADM-10 영구 삭제.
+     *
+     * <p><b>휴지통에 있는 공지만</b> 지울 수 있습니다. 되돌릴 수 없는 조작이라
+     * 한 단계를 거치게 해 두었습니다.
+     */
+    @DeleteMapping
+    public ApiResponse<Map<String, Integer>> deletePermanently(
+            @Valid @RequestBody ArticleIdsRequest request) {
+        return ApiResponse.success(Map.of(
+                "deleted_count", mergeService.deletePermanently(request.articleIds())));
     }
 
     /** ADM-09 복구. 이력의 직전 상태로만 갑니다. */

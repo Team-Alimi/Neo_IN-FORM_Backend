@@ -8,11 +8,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.OffsetDateTime;
 import java.util.Locale;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 import today.inform.inform.global.entity.BaseTimeEntity;
 
 /**
@@ -27,10 +29,24 @@ import today.inform.inform.global.entity.BaseTimeEntity;
  *   <li>구독 학과·기관은 {@code user_vendors} 관계 테이블입니다.
  *       단일 {@code major_vendor_id} 컬럼은 v11 에서 제거되었습니다(복수전공 지원).</li>
  * </ul>
+ *
+ * <p><b>왜 {@link Version} 과 {@link DynamicUpdate} 가 둘 다 필요한가</b>
+ * 이 엔티티는 서로 다른 사람이 동시에 만지는 유일한 엔티티입니다 —
+ * 본인이 설정·탈퇴를 바꾸는 동안 관리자가 권한을 바꿉니다(ADM-16).
+ * 둘 다 없으면 나중에 커밋한 쪽이 <b>로드 시점 스냅샷으로 행 전체를 다시 써서</b>
+ * 상대의 변경을 되돌립니다. 갱신 행 수가 1이라 예외도 나지 않습니다.
+ *
+ * <p>특히 나쁜 것은 감사 로그입니다. 되돌림 UPDATE 도 {@code role} 을 바꾸는 것이므로
+ * {@code trg_users_90_role_audit} 이 반응해 {@code user_role_logs} 에
+ * <b>"대상자 본인이 스스로 강등했다"</b> 는 없는 사실을 한 줄 남깁니다.
+ * 반대 방향으로는 {@code status='ACTIVE'} 와 {@code withdrawn_at=NULL} 이 함께 되돌아가
+ * 탈퇴한 계정이 되살아나는데, {@code ck_users_withdrawn} 은 두 값이 짝이 맞으므로 통과시킵니다.
+ * (V10 마이그레이션. {@code articles}·{@code comments} 가 같은 이유로 이미 version 을 가집니다)
  */
 @Getter
 @Entity
 @Table(name = "users")
+@DynamicUpdate
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends BaseTimeEntity {
 
@@ -60,6 +76,10 @@ public class User extends BaseTimeEntity {
 
     @Column(name = "onboarding_completed_at")
     private OffsetDateTime onboardingCompletedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     private User(String email, String name) {
         this.email = normalizeEmail(email);
@@ -101,6 +121,21 @@ public class User extends BaseTimeEntity {
 
     public void changeEmailNotification(boolean enabled) {
         this.emailNotificationEnabled = enabled;
+    }
+
+    /**
+     * ADM-16 권한 변경.
+     *
+     * <p><b>감사 기록은 여기서 남기지 않습니다.</b> DB 트리거
+     * ({@code trg_users_90_role_audit})가 같은 트랜잭션에서 {@code user_role_logs} 에 씁니다.
+     * "누가" 는 트랜잭션-로컬 GUC 로 전달되며, 그 주입은 {@code AuditAwareTransactionManager} 가
+     * 쓰기 트랜잭션 진입 시점에 강제합니다. 앱이 로그를 빠뜨릴 경로 자체를 없앤 구조입니다.
+     *
+     * <p>같은 권한으로 다시 부르면 트리거가 {@code IS DISTINCT FROM} 으로 걸러 내므로
+     * 이력이 늘어나지 않습니다.
+     */
+    public void changeRole(UserRole newRole) {
+        this.role = newRole;
     }
 
     /** 이미 완료한 사용자가 다시 호출해도 최초 시각을 유지합니다. */
