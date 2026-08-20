@@ -30,6 +30,12 @@ spring:
     property-naming-strategy: SNAKE_CASE
     default-property-inclusion: non_null
 
+  data.web.pageable:
+    # 기본값(2000)이면 size=2000 요청 하나가 공지 2000건과 그만큼의 제공처·카테고리를
+    # 한 번에 긁어간다. 화면에 필요한 최대치보다 넉넉한 선에서 잘라 둔다.
+    max-page-size: 50
+    default-page-size: 20
+
 jwt:
   secret: ${JWT_SECRET}
   access-token-validity: 3600000        # 1h (ms)
@@ -38,6 +44,13 @@ jwt:
 google:
   oauth:
     client-id: ${GOOGLE_CLIENT_ID}
+
+inform:
+  view-count:
+    # Redis 에 모인 조회수를 DB 에 반영하는 주기.
+    # view_count 는 재계산할 원천이 없어서, 반영 전에 프로세스가 죽으면 그 구간은 사라진다.
+    # 주기를 짧게 둘수록 손실 구간이 짧아지고, 대신 UPDATE 가 잦아진다.
+    flush-interval-ms: 60000
 
 aws:
   region: ${AWS_REGION:ap-northeast-2}
