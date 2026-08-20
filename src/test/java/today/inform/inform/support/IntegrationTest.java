@@ -60,6 +60,16 @@ public abstract class IntegrationTest {
      * <p>이 커넥션은 앱의 트랜잭션 밖입니다. 그래서 이걸 쓰는 테스트는
      * {@code @Transactional} 을 붙이면 안 됩니다 — 커밋되지 않은 데이터는 보이지 않습니다.
      */
+    /**
+     * 앱 계정으로 여는 별도 커넥션.
+     *
+     * <p>트랜잭션 두 개가 서로를 어떻게 막는지 보려면 커넥션이 물리적으로 달라야 합니다.
+     * 이걸 쓰는 테스트도 {@code @Transactional} 을 붙이면 안 됩니다.
+     */
+    protected static Connection appConnection() throws SQLException {
+        return DriverManager.getConnection(DB.getJdbcUrl(), DB.getUsername(), DB.getPassword());
+    }
+
     protected static Connection crawlerConnection() throws SQLException {
         return DriverManager.getConnection(DB.getJdbcUrl(), "inform_crawler", CRAWLER_PASSWORD);
     }

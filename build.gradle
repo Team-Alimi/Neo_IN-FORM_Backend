@@ -91,4 +91,8 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// SQL 을 눈으로 확인하고 싶을 때: ./gradlew test -PshowSql
+	if (project.hasProperty('showSql')) {
+		systemProperty 'logging.level.org.hibernate.SQL', 'DEBUG'
+	}
 }
