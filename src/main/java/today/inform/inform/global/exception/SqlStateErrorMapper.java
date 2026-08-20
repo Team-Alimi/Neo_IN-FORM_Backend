@@ -35,7 +35,11 @@ public final class SqlStateErrorMapper {
             Map.entry("23505", ErrorCode.DUPLICATE_RESOURCE),          // unique_violation
             Map.entry("23514", ErrorCode.INVALID_INPUT_VALUE),         // check_violation
             Map.entry("23503", ErrorCode.RELATED_RESOURCE_NOT_FOUND),  // foreign_key_violation
-            Map.entry("23502", ErrorCode.INVALID_INPUT_VALUE)          // not_null_violation
+            Map.entry("23502", ErrorCode.INVALID_INPUT_VALUE),         // not_null_violation
+
+            // 길이/범위 초과. 앱이 먼저 막는 것이 원칙이지만 빠뜨린 경로가 500 으로 새지 않게 한다.
+            Map.entry("22001", ErrorCode.INVALID_INPUT_VALUE),         // string_data_right_truncation
+            Map.entry("22003", ErrorCode.INVALID_INPUT_VALUE)          // numeric_value_out_of_range
     );
 
     private SqlStateErrorMapper() {

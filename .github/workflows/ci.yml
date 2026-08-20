@@ -56,7 +56,12 @@ jobs:
           path: build/reports/tests/test
           retention-days: 7
 
-# TODO 테스트 추가 시
-#   Testcontainers 로 DB 를 띄울 때 공식 postgres 이미지가 아니라
-#   docker/db/Dockerfile 로 빌드한 pg_bigm 포함 이미지를 써야 합니다.
-#   검색 인덱스(gin_bigm_ops)와 generated column 이 그 확장에 의존합니다.
+# 통합 테스트 메모
+#   src/test/.../support/IntegrationTest.java 가 Testcontainers 로 DB 를 띄웁니다.
+#   공식 postgres 이미지가 아니라 docker/db/Dockerfile 을 빌드해서 씁니다 —
+#   검색 인덱스(gin_bigm_ops)와 generated column 이 pg_bigm 에 의존하므로
+#   확장이 없으면 Flyway V1 이 명시적으로 실패해 스키마 자체가 올라가지 않습니다.
+#
+#   ★ 그래서 CI 의 build 단계에 pg_bigm 소스 빌드 시간이 포함됩니다(수 분).
+#     느려지면 docker/build-push-action 의 GHA 캐시를 붙이거나,
+#     이미지를 레지스트리에 올려 두고 받아 쓰는 쪽으로 바꿉니다.

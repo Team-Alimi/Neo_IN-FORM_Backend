@@ -2,6 +2,7 @@ package today.inform.inform.global.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,6 +33,28 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
                 .body(ApiResponse.fail(ErrorCode.INVALID_INPUT_VALUE.getCode(), message));
+    }
+
+    /**
+     * 낙관적 잠금 충돌 — 409.
+     *
+     * <p>{@code DataAccessException} 핸들러보다 구체적이라 이쪽이 먼저 선택된다.
+     * 이 핸들러가 없으면 SQLSTATE 가 없는 예외라 매핑에 실패해 500 으로 나가고,
+     * 프론트가 5xx 를 재시도하면서 <b>낡은 본문이 결국 저장된다.</b>
+     * 낙관적 잠금을 붙인 목적이 정확히 그걸 막는 것이므로 500 으로 두면 안 된다.
+     *
+     * <p>{@code jakarta.persistence.OptimisticLockException} 은 트랜잭션 커밋 시점에
+     * Spring 이 {@code ObjectOptimisticLockingFailureException} 으로 변환해 주므로
+     * 여기서는 Spring 타입만 받는다.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(OptimisticLockingFailureException e) {
+        log.warn("Optimistic lock conflict: {}", e.getMessage());
+        return ResponseEntity
+                .status(ErrorCode.CONCURRENT_MODIFICATION.getStatus())
+                .body(ApiResponse.fail(
+                        ErrorCode.CONCURRENT_MODIFICATION.getCode(),
+                        ErrorCode.CONCURRENT_MODIFICATION.getMessage()));
     }
 
     /**

@@ -57,9 +57,25 @@ public class AuditAwareTransactionManager extends JpaTransactionManager {
                 log.warn("감사 행위자를 주입하지 못했습니다 (EntityManager 없음). userId={}", userId);
                 return;
             }
-            em.createNativeQuery(SET_ACTOR_SQL)
-                    .setParameter(1, userId.toString())
-                    .getSingleResult();
+            try {
+                em.createNativeQuery(SET_ACTOR_SQL)
+                        .setParameter(1, userId.toString())
+                        .getSingleResult();
+            } catch (RuntimeException e) {
+                // ★ 여기서 예외를 그대로 던지면 안 된다.
+                //   super.doBegin() 이 이미 EntityManagerHolder 를 스레드에 바인딩한 뒤라,
+                //   doBegin 에서 예외가 나가면 Spring 은 doCleanupAfterCompletion 을 부르지 않는다
+                //   (정리는 완료된 트랜잭션에 대해서만 돈다).
+                //   결과적으로 홀더와 커넥션이 스레드에 남고, 그 스레드를 재사용하는 다음 요청이
+                //   남의 EntityManager 를 물고 시작한다. 요청 하나 실패가 워커 하나 오염으로 번진다.
+                //
+                //   감사 행위자를 못 넣으면 changed_by 가 NULL 로 남고, 그건 스키마상
+                //   "크롤러/시스템이 한 변경" 과 구분되지 않는다. 그래서 조용히 넘기지 않고 ERROR 로 남긴다.
+                //   set_config 가 실패할 정도면 커넥션이 이미 깨진 상태라
+                //   뒤따르는 업무 SQL 이 더 정확한 오류로 실패한다.
+                log.error("감사 행위자 주입 실패. 이 트랜잭션의 감사 로그는 changed_by=NULL 로 남습니다. userId={}",
+                        userId, e);
+            }
         });
     }
 

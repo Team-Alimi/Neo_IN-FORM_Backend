@@ -73,9 +73,16 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	// Spring Boot 4.0 의 dependency management 는 Testcontainers 버전을 관리하지 않는다.
+	// BOM 을 직접 import 하지 않으면 'Could not find org.testcontainers:postgresql:' 로 실패한다.
+	testImplementation platform('org.testcontainers:testcontainers-bom:1.21.3')
 	testImplementation 'org.testcontainers:postgresql'
 	testImplementation 'org.testcontainers:junit-jupiter'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+	options.compilerArgs << '-Xlint:deprecation'
 }
 
 tasks.named('test') {

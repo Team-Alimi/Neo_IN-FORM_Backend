@@ -2,6 +2,9 @@ package today.inform.inform.global.support;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
+import org.hibernate.query.NativeQuery;
+import org.hibernate.query.QueryFlushMode;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,6 +29,9 @@ public class AuditMemo {
     private static final String SET_MEMO_SQL =
             "SELECT set_config('app.status_change_memo', ?1, true)";
 
+    /** {@code article_status_logs.memo varchar(500)} */
+    private static final int MAX_MEMO_LENGTH = 500;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -37,9 +43,18 @@ public class AuditMemo {
         if (memo == null || memo.isBlank()) {
             return;
         }
-        String trimmed = memo.length() > 500 ? memo.substring(0, 500) : memo;
-        entityManager.createNativeQuery(SET_MEMO_SQL)
-                .setParameter(1, trimmed)
-                .getSingleResult();
+        String trimmed = memo.length() > MAX_MEMO_LENGTH ? memo.substring(0, MAX_MEMO_LENGTH) : memo;
+
+        Query query = entityManager.createNativeQuery(SET_MEMO_SQL).setParameter(1, trimmed);
+
+        // ★ auto-flush 를 꺼야 한다.
+        //   Hibernate 는 native query 가 어떤 테이블을 건드리는지 알 수 없어서
+        //   실행 전에 영속성 컨텍스트를 통째로 flush 한다.
+        //   그러면 이미 더티한 엔티티의 UPDATE 가 이 set_config 보다 **먼저** 나가고,
+        //   그 안에 상태 변경이 섞여 있으면 감사 로그의 memo 가 NULL 로 남는다.
+        //   "상태를 바꾸는 UPDATE 보다 먼저 호출하라" 는 이 클래스의 계약이 조용히 깨지는 지점이다.
+        query.unwrap(NativeQuery.class).setQueryFlushMode(QueryFlushMode.NO_FLUSH);
+
+        query.getSingleResult();
     }
 }
