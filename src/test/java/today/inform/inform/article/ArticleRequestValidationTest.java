@@ -43,6 +43,27 @@ class ArticleRequestValidationTest extends IntegrationTest {
     }
 
     @Test
+    @DisplayName("★ 페이지는 요청도 응답도 1부터다 — 한쪽만 바꾸면 한 칸씩 어긋난다")
+    void pagingIsOneIndexedOnBothSides() throws Exception {
+        mockMvc.perform(get("/api/v1/articles").header(HttpHeaders.AUTHORIZATION, bearer())
+                        .param("page", "1").param("size", "10").param("interest_only", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.page_info.current_page").value(1))
+                .andExpect(jsonPath("$.data.page_info.size").value(10))
+                .andExpect(jsonPath("$.data.page_info").exists())
+                .andExpect(jsonPath("$.data.content").isArray());
+    }
+
+    @Test
+    @DisplayName("page 를 안 보내도 첫 페이지는 1 이다")
+    void defaultPageIsOne() throws Exception {
+        mockMvc.perform(get("/api/v1/articles").header(HttpHeaders.AUTHORIZATION, bearer())
+                        .param("interest_only", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.page_info.current_page").value(1));
+    }
+
+    @Test
     @DisplayName("경로 변수 타입이 안 맞으면 400 이다")
     void pathVariableTypeMismatch() throws Exception {
         mockMvc.perform(put("/api/v1/bookmarks/articles/abc").header(HttpHeaders.AUTHORIZATION, bearer()))

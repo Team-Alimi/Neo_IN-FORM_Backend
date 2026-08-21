@@ -31,8 +31,12 @@ import today.inform.inform.admin.article.dto.response.ReviewStats;
 import today.inform.inform.admin.article.dto.response.StatusLogResponse;
 import today.inform.inform.admin.config.ReviewProperties;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse.NamedRef;
+import today.inform.inform.article.dto.response.ArticleDetailResponse;
+import today.inform.inform.article.dto.response.DeadlineStatus;
+import today.inform.inform.article.dto.response.VendorSummary;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.article.entity.SourceType;
+import today.inform.inform.global.support.ArticleSortSanitizer;
 import today.inform.inform.global.support.LikePattern;
 
 /**
@@ -56,7 +60,11 @@ public class AdminArticleQueryRepository {
             a.ends_on            AS ends_on,
             a.similarity_score   AS similarity_score,
             a.similar_article_id AS similar_article_id,
-            a.updated_at         AS updated_at
+            a.updated_at         AS updated_at,
+            a.created_by         AS created_by,
+            EXISTS (SELECT 1 FROM attachments at WHERE at.article_id = a.id) AS has_attachment,
+            (SELECT max(l.created_at) FROM article_status_logs l
+              WHERE l.article_id = a.id)                                     AS last_status_change
             """;
 
     /**
@@ -214,6 +222,10 @@ public class AdminArticleQueryRepository {
         Map<String, Object> params = new LinkedHashMap<>();
         String where = buildWhere(condition, params);
 
+        // ★ 정렬 검증을 count 보다 먼저 합니다. 나중에 하면 결과가 0건일 때 조기 반환되어
+        //   검증이 통째로 건너뛰어지고, 같은 잘못된 요청이 데이터 유무에 따라 400 이 되기도 200 이 되기도 합니다.
+        String orderBy = ArticleSortSanitizer.toSqlOrderBy(pageable.getSort(), "created_at");
+
         long total = count(where, params);
         if (total == 0) {
             return new PageImpl<>(List.of(), pageable, 0);
@@ -222,9 +234,7 @@ public class AdminArticleQueryRepository {
         Query query = em.createNativeQuery(
                 "SELECT " + COLUMNS
                         + " FROM articles a WHERE " + where
-                        // 관리자 목록은 "최근에 손댄 것" 순입니다. 사용자 피드의 발행순과 다릅니다 —
-                        // 검수 화면에서 중요한 건 무엇이 방금 바뀌었는가입니다.
-                        + " ORDER BY a.updated_at DESC, a.id DESC"
+                        + " ORDER BY " + orderBy
                         + " LIMIT :limit OFFSET :offset");
         bind(query, params);
         query.setParameter("limit", pageable.getPageSize());
@@ -363,7 +373,45 @@ public class AdminArticleQueryRepository {
                 (OffsetDateTime) row[12],
                 (OffsetDateTime) row[13],
                 findDetailCategories(articleId),
-                findDetailVendors(articleId)));
+                findDetailVendors(articleId),
+                findDetailAttachments(articleId),
+                // 검수 화면이 바로 옆에 띄우는 이력. 전체는 별도 엔드포인트에 있습니다.
+                findStatusLogs(articleId).stream().limit(DETAIL_STATUS_LOG_LIMIT).toList()));
+    }
+
+    /**
+     * 상세에 함께 싣는 상태 이력 건수. 검수 화면은 "직전에 무슨 일이 있었나" 만 보면 되고,
+     * 전체 이력은 {@code GET /admin/articles/{id}/status-logs} 로 따로 봅니다.
+     */
+    private static final int DETAIL_STATUS_LOG_LIMIT = 5;
+
+    /**
+     * 첨부 목록.
+     *
+     * <p><b>관리자 상세에 첨부가 반드시 있어야 하는 이유</b> — 검수는 "이 공지를 내보내도 되는가" 를
+     * 판단하는 일인데, 붙어 있는 파일을 못 보면 판단할 수가 없습니다.
+     * 첨부 삭제(FIL-02)도 이 화면에서 시작합니다.
+     */
+    private List<ArticleDetailResponse.Attachment> findDetailAttachments(Long articleId) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery("""
+                        SELECT at.id, at.file_url, at.original_name, at.content_type, at.size_bytes
+                          FROM attachments at
+                         WHERE at.article_id = :articleId
+                         ORDER BY at.id
+                        """)
+                .setParameter("articleId", articleId).getResultList();
+
+        List<ArticleDetailResponse.Attachment> attachments = new ArrayList<>(rows.size());
+        for (Object[] row : rows) {
+            attachments.add(new ArticleDetailResponse.Attachment(
+                    ((Number) row[0]).longValue(),
+                    (String) row[1],
+                    (String) row[2],
+                    (String) row[3],
+                    row[4] == null ? null : ((Number) row[4]).longValue()));
+        }
+        return attachments;
     }
 
     private List<AdminArticleDetail.CategoryRef> findDetailCategories(Long articleId) {
@@ -547,7 +595,10 @@ public class AdminArticleQueryRepository {
                 .addScalar("ends_on", StandardBasicTypes.LOCAL_DATE)
                 .addScalar("similarity_score", StandardBasicTypes.BIG_DECIMAL)
                 .addScalar("similar_article_id", StandardBasicTypes.LONG)
-                .addScalar("updated_at", StandardBasicTypes.OFFSET_DATE_TIME);
+                .addScalar("updated_at", StandardBasicTypes.OFFSET_DATE_TIME)
+                .addScalar("created_by", StandardBasicTypes.LONG)
+                .addScalar("has_attachment", StandardBasicTypes.BOOLEAN)
+                .addScalar("last_status_change", StandardBasicTypes.OFFSET_DATE_TIME);
     }
 
     private List<AdminArticleSummary> toSummaries(List<Object[]> rows,
@@ -556,12 +607,7 @@ public class AdminArticleQueryRepository {
             return List.of();
         }
         List<Long> ids = rows.stream().map(row -> (Long) row[0]).toList();
-        Map<Long, List<NamedRef>> vendors = findRefs(ids, """
-                SELECT av.article_id, v.id, v.name
-                  FROM article_vendors av JOIN vendors v ON v.id = av.vendor_id
-                 WHERE av.article_id IN (:articleIds)
-                 ORDER BY v.name, v.id
-                """);
+        Map<Long, List<VendorSummary>> vendors = findVendorSummaries(ids);
         Map<Long, List<NamedRef>> categories = findRefs(ids, """
                 SELECT ac.article_id, c.id, c.name
                   FROM article_categories ac JOIN categories c ON c.id = ac.category_id
@@ -569,19 +615,27 @@ public class AdminArticleQueryRepository {
                  ORDER BY c.sort_order, c.id
                 """);
 
+        LocalDate today = LocalDate.now();
+
         List<AdminArticleSummary> summaries = new ArrayList<>(rows.size());
         for (Object[] row : rows) {
             Long id = (Long) row[0];
+            LocalDate startsOn = (LocalDate) row[4];
+            LocalDate endsOn = (LocalDate) row[5];
             summaries.add(new AdminArticleSummary(
                     id,
                     SourceType.valueOf((String) row[1]),
                     ArticleStatus.valueOf((String) row[2]),
                     (String) row[3],
-                    (LocalDate) row[4],
-                    (LocalDate) row[5],
+                    startsOn,
+                    endsOn,
+                    DeadlineStatus.of(startsOn, endsOn, today),
                     (BigDecimal) row[6],
                     (Long) row[7],
                     (OffsetDateTime) row[8],
+                    (OffsetDateTime) row[11],
+                    (Long) row[9],
+                    Boolean.TRUE.equals(row[10]),
                     previousStatuses.get(id),
                     // 화면은 출처를 최대 3개까지만 보여 줍니다. 자르는 건 클라이언트 몫이라
                     // 서버는 전부 내려보냅니다 — 3개로 잘라 보내면 "더 있는지" 를 알 수 없습니다.
@@ -589,6 +643,30 @@ public class AdminArticleQueryRepository {
                     categories.getOrDefault(id, List.of())));
         }
         return summaries;
+    }
+
+    /** 출처를 명세 2.8 의 {@code VendorSummary} 형태로. 축약 표시({@code initial})가 화면에 필요합니다. */
+    private Map<Long, List<VendorSummary>> findVendorSummaries(List<Long> articleIds) {
+        if (articleIds.isEmpty()) {
+            return Map.of();
+        }
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery("""
+                        SELECT DISTINCT av.article_id, v.id, v.name, v.initial, v.type
+                          FROM article_vendors av JOIN vendors v ON v.id = av.vendor_id
+                         WHERE av.article_id IN (:articleIds)
+                         ORDER BY v.name, v.id
+                        """)
+                .setParameter("articleIds", articleIds)
+                .getResultList();
+
+        Map<Long, List<VendorSummary>> byArticle = new HashMap<>();
+        for (Object[] row : rows) {
+            byArticle.computeIfAbsent(((Number) row[0]).longValue(), key -> new ArrayList<>())
+                    .add(new VendorSummary(((Number) row[1]).longValue(), (String) row[2],
+                            (String) row[3], SourceType.valueOf((String) row[4])));
+        }
+        return byArticle;
     }
 
     private Map<Long, List<NamedRef>> findRefs(List<Long> articleIds, String sql) {

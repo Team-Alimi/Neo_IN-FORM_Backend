@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,13 +59,13 @@ public class AdminArticleService {
     /** ADM-03 / ADM-12 목록. */
     @Transactional(readOnly = true)
     public Page<AdminArticleSummary> search(AdminArticleSearchCondition condition, Pageable pageable) {
-        return queryRepository.search(condition, dropSort(pageable));
+        return queryRepository.search(condition, pageable);
     }
 
     /** ADM-09 휴지통 목록. */
     @Transactional(readOnly = true)
     public Page<AdminArticleSummary> listTrashed(Pageable pageable) {
-        return queryRepository.searchTrashed(dropSort(pageable));
+        return queryRepository.searchTrashed(pageable);
     }
 
     /**
@@ -278,14 +277,4 @@ public class AdminArticleService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
     }
 
-    /**
-     * 클라이언트 정렬을 버립니다.
-     *
-     * <p>관리자 목록은 "최근에 손댄 것" 순으로 고정입니다. 검수 화면에서 필요한 건
-     * 무엇이 방금 바뀌었는가지 발행순이 아닙니다.
-     * 받아 두면 Spring Data 가 검증 없이 이어 붙여 없는 속성 하나에 500 이 납니다.
-     */
-    private static Pageable dropSort(Pageable pageable) {
-        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
-    }
 }

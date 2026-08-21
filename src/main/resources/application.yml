@@ -43,6 +43,10 @@ spring:
     # 한 번에 긁어간다. 화면에 필요한 최대치보다 넉넉한 선에서 잘라 둔다.
     max-page-size: 50
     default-page-size: 20
+    # ★ 명세가 페이지를 1부터 셉니다. 응답만 +1 하고 이걸 켜지 않으면 요청과 응답이
+    #   한 칸씩 어긋나 1페이지를 달라는 요청이 2페이지를 줍니다.
+    #   PageResponse 의 currentPage 와 반드시 짝으로 움직여야 합니다.
+    one-indexed-parameters: true
 
 jwt:
   secret: ${JWT_SECRET}

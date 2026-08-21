@@ -1,6 +1,7 @@
 package today.inform.inform.article;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform.article.dto.request.ArticleSearchCondition;
 import today.inform.inform.article.dto.response.ArticleDetailResponse;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse;
+import today.inform.inform.article.dto.response.VendorSummary;
 import today.inform.inform.article.entity.Article;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.article.entity.SourceType;
@@ -211,8 +213,9 @@ class ArticleQueryTest extends IntegrationTest {
 
         ArticleSummaryResponse found = search(condition(null, null)).get(0);
 
-        assertThat(found.vendors()).extracting(ArticleSummaryResponse.NamedRef::name)
-                .containsExactly("질의테스트학과");
+        assertThat(found.vendors())
+                .extracting(VendorSummary::name, VendorSummary::initial, VendorSummary::type)
+                .containsExactly(tuple("질의테스트학과", "QRYTEST", SourceType.SCHOOL));
         assertThat(found.categories()).hasSize(1);
     }
 

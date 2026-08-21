@@ -2,6 +2,7 @@ package today.inform.inform.admin.comment.service;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -10,8 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform.admin.comment.dto.request.AdminCommentSearchCondition;
 import today.inform.inform.admin.comment.dto.response.AdminCommentSummary;
+import today.inform.inform.admin.article.dto.response.BulkResult;
 import today.inform.inform.admin.comment.repository.AdminCommentQueryRepository;
 import today.inform.inform.comment.entity.Comment;
+import today.inform.inform.global.exception.ErrorCode;
 import today.inform.inform.comment.repository.CommentRepository;
 
 /**
@@ -49,10 +52,14 @@ public class AdminCommentService {
      * 관리자 조작 전용 감사 테이블이 생기면 그쪽으로 옮겨야 합니다
      * (같은 공백이 {@code ArticleMergeService#deletePermanently} 에도 있습니다).
      *
-     * @return 실제로 지운 개수
+     * <p><b>응답 형태는 공지 벌크와 같습니다</b>(명세 4.8 공통 규약: {@code succeeded}/{@code failed}).
+     * 경로가 {@code /bulk/} 인데 형태만 다르면 화면이 두 가지 응답을 따로 다뤄야 합니다.
+     *
+     * @return 건별 성공·실패. 이미 지워진 건은 {@code failed} 에 사유와 함께 담깁니다 —
+     *         조용히 빼면 관리자는 30건을 골랐는데 28건만 처리된 것을 알 수 없습니다
      */
     @Transactional
-    public int deleteAll(List<Long> commentIds, Long actorId) {
+    public BulkResult deleteAll(List<Long> commentIds, Long actorId) {
         List<Long> ids = commentIds.stream().filter(Objects::nonNull).distinct().toList();
 
         // 답글 → 원댓글 순. 답글을 먼저 없애야 원댓글이 빈 껍데기로 남지 않습니다.
@@ -61,13 +68,23 @@ public class AdminCommentService {
         // ★ 지우기 전에 대상 전부를 먼저 잠급니다. 이유는 lockAll 주석 참조.
         lockAll(ordered);
 
-        int deleted = 0;
-        for (Long commentId : ordered) {
-            if (deleteOne(commentId, actorId)) {
-                deleted++;
+        BulkResult.Builder result = BulkResult.builder();
+
+        // 조회 단계에서 이미 빠진 id (그 사이 글쓴이가 먼저 지운 경우)
+        Set<Long> found = Set.copyOf(ordered);
+        for (Long commentId : ids) {
+            if (!found.contains(commentId)) {
+                result.fail(commentId, ErrorCode.COMMENT_NOT_FOUND, "이미 삭제된 댓글입니다.");
             }
         }
-        return deleted;
+        for (Long commentId : ordered) {
+            if (deleteOne(commentId, actorId)) {
+                result.succeed(commentId);
+            } else {
+                result.fail(commentId, ErrorCode.COMMENT_NOT_FOUND, "이미 삭제된 댓글입니다.");
+            }
+        }
+        return result.build();
     }
 
     // ─────────────────────────────────────────────────────────────────────────

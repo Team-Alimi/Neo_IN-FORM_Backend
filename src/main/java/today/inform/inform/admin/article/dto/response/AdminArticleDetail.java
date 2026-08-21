@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import today.inform.inform.article.entity.ArticleStatus;
+import today.inform.inform.article.dto.response.ArticleDetailResponse;
 import today.inform.inform.article.entity.SourceType;
 
 /**
@@ -33,7 +34,9 @@ public record AdminArticleDetail(
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         List<CategoryRef> categories,
-        List<VendorRef> vendors) {
+        List<VendorRef> vendors,
+        List<ArticleDetailResponse.Attachment> attachments,
+        List<StatusLogResponse> statusLogs) {
 
     public record CategoryRef(Long id, String name) {
     }

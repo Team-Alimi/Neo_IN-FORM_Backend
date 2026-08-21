@@ -1,6 +1,7 @@
 package today.inform.inform.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform.admin.article.dto.request.SaveArticleRequest;
 import today.inform.inform.admin.article.dto.request.SaveArticleRequest.VendorLink;
 import today.inform.inform.admin.article.dto.response.AdminArticleDetail;
+import today.inform.inform.article.dto.response.ArticleDetailResponse;
 import today.inform.inform.admin.article.service.AdminArticleWriteService;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.article.entity.SourceType;
@@ -125,6 +127,43 @@ class AdminArticleWriteTest extends IntegrationTest {
         assertThat(writeService.getDetail(created).publishedAt())
                 .as("발행 시각은 V6 트리거가 채웁니다")
                 .isNotNull();
+    }
+
+    @Test
+    @DisplayName("★ 상세에 첨부와 최근 상태 이력이 함께 실린다 — 없으면 검수할 수가 없다")
+    void detailCarriesAttachmentsAndRecentLogs() {
+        Long created = writeService.create(request(null, null, "첨부 붙은 공지"), adminId);
+        em.createNativeQuery("""
+                        INSERT INTO attachments (article_id, file_url, object_key, storage_type,
+                                                 original_name, content_type, size_bytes)
+                        VALUES (:id, 'https://bucket.s3.amazonaws.com/a/포스터.png', 'a/포스터.png', 'S3',
+                                '포스터.png', 'image/png', 4821)
+                        """)
+                .setParameter("id", created).executeUpdate();
+
+        // 이력이 두 줄 이상 쌓이도록 상태를 한 번 옮깁니다.
+        // 트리거(trg_articles_90_status_log)가 UPDATE 를 보고 이력을 남깁니다.
+        em.createNativeQuery("UPDATE articles SET status = 'READY_TO_PUBLISH' WHERE id = :id")
+                .setParameter("id", created).executeUpdate();
+        em.flush();
+        em.clear();
+
+        AdminArticleDetail detail = writeService.getDetail(created);
+
+        assertThat(detail.attachments())
+                .as("붙어 있는 파일을 못 보면 내보내도 되는 공지인지 판단할 수 없습니다")
+                .extracting(ArticleDetailResponse.Attachment::originalName,
+                        ArticleDetailResponse.Attachment::contentType,
+                        ArticleDetailResponse.Attachment::sizeBytes)
+                .containsExactly(tuple("포스터.png", "image/png", 4821L));
+
+        assertThat(detail.statusLogs())
+                .as("검수 화면은 '직전에 무슨 일이 있었나' 를 상세에서 바로 봅니다")
+                .isNotEmpty()
+                .hasSizeLessThanOrEqualTo(5);
+        assertThat(detail.statusLogs().get(0).toStatus())
+                .as("최신순입니다")
+                .isEqualTo(ArticleStatus.READY_TO_PUBLISH);
     }
 
     @Test

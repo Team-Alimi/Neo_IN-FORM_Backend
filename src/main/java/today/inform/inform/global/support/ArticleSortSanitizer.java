@@ -32,7 +32,8 @@ public final class ArticleSortSanitizer {
             "bookmark_count", new Allowed("bookmarkCount", "bookmark_count"),
             "like_count",     new Allowed("likeCount",     "like_count"),
             "ends_on",        new Allowed("endsOn",        "ends_on"),
-            "created_at",     new Allowed("createdAt",     "created_at")
+            "created_at",     new Allowed("createdAt",     "created_at"),
+            "updated_at",     new Allowed("updatedAt",     "updated_at")
     );
 
     private record Allowed(String property, String column) {
@@ -76,8 +77,17 @@ public final class ArticleSortSanitizer {
      * @return 예: {@code "a.published_at DESC, a.id DESC"}
      */
     public static String toSqlOrderBy(Sort requested) {
+        return toSqlOrderBy(requested, "published_at");
+    }
+
+    /**
+     * @param defaultColumn 정렬을 안 보냈을 때 쓸 컬럼. 사용자 목록은 발행순,
+     *                      관리자 검수 목록은 <b>생성순</b>이 기본입니다(명세 4.8) —
+     *                      두 화면이 보는 것이 다릅니다
+     */
+    public static String toSqlOrderBy(Sort requested, String defaultColumn) {
         if (requested == null || requested.isUnsorted()) {
-            return "a.published_at DESC, a." + TIE_BREAKER + " DESC";
+            return "a." + defaultColumn + " DESC, a." + TIE_BREAKER + " DESC";
         }
 
         StringBuilder clause = new StringBuilder();

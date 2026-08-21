@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import today.inform.inform.admin.comment.dto.request.AdminCommentSearchCondition;
+import today.inform.inform.admin.article.dto.response.BulkResult;
 import today.inform.inform.admin.comment.dto.request.CommentIdsRequest;
 import today.inform.inform.admin.comment.dto.response.AdminCommentSummary;
 import today.inform.inform.admin.comment.service.AdminCommentService;
@@ -52,14 +53,13 @@ public class AdminCommentController {
     /**
      * 일괄 삭제.
      *
-     * <p>이미 지워진 건은 조용히 건너뛰므로 요청한 개수와 응답의 {@code deleted} 가 다를 수 있습니다.
-     * 화면은 이 숫자를 그대로 보여 주고 목록을 새로 고쳐야 합니다.
+     * <p>공지 벌크와 <b>같은 응답 형태</b>입니다 — 이미 지워진 건은 {@code failed} 에 사유와 함께 담깁니다.
+     * 조용히 빼면 관리자는 30건을 골랐는데 28건만 처리된 것을 모릅니다.
      */
     @PostMapping("/bulk/delete")
-    public ApiResponse<Map<String, Integer>> deleteAll(
+    public ApiResponse<BulkResult> deleteAll(
             @AuthenticationPrincipal AuthPrincipal principal,
             @Valid @RequestBody CommentIdsRequest request) {
-        int deleted = adminCommentService.deleteAll(request.ids(), principal.userId());
-        return ApiResponse.success(Map.of("deleted", deleted));
+        return ApiResponse.success(adminCommentService.deleteAll(request.ids(), principal.userId()));
     }
 }

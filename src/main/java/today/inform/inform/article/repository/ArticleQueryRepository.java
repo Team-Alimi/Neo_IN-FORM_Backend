@@ -27,6 +27,8 @@ import today.inform.inform.article.dto.request.ArticleSearchCondition;
 import today.inform.inform.article.dto.response.ArticleDetailResponse;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse.NamedRef;
+import today.inform.inform.article.dto.response.DeadlineStatus;
+import today.inform.inform.article.dto.response.VendorSummary;
 import today.inform.inform.article.entity.SourceType;
 import today.inform.inform.global.support.ArticleSortSanitizer;
 
@@ -294,6 +296,7 @@ public class ArticleQueryRepository {
                 (OffsetDateTime) row[4],
                 (LocalDate) row[5],
                 (LocalDate) row[6],
+                DeadlineStatus.of((LocalDate) row[5], (LocalDate) row[6], LocalDate.now()),
                 (Integer) row[7],
                 (Integer) row[8],
                 (Integer) row[9],
@@ -313,7 +316,7 @@ public class ArticleQueryRepository {
     private List<ArticleDetailResponse.Source> findSources(Long articleId) {
         @SuppressWarnings("unchecked")
         List<Object[]> rows = em.createNativeQuery("""
-                        SELECT v.id, v.name, av.source_url
+                        SELECT v.id, v.name, v.initial, v.type, av.source_url
                           FROM article_vendors av
                           JOIN vendors v ON v.id = av.vendor_id
                          WHERE av.article_id = :articleId
@@ -322,12 +325,13 @@ public class ArticleQueryRepository {
                 .setParameter("articleId", articleId)
                 .getResultList();
 
-        List<ArticleDetailResponse.Source> sources = new ArrayList<>(rows.size());
+        List<ArticleDetailResponse.Source> vendors = new ArrayList<>(rows.size());
         for (Object[] row : rows) {
-            sources.add(new ArticleDetailResponse.Source(
-                    ((Number) row[0]).longValue(), (String) row[1], (String) row[2]));
+            vendors.add(new ArticleDetailResponse.Source(
+                    ((Number) row[0]).longValue(), (String) row[1], (String) row[2],
+                    SourceType.valueOf((String) row[3]), (String) row[4]));
         }
-        return sources;
+        return vendors;
     }
 
     private List<ArticleDetailResponse.Attachment> findAttachments(Long articleId) {
@@ -377,14 +381,47 @@ public class ArticleQueryRepository {
      * <p>상세의 {@link #findSources} 는 반대로 <b>중복을 남깁니다</b> —
      * 거기서는 행 하나가 원본 게시물 하나이고 각자 다른 {@code source_url} 을 가집니다.
      */
-    private Map<Long, List<NamedRef>> findVendors(List<Long> articleIds) {
-        return findRefs(articleIds, """
-                SELECT DISTINCT av.article_id, v.id, v.name
-                  FROM article_vendors av
-                  JOIN vendors v ON v.id = av.vendor_id
-                 WHERE av.article_id IN (:articleIds)
-                 ORDER BY v.name, v.id
-                """);
+    private Map<Long, List<VendorSummary>> findVendors(List<Long> articleIds) {
+        if (articleIds.isEmpty()) {
+            return Map.of();
+        }
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery("""
+                        SELECT DISTINCT av.article_id, v.id, v.name, v.initial, v.type
+                          FROM article_vendors av
+                          JOIN vendors v ON v.id = av.vendor_id
+                         WHERE av.article_id IN (:articleIds)
+                         ORDER BY v.name, v.id
+                        """)
+                .setParameter("articleIds", articleIds)
+                .getResultList();
+
+        Map<Long, List<VendorSummary>> byArticle = new HashMap<>();
+        for (Object[] row : rows) {
+            byArticle.computeIfAbsent(((Number) row[0]).longValue(), key -> new ArrayList<>())
+                    .add(new VendorSummary(((Number) row[1]).longValue(), (String) row[2],
+                            (String) row[3], SourceType.valueOf((String) row[4])));
+        }
+        return byArticle;
+    }
+
+    /**
+     * 첨부가 하나라도 있는 공지.
+     *
+     * <p>개수를 세지 않고 <b>존재만</b> 봅니다 — 목록에 필요한 것은 클립 아이콘 하나뿐입니다.
+     */
+    private Set<Long> findArticlesWithAttachment(List<Long> articleIds) {
+        if (articleIds.isEmpty()) {
+            return Set.of();
+        }
+        @SuppressWarnings("unchecked")
+        List<Number> rows = em.createNativeQuery("""
+                        SELECT DISTINCT article_id FROM attachments
+                         WHERE article_id IN (:articleIds)
+                        """)
+                .setParameter("articleIds", articleIds)
+                .getResultList();
+        return rows.stream().map(Number::longValue).collect(Collectors.toSet());
     }
 
     private Map<Long, List<NamedRef>> findRefs(List<Long> articleIds, String sql) {
@@ -540,26 +577,35 @@ public class ArticleQueryRepository {
             return List.of();
         }
         List<Long> ids = rows.stream().map(row -> (Long) row[0]).toList();
-        Map<Long, List<NamedRef>> vendors = findVendors(ids);
+        Map<Long, List<VendorSummary>> vendors = findVendors(ids);
         Map<Long, List<NamedRef>> categories = findCategories(ids);
+        Set<Long> withAttachment = findArticlesWithAttachment(ids);
+
+        // 마감 상태는 파생값이라 여기서 계산합니다. 기준일을 한 번만 읽어 페이지 안의 모든 칸이
+        // 같은 날짜로 판정되게 합니다 - 자정을 걸치는 요청에서 칸마다 기준이 달라지면 안 됩니다.
+        LocalDate today = LocalDate.now();
 
         List<ArticleSummaryResponse> summaries = new ArrayList<>(rows.size());
         for (Object[] row : rows) {
             Long id = (Long) row[0];
+            LocalDate startsOn = (LocalDate) row[5];
+            LocalDate endsOn = (LocalDate) row[6];
             summaries.add(new ArticleSummaryResponse(
                     id,
                     SourceType.valueOf((String) row[1]),
                     (String) row[2],
                     (String) row[3],
                     (OffsetDateTime) row[4],
-                    (LocalDate) row[5],
-                    (LocalDate) row[6],
+                    startsOn,
+                    endsOn,
+                    DeadlineStatus.of(startsOn, endsOn, today),
                     (Integer) row[7],
                     (Integer) row[8],
                     (Integer) row[9],
                     (Long) row[10],
                     (Boolean) row[11],
                     (Boolean) row[12],
+                    withAttachment.contains(id),
                     (Boolean) row[13],
                     vendors.getOrDefault(id, Collections.emptyList()),
                     categories.getOrDefault(id, Collections.emptyList())));

@@ -11,12 +11,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
+import today.inform.inform.admin.article.dto.response.BulkResult;
 import today.inform.inform.admin.comment.dto.request.AdminCommentSearchCondition;
 import today.inform.inform.admin.comment.dto.response.AdminCommentSummary;
 import today.inform.inform.admin.comment.service.AdminCommentService;
 import today.inform.inform.article.entity.Article;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.article.repository.ArticleRepository;
+import today.inform.inform.admin.article.dto.response.BulkResult;
 import today.inform.inform.comment.dto.response.CommentResponse;
 import today.inform.inform.comment.service.CommentService;
 import today.inform.inform.support.IntegrationTest;
@@ -66,7 +68,8 @@ class AdminCommentTest extends IntegrationTest {
         Long commentId = commentService.create(articleId, userId, "혼자 있는 댓글", null).id();
         em.flush();
 
-        assertThat(adminCommentService.deleteAll(List.of(commentId), adminId)).isEqualTo(1);
+        assertThat(adminCommentService.deleteAll(List.of(commentId), adminId).succeeded())
+                .containsExactly(commentId);
         em.flush();
 
         assertThat(rowCount(commentId)).isZero();
@@ -106,7 +109,8 @@ class AdminCommentTest extends IntegrationTest {
 
         // 원댓글을 먼저 넣어 보냅니다 — 순서를 서비스가 다시 정하지 않으면
         // 원댓글이 '답글 있음' 으로 판정돼 빈 껍데기가 남습니다.
-        assertThat(adminCommentService.deleteAll(List.of(root.id(), replyId), adminId)).isEqualTo(2);
+        assertThat(adminCommentService.deleteAll(List.of(root.id(), replyId), adminId).succeeded())
+                .containsExactlyInAnyOrder(root.id(), replyId);
         em.flush();
         em.clear();
 
@@ -123,10 +127,18 @@ class AdminCommentTest extends IntegrationTest {
         commentService.delete(gone, userId);
         em.flush();
 
-        assertThat(adminCommentService.deleteAll(List.of(alive, gone, 999_999_999L), adminId))
-                .as("목록을 띄워 둔 사이 글쓴이가 먼저 지우는 일은 흔합니다. 전체를 뒤집으면 안 됩니다")
-                .isEqualTo(1);
+        BulkResult result = adminCommentService.deleteAll(List.of(alive, gone, 999_999_999L), adminId);
         em.flush();
+
+        assertThat(result.succeeded())
+                .as("목록을 띄워 둔 사이 글쓴이가 먼저 지우는 일은 흔합니다. 전체를 뒤집으면 안 됩니다")
+                .containsExactly(alive);
+        assertThat(result.failed())
+                .as("★ 빠진 건은 조용히 사라지면 안 됩니다 — 30건 골랐는데 28건만 됐다는 걸 알 수 있어야 합니다")
+                .extracting(BulkResult.Failure::id)
+                .containsExactlyInAnyOrder(gone, 999_999_999L);
+        assertThat(result.failed())
+                .allSatisfy(failure -> assertThat(failure.code()).isEqualTo("COMMENT_NOT_FOUND"));
 
         assertThat(rowCount(alive)).isZero();
     }
@@ -137,7 +149,9 @@ class AdminCommentTest extends IntegrationTest {
         Long commentId = commentService.create(articleId, userId, "중복 요청 댓글", null).id();
         em.flush();
 
-        assertThat(adminCommentService.deleteAll(List.of(commentId, commentId), adminId)).isEqualTo(1);
+        assertThat(adminCommentService.deleteAll(List.of(commentId, commentId), adminId).succeeded())
+                .as("중복은 합쳐집니다. 두 번째가 '이미 처리됨' 으로 실패해 보이면 안 됩니다")
+                .containsExactly(commentId);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
