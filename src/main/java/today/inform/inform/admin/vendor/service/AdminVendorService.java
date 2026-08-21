@@ -29,7 +29,7 @@ public class AdminVendorService {
     /** 관리 화면 목록. 비활성 제공처도 보여야 다시 켤 수 있습니다. */
     @Transactional(readOnly = true)
     public List<AdminVendorResponse> search(SourceType type, Boolean active) {
-        return AdminVendorResponse.from(vendorRepository.findForAdmin(type, active));
+        return AdminVendorResponse.from(vendorRepository.search(type, active));
     }
 
     @Transactional(readOnly = true)

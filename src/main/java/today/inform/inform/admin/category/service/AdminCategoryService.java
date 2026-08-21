@@ -41,7 +41,7 @@ public class AdminCategoryService {
 
     @Transactional(readOnly = true)
     public List<AdminCategoryResponse> search(Boolean active) {
-        List<Category> categories = categoryRepository.findForAdmin(active);
+        List<Category> categories = categoryRepository.search(active);
         Set<Long> inUseIds = new HashSet<>(categoryRepository.findInUseIds());
         return AdminCategoryResponse.of(categories, inUseIds);
     }

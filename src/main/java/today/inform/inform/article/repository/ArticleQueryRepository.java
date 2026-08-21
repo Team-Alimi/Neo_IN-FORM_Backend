@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.query.NativeQuery;
 import org.hibernate.type.StandardBasicTypes;
 import org.springframework.data.domain.Page;
@@ -50,6 +51,7 @@ import today.inform.inform.global.support.ArticleSortSanitizer;
  * SQL 을 문자열로 조립하지만 클라이언트 값이 들어가는 자리는 전부 bind parameter 입니다.
  * 이어 붙이는 건 고정 문자열과 {@link ArticleSortSanitizer} 의 화이트리스트 컬럼명뿐입니다.
  */
+@Slf4j
 @Repository
 public class ArticleQueryRepository {
 
@@ -180,6 +182,91 @@ public class ArticleQueryRepository {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // CAL-01 / CAL-02 캘린더
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * CAL-01 월간 일정. 그 달과 기간이 <b>겹치는</b> 배포 공지를 전부 돌려줍니다.
+     *
+     * <p><b>날짜가 하나도 없는 공지는 뺍니다.</b> 캘린더는 날짜 위에 올리는 화면이라
+     * 놓을 자리가 없습니다. 반대로 한쪽만 있는 공지는 <b>넣습니다</b> —
+     * 없는 쪽을 무한으로 봅니다. "상시 모집, 12월 마감" 이 11월 달력에서 사라지면 안 됩니다.
+     * 목록 화면의 기간 필터({@code appendPeriodOverlap})와 같은 판정입니다.
+     *
+     * <p><b>페이징이 없습니다</b>(명세). 대신 상한을 둡니다 —
+     * 한 달에 걸리는 공지가 수백 건이 되면 화면이 그리지 못하고, 상한 없이 두면
+     * 그 요청 하나가 목록 전체와 그만큼의 제공처·카테고리를 통째로 긁어갑니다.
+     * 잘린 경우는 <b>조용히 넘기지 않고</b> 경고 로그를 남깁니다 —
+     * 응답만 보면 그 달에 원래 그만큼만 있는 것과 구별되지 않습니다.
+     *
+     * @param userId 비로그인이면 {@code null}. 개인화 값({@code is_bookmarked} 등)이 전부 false 가 됩니다
+     */
+    public List<ArticleSummaryResponse> findForCalendar(LocalDate monthStart, LocalDate monthEnd,
+                                                        List<Long> categoryIds, boolean myMajorOnly,
+                                                        Long userId, int limit) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("userId", anonymousSafe(userId));
+        params.put("monthStart", monthStart);
+        params.put("monthEnd", monthEnd);
+
+        StringBuilder where = new StringBuilder(VISIBLE);
+        // 겹침 판정. 없는 날짜는 무한으로 보되, 둘 다 없으면 캘린더에 놓을 수 없습니다.
+        //
+        // ★ 범위 연산자(&&)로 쓰는 이유는 인덱스입니다.
+        //   같은 뜻을 (starts_on IS NULL OR starts_on <= :end) AND (ends_on IS NULL OR ends_on >= :start)
+        //   로 적으면 OR-with-NULL 이라 B-tree 가 만족시키지 못해, 비로그인으로 열린 이 경로가
+        //   요청마다 배포 공지 전체를 훑습니다. daterange 는 NULL 경계를 무한으로 다루므로
+        //   두 표현은 정확히 같은 집합을 고릅니다. (V11 의 idx_articles_calendar 가 이 식을 인덱싱합니다)
+        //
+        //   앞줄의 "둘 다 NULL 제외" 는 의미상 필요할 뿐 아니라 부분 인덱스의 조건과 일치해야 합니다 —
+        //   빠뜨리면 플래너가 그 인덱스를 고르지 못합니다.
+        where.append(" AND (a.starts_on IS NOT NULL OR a.ends_on IS NOT NULL)")
+                .append(" AND daterange(a.starts_on, a.ends_on, '[]')")
+                .append("  && daterange(:monthStart, :monthEnd, '[]')");
+
+        if (categoryIds != null && !categoryIds.isEmpty()) {
+            where.append(" AND EXISTS (SELECT 1 FROM article_categories ac"
+                    + " WHERE ac.article_id = a.id AND ac.category_id IN (:categoryIds))");
+            params.put("categoryIds", categoryIds);
+        }
+        if (myMajorOnly) {
+            // CAL-02. user_vendors 는 트리거가 SCHOOL 유형만 허용하므로 학과·기관 구독입니다.
+            where.append(" AND EXISTS (SELECT 1 FROM article_vendors av"
+                    + " JOIN user_vendors uv ON uv.vendor_id = av.vendor_id"
+                    + " WHERE av.article_id = a.id AND uv.user_id = :userId)");
+        }
+
+        Query query = em.createNativeQuery(
+                "SELECT " + SUMMARY_COLUMNS
+                        + " FROM articles a WHERE " + where
+                        // 달력은 시작일 순으로 읽습니다. 시작일이 없으면 마감일을 기준으로 둡니다.
+                        + " ORDER BY COALESCE(a.starts_on, a.ends_on) ASC, a.id ASC"
+                        + " LIMIT :limit");
+        bind(query, params);
+        query.setParameter("limit", limit + 1);   // 상한에 걸렸는지 알아내려고 하나 더 받습니다
+
+        List<Object[]> rows = declareSummaryScalars(query).getResultList();
+        if (rows.size() > limit) {
+            log.warn("캘린더 결과가 상한에 걸려 잘렸습니다. {}~{} limit={} — 화면에 안 보이는 공지가 있습니다.",
+                    monthStart, monthEnd, limit);
+            rows = rows.subList(0, limit);
+        }
+        return toSummaries(rows);
+    }
+
+    /**
+     * 비로그인 요청의 {@code :userId} 자리.
+     *
+     * <p>{@code null} 을 그대로 넘기면 드라이버가 타입을 정하지 못해 실패합니다.
+     * 실재하지 않는 id 를 넣으면 개인화 {@code EXISTS} 가 전부 false 가 되어
+     * "북마크 안 함 · 좋아요 안 함" 이라는 <b>맞는 답</b>이 나옵니다.
+     * {@code bigserial} 은 음수를 만들지 않으므로 누구와도 겹치지 않습니다.
+     */
+    private static long anonymousSafe(Long userId) {
+        return userId == null ? -1L : userId;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // ART-02 상세
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -277,9 +364,22 @@ public class ArticleQueryRepository {
                 """);
     }
 
+    /**
+     * 목록 카드에 붙는 제공처 이름.
+     *
+     * <p><b>{@code DISTINCT} 가 필요합니다.</b> {@code article_vendors} 는
+     * {@code (article_id, vendor_id)} 유니크를 <b>의도적으로 걸지 않습니다</b> —
+     * 같은 게시판에 재게시된 원본을 모두 보존해야 재수집 루프가 생기지 않기 때문입니다
+     * (V2 테이블 주석). 그래서 한 공지가 같은 제공처 행을 여러 개 가지는 것이 정상이고,
+     * 그대로 펼치면 카드의 제공처 칩이 <b>같은 이름으로 두세 개 반복</b>됩니다.
+     * 오류가 아니라 200 으로 나가므로 화면을 보기 전에는 드러나지 않습니다.
+     *
+     * <p>상세의 {@link #findSources} 는 반대로 <b>중복을 남깁니다</b> —
+     * 거기서는 행 하나가 원본 게시물 하나이고 각자 다른 {@code source_url} 을 가집니다.
+     */
     private Map<Long, List<NamedRef>> findVendors(List<Long> articleIds) {
         return findRefs(articleIds, """
-                SELECT av.article_id, v.id, v.name
+                SELECT DISTINCT av.article_id, v.id, v.name
                   FROM article_vendors av
                   JOIN vendors v ON v.id = av.vendor_id
                  WHERE av.article_id IN (:articleIds)

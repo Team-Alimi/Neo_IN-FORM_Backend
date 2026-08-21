@@ -13,13 +13,13 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     Optional<Category> findByName(String name);
 
-    /** 관리자 분류 목록. 비활성 포함. (정렬을 고정하고 Pageable 을 안 받는 이유는 {@code VendorRepository} 참조) */
+    /** 분류 목록. 관리자와 사용자가 함께 씁니다. active 가 null 이면 비활성 포함 — 관리 화면 전용입니다. (정렬을 고정하고 Pageable 을 안 받는 이유는 {@code VendorRepository} 참조) */
     @Query("""
             SELECT c FROM Category c
              WHERE (:active IS NULL OR c.active = :active)
              ORDER BY c.sortOrder ASC, c.name ASC, c.id ASC
             """)
-    List<Category> findForAdmin(@Param("active") Boolean active);
+    List<Category> search(@Param("active") Boolean active);
 
     /**
      * 삭제 판정 전에 분류 행을 잠급니다.
