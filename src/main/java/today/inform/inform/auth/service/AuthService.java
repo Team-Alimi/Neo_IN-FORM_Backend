@@ -108,11 +108,10 @@ public class AuthService {
                     ErrorCode.INVALID_REFRESH_TOKEN, "세션이 만료되었습니다. 다시 로그인해 주세요.");
         }
 
-        return new TokenResponse(
+        return TokenResponse.of(
                 jwtTokenProvider.createAccessToken(user.getId(), user.getRole()),
                 jwtTokenProvider.createRefreshToken(user.getId(), newTokenId),
-                user.getRole(),
-                user.isOnboardingCompleted());
+                user);
     }
 
     /** AUTH-03 현재 기기만 로그아웃. 다른 기기 세션은 유지됩니다. */
@@ -162,11 +161,10 @@ public class AuthService {
     private TokenResponse issueTokens(User user) {
         String tokenId = JwtTokenProvider.newTokenId();
         refreshTokenStore.save(user.getId(), tokenId, refreshTtl());
-        return new TokenResponse(
+        return TokenResponse.of(
                 jwtTokenProvider.createAccessToken(user.getId(), user.getRole()),
                 jwtTokenProvider.createRefreshToken(user.getId(), tokenId),
-                user.getRole(),
-                user.isOnboardingCompleted());
+                user);
     }
 
     private Duration refreshTtl() {
