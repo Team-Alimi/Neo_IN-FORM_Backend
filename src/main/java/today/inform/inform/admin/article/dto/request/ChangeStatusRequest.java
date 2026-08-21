@@ -7,7 +7,7 @@ import java.util.List;
 import today.inform.inform.article.entity.ArticleStatus;
 
 /**
- * ADM-07 상태 일괄 변경.
+ * ADM-06 상태 일괄 변경 — {@code POST /admin/articles/bulk/status}.
  *
  * @param memo 변경 사유. 감사 로그에 남습니다.
  *             전달 방법이 특이한데({@code app.status_change_memo} GUC),
@@ -17,7 +17,7 @@ import today.inform.inform.article.entity.ArticleStatus;
 public record ChangeStatusRequest(
         @NotEmpty(message = "대상 공지를 선택해 주세요.")
         @Size(max = 200, message = "한 번에 200건까지 처리할 수 있습니다.")
-        List<@NotNull(message = "공지 번호가 비어 있습니다.") Long> articleIds,
+        List<@NotNull(message = "공지 번호가 비어 있습니다.") Long> ids,
 
         @NotNull(message = "변경할 상태를 지정해 주세요.")
         ArticleStatus status,

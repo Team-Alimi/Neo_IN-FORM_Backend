@@ -30,6 +30,14 @@ spring:
     property-naming-strategy: SNAKE_CASE
     default-property-inclusion: non_null
 
+  servlet:
+    multipart:
+      # FIL-01 은 파일당 10MB 를 허용한다. 기본값(1MB/10MB)이면 앱이 검증에 닿기도 전에
+      # 톰캣이 MaxUploadSizeExceededException 을 던져 우리 ErrorCode 가 아닌 오류가 나간다.
+      # 요청 상한은 다중 업로드를 감안해 파일 상한보다 넉넉히 둔다.
+      max-file-size: 10MB
+      max-request-size: 60MB
+
   data.web.pageable:
     # 기본값(2000)이면 size=2000 요청 하나가 공지 2000건과 그만큼의 제공처·카테고리를
     # 한 번에 긁어간다. 화면에 필요한 최대치보다 넉넉한 선에서 잘라 둔다.

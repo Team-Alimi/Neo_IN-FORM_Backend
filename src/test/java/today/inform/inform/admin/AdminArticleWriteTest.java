@@ -59,14 +59,14 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("번호를 비우면 시퀀스가 발급하고, 카테고리·출처가 함께 저장된다")
     void createWithGeneratedId() {
-        AdminArticleDetail created = writeService.create(request(null, null, "새 공지"), adminId);
+        Long created = writeService.create(request(null, null, "새 공지"), adminId);
         em.flush();
 
-        assertThat(created.id()).isNotNull();
-        assertThat(created.status()).isEqualTo(ArticleStatus.PENDING_REVIEW);
-        assertThat(created.createdBy()).isEqualTo(adminId);
-        assertThat(created.categories()).hasSize(2);
-        assertThat(created.vendors()).extracting(AdminArticleDetail.VendorRef::sourceUrl)
+        assertThat(created).isNotNull();
+        assertThat(writeService.getDetail(created).status()).isEqualTo(ArticleStatus.PENDING_REVIEW);
+        assertThat(writeService.getDetail(created).createdBy()).isEqualTo(adminId);
+        assertThat(writeService.getDetail(created).categories()).hasSize(2);
+        assertThat(writeService.getDetail(created).vendors()).extracting(AdminArticleDetail.VendorRef::sourceUrl)
                 .containsExactly("https://example.inha.ac.kr/1");
     }
 
@@ -105,11 +105,11 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("★ 이미 쓰는 번호를 지정하면 409 로 거부된다")
     void duplicateManualIdIsRejected() {
-        AdminArticleDetail existing = writeService.create(request(null, null, "기존 공지"), adminId);
+        Long existing = writeService.create(request(null, null, "기존 공지"), adminId);
         em.flush();
 
         assertThatThrownBy(() -> {
-            writeService.create(request(existing.id(), null, "같은 번호 공지"), adminId);
+            writeService.create(request(existing, null, "같은 번호 공지"), adminId);
             em.flush();
         }).isInstanceOf(DataIntegrityViolationException.class);
     }
@@ -117,12 +117,12 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("초기 상태를 지정해 만들 수 있다 — 생성은 전이가 아니다")
     void createWithExplicitStatus() {
-        AdminArticleDetail created = writeService.create(
+        Long created = writeService.create(
                 request(null, ArticleStatus.PUBLISHED, "바로 배포할 공지"), adminId);
         em.flush();
 
-        assertThat(created.status()).isEqualTo(ArticleStatus.PUBLISHED);
-        assertThat(created.publishedAt())
+        assertThat(writeService.getDetail(created).status()).isEqualTo(ArticleStatus.PUBLISHED);
+        assertThat(writeService.getDetail(created).publishedAt())
                 .as("발행 시각은 V6 트리거가 채웁니다")
                 .isNotNull();
     }
@@ -132,7 +132,7 @@ class AdminArticleWriteTest extends IntegrationTest {
     void statusMustMatchSourceType() {
         SaveArticleRequest invalid = new SaveArticleRequest(
                 null, SourceType.SCHOOL, ArticleStatus.DRAFT, "제목", "본문",
-                null, null, List.of(), List.of());
+                null, null, List.of(), List.of(), List.of());
 
         assertThatThrownBy(() -> writeService.create(invalid, adminId))
                 .isInstanceOf(BusinessException.class);
@@ -143,7 +143,7 @@ class AdminArticleWriteTest extends IntegrationTest {
     void manualIdPathValidatesPeriod() {
         SaveArticleRequest invalid = new SaveArticleRequest(
                 currentSequenceValue() + 900, SourceType.SCHOOL, null, "제목", "본문",
-                LocalDate.of(2026, 5, 1), LocalDate.of(2026, 4, 1), List.of(), List.of());
+                LocalDate.of(2026, 5, 1), LocalDate.of(2026, 4, 1), List.of(), List.of(), List.of());
 
         assertThatThrownBy(() -> writeService.create(invalid, adminId))
                 .as("native INSERT 경로는 엔티티 검증을 안 거치므로 따로 막아야 합니다")
@@ -157,7 +157,7 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("★ 수정이 크롤러가 수집한 출처를 지우지 않는다 — 지우면 다음 수집에서 공지가 복제된다")
     void updateKeepsCrawlerCollectedVendors() {
-        AdminArticleDetail created = writeService.create(request(null, null, "수집분이 붙은 공지"), adminId);
+        Long created = writeService.create(request(null, null, "수집분이 붙은 공지"), adminId);
         em.flush();
 
         // 크롤러가 넣은 출처(원본 게시판 글 번호가 있음)
@@ -165,15 +165,15 @@ class AdminArticleWriteTest extends IntegrationTest {
                         INSERT INTO article_vendors (article_id, vendor_id, source_url, external_key)
                         VALUES (:articleId, :vendorId, 'https://inha.ac.kr/board/9999', '9999')
                         """)
-                .setParameter("articleId", created.id()).setParameter("vendorId", vendorId)
+                .setParameter("articleId", created).setParameter("vendorId", vendorId)
                 .executeUpdate();
         em.flush();
 
         // 관리자가 제목만 고쳐 저장합니다. 출처 목록에는 수기 추가분만 담겨 옵니다.
-        writeService.update(created.id(), request(null, null, "제목만 고침"));
+        writeService.update(created, request(null, null, "제목만 고침"));
         em.flush();
 
-        List<AdminArticleDetail.VendorRef> vendors = writeService.getDetail(created.id()).vendors();
+        List<AdminArticleDetail.VendorRef> vendors = writeService.getDetail(created).vendors();
 
         assertThat(vendors)
                 .as("수집분이 사라지면 크롤러가 처음 보는 글로 인식해 공지를 새로 만듭니다")
@@ -185,32 +185,32 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("수정하면 카테고리가 최종 목록으로 맞춰진다")
     void updateReplacesCategories() {
-        AdminArticleDetail created = writeService.create(request(null, null, "분류 바꿀 공지"), adminId);
+        Long created = writeService.create(request(null, null, "분류 바꿀 공지"), adminId);
         em.flush();
-        assertThat(created.categories()).hasSize(2);
+        assertThat(writeService.getDetail(created).categories()).hasSize(2);
 
         SaveArticleRequest single = new SaveArticleRequest(
                 null, null, null, "분류 바꿀 공지", "본문", null, null,
-                List.of(categoryId), List.of());
-        writeService.update(created.id(), single);
+                List.of(categoryId), List.of(), List.of());
+        writeService.update(created, single);
         em.flush();
 
-        assertThat(writeService.getDetail(created.id()).categories()).hasSize(1);
+        assertThat(writeService.getDetail(created).categories()).hasSize(1);
     }
 
     @Test
     @DisplayName("★ 수정은 상태를 바꾸지 않는다 — 상태는 전이 규칙을 타야 한다")
     void updateDoesNotChangeStatus() {
-        AdminArticleDetail created = writeService.create(request(null, null, "상태 유지 공지"), adminId);
+        Long created = writeService.create(request(null, null, "상태 유지 공지"), adminId);
         em.flush();
 
         SaveArticleRequest tryingToPublish = new SaveArticleRequest(
                 null, SourceType.CLUB, ArticleStatus.PUBLISHED, "상태 유지 공지", "본문",
-                null, null, List.of(), List.of());
-        writeService.update(created.id(), tryingToPublish);
+                null, null, List.of(), List.of(), List.of());
+        writeService.update(created, tryingToPublish);
         em.flush();
 
-        AdminArticleDetail after = writeService.getDetail(created.id());
+        AdminArticleDetail after = writeService.getDetail(created);
         assertThat(after.status())
                 .as("수정으로 검수를 건너뛸 수 있으면 상태 머신이 무의미해집니다")
                 .isEqualTo(ArticleStatus.PENDING_REVIEW);
@@ -222,20 +222,20 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("본문을 고치면 AI 요약이 무효화된다")
     void updateInvalidatesSummary() {
-        AdminArticleDetail created = writeService.create(request(null, null, "요약 붙은 공지"), adminId);
+        Long created = writeService.create(request(null, null, "요약 붙은 공지"), adminId);
         em.flush();
         em.createNativeQuery("UPDATE articles SET summary = 'AI 요약' WHERE id = :id")
-                .setParameter("id", created.id()).executeUpdate();
+                .setParameter("id", created).executeUpdate();
         em.flush();
         em.clear();
 
         SaveArticleRequest edited = new SaveArticleRequest(
                 null, null, null, "요약 붙은 공지", "본문을 완전히 바꿉니다", null, null,
-                List.of(), List.of());
-        writeService.update(created.id(), edited);
+                List.of(), List.of(), List.of());
+        writeService.update(created, edited);
         em.flush();
 
-        assertThat(writeService.getDetail(created.id()).summary())
+        assertThat(writeService.getDetail(created).summary())
                 .as("트리거가 지웁니다. 앱이 따로 할 일이 없습니다")
                 .isNull();
     }
@@ -247,42 +247,97 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("★ 상세에서 받은 출처를 그대로 되돌려 보내도 행이 늘어나지 않는다")
     void roundTrippingVendorsDoesNotDuplicate() {
-        AdminArticleDetail created = writeService.create(request(null, null, "왕복 저장 공지"), adminId);
+        Long created = writeService.create(request(null, null, "왕복 저장 공지"), adminId);
         em.flush();
         em.createNativeQuery("""
                         INSERT INTO article_vendors (article_id, vendor_id, source_url, external_key)
                         VALUES (:articleId, :vendorId, 'https://inha.ac.kr/board/1234', '1234')
                         """)
-                .setParameter("articleId", created.id()).setParameter("vendorId", vendorId)
+                .setParameter("articleId", created).setParameter("vendorId", vendorId)
                 .executeUpdate();
         em.flush();
         em.clear();
 
         // 화면이 상세 응답을 그대로 폼에 담아 되돌려 보냅니다.
         for (int i = 0; i < 3; i++) {
-            AdminArticleDetail current = writeService.getDetail(created.id());
-            writeService.update(created.id(), echo(current));
+            AdminArticleDetail current = writeService.getDetail(created);
+            writeService.update(created, echo(current));
             em.flush();
             em.clear();
         }
 
-        assertThat(writeService.getDetail(created.id()).vendors())
+        assertThat(writeService.getDetail(created).vendors())
                 .as("저장할 때마다 한 줄씩 늘어나면 사용자 화면에 같은 학과가 여러 번 뜹니다")
                 .hasSize(2);
     }
 
     @Test
-    @DisplayName("★ 분류·출처를 빠뜨린 요청은 거부한다 — 조용히 지우지 않는다")
-    void omittingCollectionsIsRejected() {
-        AdminArticleDetail created = writeService.create(request(null, null, "부분 수정 대상"), adminId);
+    @DisplayName("★ 분류·출처를 빠뜨리면 그대로 유지된다 — 생략과 빈 배열은 다른 뜻이다")
+    void omittingCollectionsKeepsThem() {
+        Long created = writeService.create(request(null, null, "부분 수정 대상"), adminId);
         em.flush();
+        assertThat(writeService.getDetail(created).categories()).hasSize(2);
 
         SaveArticleRequest titleOnly = new SaveArticleRequest(
-                null, null, null, "제목만 고침", "본문", null, null, null, null);
+                null, null, null, "제목만 고침", "본문", null, null, null, null, null);
+        writeService.update(created, titleOnly);
+        em.flush();
 
-        assertThatThrownBy(() -> writeService.update(created.id(), titleOnly))
+        assertThat(writeService.getDetail(created).categories())
                 .as("보내지 않은 것이 '지워 달라' 로 해석되면 안 됩니다")
+                .hasSize(2);
+        assertThat(writeService.getDetail(created).vendors()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("★ 제목만 고쳐도 기간이 지워지지 않는다 — 명세: 보낸 필드만 반영")
+    void patchKeepsFieldsThatWereNotSent() {
+        Long created = writeService.create(new SaveArticleRequest(
+                null, SourceType.SCHOOL, null, "기간 있는 공지", "본문",
+                LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31),
+                List.of(), List.of(), List.of()), adminId);
+        em.flush();
+
+        // 제목만 보냅니다. 기간·본문·목록은 전부 생략.
+        writeService.update(created, new SaveArticleRequest(
+                null, null, null, "제목만 고침", null, null, null, null, null, null));
+        em.flush();
+        em.clear();
+
+        AdminArticleDetail after = writeService.getDetail(created);
+        assertThat(after.title()).isEqualTo("제목만 고침");
+        assertThat(after.startsOn())
+                .as("생략한 기간이 지워지면 오류 없이 사라져 관리자가 알아채지 못합니다")
+                .isEqualTo(LocalDate.of(2026, 3, 1));
+        assertThat(after.endsOn()).isEqualTo(LocalDate.of(2026, 3, 31));
+        assertThat(after.content())
+                .as("본문도 마찬가지입니다")
+                .isEqualTo("본문");
+    }
+
+    @Test
+    @DisplayName("생성에는 제목·본문이 필수다 — DTO 가 아니라 서비스가 막는다")
+    void createStillRequiresTitleAndContent() {
+        SaveArticleRequest noTitle = new SaveArticleRequest(
+                null, SourceType.SCHOOL, null, null, "본문",
+                null, null, List.of(), List.of(), List.of());
+
+        assertThatThrownBy(() -> writeService.create(noTitle, adminId))
+                .as("PATCH 가 같은 DTO 를 쓰므로 @NotBlank 를 걸 수 없습니다")
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("★ 빈 배열을 명시하면 지워진다 — 생략과 구분되어야 한다")
+    void explicitEmptyListClearsThem() {
+        Long created = writeService.create(request(null, null, "비울 대상"), adminId);
+        em.flush();
+
+        writeService.update(created, new SaveArticleRequest(
+                null, null, null, "비움", "본문", null, null, List.of(), List.of(), List.of()));
+        em.flush();
+
+        assertThat(writeService.getDetail(created).categories()).isEmpty();
     }
 
     @Test
@@ -290,7 +345,7 @@ class AdminArticleWriteTest extends IntegrationTest {
     void cannotCreateDirectlyInTrash() {
         SaveArticleRequest trashed = new SaveArticleRequest(
                 null, SourceType.SCHOOL, ArticleStatus.TRASHED, "휴지통에서 태어난 공지", "본문",
-                null, null, List.of(), List.of());
+                null, null, List.of(), List.of(), List.of());
 
         assertThatThrownBy(() -> writeService.create(trashed, adminId))
                 .isInstanceOf(BusinessException.class);
@@ -301,7 +356,7 @@ class AdminArticleWriteTest extends IntegrationTest {
     void absurdlyLargeIdIsRejected() {
         SaveArticleRequest huge = new SaveArticleRequest(
                 Long.MAX_VALUE / 2, SourceType.SCHOOL, null, "거대 번호", "본문",
-                null, null, List.of(), List.of());
+                null, null, List.of(), List.of(), List.of());
 
         assertThatThrownBy(() -> writeService.create(huge, adminId))
                 .isInstanceOf(BusinessException.class);
@@ -314,10 +369,10 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("관리자 상세는 검수 대기 공지도 열린다")
     void detailOpensUnpublishedArticle() {
-        AdminArticleDetail created = writeService.create(request(null, null, "미배포 공지"), adminId);
+        Long created = writeService.create(request(null, null, "미배포 공지"), adminId);
         em.flush();
 
-        assertThat(writeService.getDetail(created.id()).status())
+        assertThat(writeService.getDetail(created).status())
                 .isEqualTo(ArticleStatus.PENDING_REVIEW);
     }
 
@@ -331,10 +386,10 @@ class AdminArticleWriteTest extends IntegrationTest {
     @Test
     @DisplayName("번호 중복 확인")
     void checkId() {
-        AdminArticleDetail created = writeService.create(request(null, null, "번호 확인용"), adminId);
+        Long created = writeService.create(request(null, null, "번호 확인용"), adminId);
         em.flush();
 
-        assertThat(writeService.isIdAvailable(created.id())).isFalse();
+        assertThat(writeService.isIdAvailable(created)).isFalse();
         assertThat(writeService.isIdAvailable(currentSequenceValue() + 10_000)).isTrue();
     }
 
@@ -348,7 +403,7 @@ class AdminArticleWriteTest extends IntegrationTest {
                 detail.categories().stream().map(AdminArticleDetail.CategoryRef::id).toList(),
                 detail.vendors().stream()
                         .map(v -> new VendorLink(v.id(), v.vendorId(), v.sourceUrl()))
-                        .toList());
+                        .toList(), List.of());
     }
 
     private SaveArticleRequest request(Long articleId, ArticleStatus status, String title) {
@@ -356,7 +411,7 @@ class AdminArticleWriteTest extends IntegrationTest {
                 articleId, SourceType.SCHOOL, status, title, "본문입니다. 충분히 깁니다.",
                 LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31),
                 List.of(categoryId, secondCategoryId),
-                List.of(new VendorLink(null, vendorId, "https://example.inha.ac.kr/1")));
+                List.of(new VendorLink(null, vendorId, "https://example.inha.ac.kr/1")), List.of());
     }
 
     /** {@code ceiling} 아래에서 아직 쓰이지 않은 번호. */

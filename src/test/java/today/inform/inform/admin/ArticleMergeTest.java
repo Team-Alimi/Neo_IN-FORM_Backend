@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform.admin.article.dto.response.SimilarComparison;
+import today.inform.inform.admin.article.dto.response.StatusLogResponse;
 import today.inform.inform.admin.article.service.AdminArticleService;
 import today.inform.inform.admin.article.service.ArticleMergeService;
 import today.inform.inform.article.entity.Article;
@@ -208,9 +209,21 @@ class ArticleMergeTest extends IntegrationTest {
         mergeService.merge(target.getId(), List.of(source.getId()), longMemo, adminId);
         em.flush();
 
-        assertThat(adminArticleService.statusLogs(target.getId()))
-                .as("사유가 길다고 병합 전체가 롤백되면 관리자는 원인을 알 수 없습니다")
-                .isNotEmpty();
+        // ★ isNotEmpty() 만으로는 아무것도 검증되지 않습니다 — publish() 가 남긴 상태 전이 로그와
+        //   흡수된 공지에서 옮겨 온 이력 때문에 recordMerge 가 아무 일도 안 해도 비어 있지 않습니다.
+        //   확인해야 할 것은 "잘릴 때 무엇을 살렸는가" 입니다.
+        String mergeMemo = adminArticleService.statusLogs(target.getId()).stream()
+                .map(StatusLogResponse::memo)
+                .filter(memo -> memo != null && memo.contains("#" + source.getId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("병합 사유가 이력에 없습니다"));
+
+        assertThat(mergeMemo)
+                .as("접두어가 잘리면 어느 공지를 흡수했는지가 사라집니다 — "
+                        + "잘라야 할 때 버리는 쪽은 사용자 사유여야 합니다")
+                .startsWith("공지 #" + source.getId() + " 병합")
+                .contains("가")
+                .hasSizeLessThanOrEqualTo(500);
     }
 
     @Test
@@ -309,31 +322,9 @@ class ArticleMergeTest extends IntegrationTest {
     // ADM-10 영구 삭제
     // ─────────────────────────────────────────────────────────────────────────
 
-    @Test
-    @DisplayName("★ 휴지통에 없는 공지는 영구 삭제할 수 없다")
-    void canOnlyDeleteFromTrash() {
-        Article live = publish("살아 있는 공지");
-        em.flush();
-
-        assertThatThrownBy(() -> mergeService.deletePermanently(List.of(live.getId())))
-                .as("목록에서 잘못 선택한 공지가 곧바로 사라지면 되돌릴 수 없습니다")
-                .isInstanceOf(BusinessException.class);
-    }
-
-    @Test
-    @DisplayName("휴지통 공지는 영구 삭제된다")
-    void deletesTrashedArticle() {
-        Article article = publish("지울 공지");
-        article.changeStatus(ArticleStatus.TRASHED);
-        em.flush();
-        Long articleId = article.getId();
-
-        assertThat(mergeService.deletePermanently(List.of(articleId))).isEqualTo(1);
-        em.flush();
-        em.clear();
-
-        assertThat(articleRepository.findById(articleId)).isEmpty();
-    }
+    // ADM-10 영구 삭제는 부분 성공이라 건별로 커밋합니다({@code BulkExecutor}).
+    // 트랜잭션 테스트 안에서는 그 새 트랜잭션이 준비 데이터를 보지 못하므로
+    // 검증을 AdminFileCleanupTest(비트랜잭션)로 옮겼습니다.
 
     // ─────────────────────────────────────────────────────────────────────────
     // ADM-12 유사 비교

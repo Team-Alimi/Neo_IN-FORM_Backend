@@ -72,29 +72,30 @@ class UserConcurrencyTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("★ 권한 변경은 같은 트랜잭션의 다른 컬럼을 되돌리지 않는다 (@DynamicUpdate)")
-    void roleChangeDoesNotResurrectAWithdrawnAccount() {
+    @DisplayName("★ 낡은 권한 변경이 탈퇴를 되살리지 못한다 — 반대 방향도 막혀야 한다")
+    void staleRoleChangeCannotResurrectAWithdrawnAccount() {
         User user = userRepository.saveAndFlush(User.create("concurrency-b@inha.ac.kr", "동시성"));
         Long userId = user.getId();
 
-        // 사용자가 탈퇴하고 커밋한 상황.
+        // 관리자가 권한 화면을 열어 둔 상태(= 이 시점 스냅샷을 들고 있음).
+        // 그 사이 사용자가 탈퇴하고 커밋합니다.
         em.createNativeQuery("""
                         UPDATE users SET status = 'WITHDRAWN', withdrawn_at = now(),
                                          version = version + 1
                          WHERE id = :id
                         """)
                 .setParameter("id", userId).executeUpdate();
-        em.clear();
 
-        // 관리자가 그 뒤에 권한만 바꿉니다. 이번에는 최신 행을 읽으므로 정상 저장돼야 합니다.
-        userRepository.findById(userId).orElseThrow().changeRole(UserRole.USER);
-        em.flush();
-        em.clear();
+        // 이제야 관리자의 저장이 들어옵니다. 낡은 스냅샷에는 status='ACTIVE', withdrawn_at=NULL 이 들어 있습니다.
+        user.changeRole(UserRole.ADMIN);
 
-        assertThat(statusOf(userId))
-                .as("전 컬럼 UPDATE 라면 status='ACTIVE', withdrawn_at=NULL 이 되돌아가 계정이 되살아납니다. "
-                        + "ck_users_withdrawn 은 두 값이 짝이 맞으므로 이것을 잡지 못합니다")
-                .isEqualTo("WITHDRAWN");
+        assertThatThrownBy(() -> em.flush())
+                .as("통과하면 방금 탈퇴한 계정이 되살아납니다. "
+                        + "ck_users_withdrawn 은 두 값이 짝으로 되돌아가므로 이것을 잡지 못합니다")
+                .isInstanceOf(OptimisticLockException.class);
+
+        em.clear();
+        assertThat(statusOf(userId)).isEqualTo("WITHDRAWN");
     }
 
     // ─────────────────────────────────────────────────────────────────────────

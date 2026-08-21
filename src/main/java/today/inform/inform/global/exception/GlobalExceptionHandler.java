@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import today.inform.inform.global.response.ApiResponse;
 
@@ -35,6 +36,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
                 .body(ApiResponse.fail(ErrorCode.INVALID_INPUT_VALUE.getCode(), message));
+    }
+
+    /**
+     * 업로드 용량 초과 — 400.
+     *
+     * <p>이 핸들러가 없으면 <b>500</b> 이 나갑니다. 톰캣이 요청 본문을 다 읽기도 전에 끊어서
+     * 우리 검증({@code AdminFileService})에 아예 도달하지 못하기 때문입니다.
+     * 그러면 같은 "너무 큰 파일" 이 <b>파일 크기에 따라 400 이 되기도 하고 500 이 되기도 합니다</b> —
+     * 앱 상한(10MB)보다 큰 파일은 여기로, 그 이하는 우리 검증으로 갑니다.
+     * 클라이언트가 5xx 를 재시도 대상으로 다루므로 큰 파일일수록 재업로드가 반복됩니다.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadSize(MaxUploadSizeExceededException e) {
+        log.warn("업로드 용량 초과: {}", e.getMessage());
+        return ResponseEntity
+                .status(ErrorCode.FILE_SIZE_EXCEEDED.getStatus())
+                .body(ApiResponse.fail(
+                        ErrorCode.FILE_SIZE_EXCEEDED.getCode(), ErrorCode.FILE_SIZE_EXCEEDED.getMessage()));
     }
 
     /**

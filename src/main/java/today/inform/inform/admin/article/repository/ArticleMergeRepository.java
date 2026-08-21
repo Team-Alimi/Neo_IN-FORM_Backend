@@ -52,13 +52,14 @@ public class ArticleMergeRepository {
      *
      * <p>두 공지를 모두 북마크한 사용자는 대상 쪽 북마크가 이미 있으므로 잃는 것이 없습니다.
      */
-    public void moveUserReactions(Long targetId, Long sourceId) {
-        moveByUser("bookmarks", targetId, sourceId);
+    public int moveUserReactions(Long targetId, Long sourceId) {
+        int bookmarks = moveByUser("bookmarks", targetId, sourceId);
         moveByUser("article_likes", targetId, sourceId);
+        return bookmarks;
     }
 
-    private void moveByUser(String table, Long targetId, Long sourceId) {
-        execute("""
+    private int moveByUser(String table, Long targetId, Long sourceId) {
+        int moved = execute("""
                 UPDATE %s r SET article_id = :targetId
                  WHERE r.article_id = :sourceId
                    AND NOT EXISTS (SELECT 1 FROM %s t
@@ -66,11 +67,12 @@ public class ArticleMergeRepository {
                 """.formatted(table, table), targetId, sourceId);
 
         execute("DELETE FROM %s WHERE article_id = :sourceId".formatted(table), targetId, sourceId);
+        return moved;
     }
 
     /** 분류는 합집합입니다. 이미 대상에 있는 카테고리는 버립니다. */
-    public void mergeCategories(Long targetId, Long sourceId) {
-        execute("""
+    public int mergeCategories(Long targetId, Long sourceId) {
+        int moved = execute("""
                 UPDATE article_categories ac SET article_id = :targetId
                  WHERE ac.article_id = :sourceId
                    AND NOT EXISTS (SELECT 1 FROM article_categories t
@@ -78,6 +80,7 @@ public class ArticleMergeRepository {
                 """, targetId, sourceId);
 
         execute("DELETE FROM article_categories WHERE article_id = :sourceId", targetId, sourceId);
+        return moved;
     }
 
     /**
@@ -90,8 +93,8 @@ public class ArticleMergeRepository {
      * <p>수집분은 {@code (vendor_id, external_key)} 로 유니크라 대상으로 옮겨도 충돌하지 않습니다.
      * 수기분만 {@code (article_id, vendor_id)} 유니크에 걸리므로 대조가 필요합니다.
      */
-    public void moveVendors(Long targetId, Long sourceId) {
-        execute("""
+    public int moveVendors(Long targetId, Long sourceId) {
+        int moved = execute("""
                 UPDATE article_vendors av SET article_id = :targetId
                  WHERE av.article_id = :sourceId
                    AND (av.external_key IS NOT NULL
@@ -102,11 +105,12 @@ public class ArticleMergeRepository {
                 """, targetId, sourceId);
 
         execute("DELETE FROM article_vendors WHERE article_id = :sourceId", targetId, sourceId);
+        return moved;
     }
 
     /** 첨부. 같은 파일이 이미 붙어 있으면 버립니다. */
-    public void moveAttachments(Long targetId, Long sourceId) {
-        execute("""
+    public int moveAttachments(Long targetId, Long sourceId) {
+        int moved = execute("""
                 UPDATE attachments a SET article_id = :targetId
                  WHERE a.article_id = :sourceId
                    AND NOT EXISTS (SELECT 1 FROM attachments t
@@ -115,6 +119,7 @@ public class ArticleMergeRepository {
                 """, targetId, sourceId);
 
         execute("DELETE FROM attachments WHERE article_id = :sourceId", targetId, sourceId);
+        return moved;
     }
 
     /**
@@ -127,21 +132,23 @@ public class ArticleMergeRepository {
      *
      * <p>한 문장으로 옮기면 행 처리 순서를 보장할 수 없으므로 두 문장으로 나눕니다.
      */
-    public void moveComments(Long targetId, Long sourceId) {
-        execute("""
+    public int moveComments(Long targetId, Long sourceId) {
+        int roots = execute("""
                 UPDATE comments SET article_id = :targetId
                  WHERE article_id = :sourceId AND parent_id IS NULL
                 """, targetId, sourceId);
 
-        execute("""
+        int replies = execute("""
                 UPDATE comments SET article_id = :targetId
                  WHERE article_id = :sourceId AND parent_id IS NOT NULL
                 """, targetId, sourceId);
+
+        return roots + replies;
     }
 
     /** 알림. 이미 같은 알림이 대상에 있으면 버립니다. */
-    public void moveNotifications(Long targetId, Long sourceId) {
-        execute("""
+    public int moveNotifications(Long targetId, Long sourceId) {
+        int moved = execute("""
                 UPDATE notifications n SET article_id = :targetId
                  WHERE n.article_id = :sourceId
                    AND NOT EXISTS (SELECT 1 FROM notifications t
@@ -152,6 +159,7 @@ public class ArticleMergeRepository {
                 """, targetId, sourceId);
 
         execute("DELETE FROM notifications WHERE article_id = :sourceId", targetId, sourceId);
+        return moved;
     }
 
     /** 상태 이력. 유니크가 없어 그대로 옮깁니다 — 흡수된 공지의 검수 과정도 기록으로 남아야 합니다. */
@@ -232,11 +240,12 @@ public class ArticleMergeRepository {
                 .executeUpdate();
     }
 
-    private void execute(String sql, Long targetId, Long sourceId) {
+    /** @return 영향받은 행 수. 병합 응답이 "무엇이 몇 건 옮겨졌는지" 를 돌려주는 데 씁니다. */
+    private int execute(String sql, Long targetId, Long sourceId) {
         var query = em.createNativeQuery(sql).setParameter("sourceId", sourceId);
         if (sql.contains(":targetId")) {
             query.setParameter("targetId", targetId);
         }
-        query.executeUpdate();
+        return query.executeUpdate();
     }
 }

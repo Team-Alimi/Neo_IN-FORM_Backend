@@ -1,7 +1,7 @@
 package today.inform.inform.admin;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -82,11 +82,11 @@ class AdminAuditTest extends IntegrationTest {
     @Test
     @DisplayName("★ 관리자가 상태를 바꾸면 이력에 '누가·왜·언제' 가 전부 남는다")
     void auditTrailCarriesActorMemoAndTime() throws Exception {
-        mockMvc.perform(patch("/api/v1/admin/articles/status")
+        mockMvc.perform(post("/api/v1/admin/articles/bulk/status")
                         .header(HttpHeaders.AUTHORIZATION, bearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"article_ids": [%d], "status": "READY_TO_PUBLISH", "memo": "검수 완료"}
+                                {"ids": [%d], "status": "READY_TO_PUBLISH", "memo": "검수 완료"}
                                 """.formatted(articleId)))
                 .andExpect(status().isOk());
 

@@ -30,7 +30,7 @@ import today.inform.inform.global.entity.BaseTimeEntity;
  *       단일 {@code major_vendor_id} 컬럼은 v11 에서 제거되었습니다(복수전공 지원).</li>
  * </ul>
  *
- * <p><b>왜 {@link Version} 과 {@link DynamicUpdate} 가 둘 다 필요한가</b>
+ * <p><b>왜 {@link Version} 이 필요한가</b>
  * 이 엔티티는 서로 다른 사람이 동시에 만지는 유일한 엔티티입니다 —
  * 본인이 설정·탈퇴를 바꾸는 동안 관리자가 권한을 바꿉니다(ADM-16).
  * 둘 다 없으면 나중에 커밋한 쪽이 <b>로드 시점 스냅샷으로 행 전체를 다시 써서</b>
@@ -42,6 +42,11 @@ import today.inform.inform.global.entity.BaseTimeEntity;
  * 반대 방향으로는 {@code status='ACTIVE'} 와 {@code withdrawn_at=NULL} 이 함께 되돌아가
  * 탈퇴한 계정이 되살아나는데, {@code ck_users_withdrawn} 은 두 값이 짝이 맞으므로 통과시킵니다.
  * (V10 마이그레이션. {@code articles}·{@code comments} 가 같은 이유로 이미 version 을 가집니다)
+ *
+ * <p>{@link DynamicUpdate} 는 <b>보조 장치</b>입니다. 바뀐 컬럼만 UPDATE 에 실어 불필요한 덮어쓰기를
+ * 줄이지만, 위 사고를 실제로 막는 것은 {@code version} 입니다 —
+ * 낡은 스냅샷은 어느 컬럼을 쓰든 0행이 되어 거부됩니다.
+ * 그래서 {@code @DynamicUpdate} 하나만으로는 상태 단언으로 검증되지 않습니다(테스트가 그것을 주장하면 안 됩니다).
  */
 @Getter
 @Entity

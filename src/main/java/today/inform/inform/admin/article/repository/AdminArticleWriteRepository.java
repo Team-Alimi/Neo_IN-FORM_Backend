@@ -163,6 +163,95 @@ public class AdminArticleWriteRepository {
         }
     }
 
+    /**
+     * 첨부를 요청 내용과 일치시킵니다. <b>전체 교체</b>입니다.
+     *
+     * <p>{@code id} 가 있는 항목은 남기고, 없는 항목은 새로 넣고,
+     * 요청에 없는 기존 행은 지웁니다 — 출처와 같은 방식입니다.
+     *
+     * <p><b>DB 에서 지워도 S3 객체는 남습니다.</b> 이 메서드는 그것까지 책임지지 않습니다 —
+     * 트랜잭션이 롤백되면 되살릴 수 없는데 객체는 이미 사라진 뒤가 되기 때문입니다.
+     * 떨어져 나온 객체는 FIL-02 나 정리 배치가 다룹니다.
+     *
+     * @param attachments 이미 저장 형식으로 해석된 값. {@code storageType} 과 {@code objectKey} 의
+     *                    짝이 맞아야 합니다 — {@code ck_attachments_object_key} 가 강제합니다
+     */
+    public void syncAttachments(Long articleId, List<ResolvedAttachment> attachments) {
+        Set<Long> keepIds = attachments.stream()
+                .map(ResolvedAttachment::id)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        deleteRemovedAttachments(articleId, keepIds);
+
+        int sortOrder = 0;
+        for (ResolvedAttachment attachment : attachments) {
+            if (attachment.id() == null) {
+                insertAttachment(articleId, attachment, sortOrder);
+            } else {
+                // 기존 행은 순서만 맞춥니다. 파일 자체는 바뀔 수 없습니다 —
+                // 다른 파일이면 새 행이고, 그건 id 가 없는 항목으로 들어옵니다.
+                em.createNativeQuery(
+                                "UPDATE attachments SET sort_order = :sortOrder"
+                                        + " WHERE id = :id AND article_id = :articleId")
+                        .setParameter("sortOrder", sortOrder)
+                        .setParameter("id", attachment.id())
+                        .setParameter("articleId", articleId)
+                        .executeUpdate();
+            }
+            sortOrder++;
+        }
+    }
+
+    private void deleteRemovedAttachments(Long articleId, Set<Long> keepIds) {
+        if (keepIds.isEmpty()) {
+            em.createNativeQuery("DELETE FROM attachments WHERE article_id = :articleId")
+                    .setParameter("articleId", articleId)
+                    .executeUpdate();
+            return;
+        }
+        em.createNativeQuery(
+                        "DELETE FROM attachments WHERE article_id = :articleId AND id NOT IN (:keepIds)")
+                .setParameter("articleId", articleId)
+                .setParameter("keepIds", keepIds)
+                .executeUpdate();
+    }
+
+    private void insertAttachment(Long articleId, ResolvedAttachment attachment, int sortOrder) {
+        em.createNativeQuery("""
+                        INSERT INTO attachments
+                               (article_id, file_url, storage_type, object_key,
+                                original_name, content_type, size_bytes, sort_order)
+                        VALUES (:articleId, :fileUrl, :storageType, :objectKey,
+                                :originalName, :contentType, :sizeBytes, :sortOrder)
+                        """)
+                .setParameter("articleId", articleId)
+                .setParameter("fileUrl", attachment.fileUrl())
+                .setParameter("storageType", attachment.storageType())
+                .setParameter("objectKey", attachment.objectKey())
+                .setParameter("originalName", attachment.originalName())
+                .setParameter("contentType", attachment.contentType())
+                .setParameter("sizeBytes", attachment.sizeBytes())
+                .setParameter("sortOrder", sortOrder)
+                .executeUpdate();
+    }
+
+    /**
+     * 저장 직전 형태의 첨부.
+     *
+     * <p>요청의 {@code file_url} 이 우리 스토리지 것인지 판정한 결과가 담깁니다.
+     * 그 판정은 {@code FileStorage} 를 아는 서비스가 하고, 저장소는 받은 대로 씁니다.
+     */
+    public record ResolvedAttachment(
+            Long id,
+            String fileUrl,
+            String storageType,
+            String objectKey,
+            String originalName,
+            String contentType,
+            Long sizeBytes) {
+    }
+
     private void deleteRemovedManualVendors(Long articleId, Set<Long> keepIds) {
         if (keepIds.isEmpty()) {
             em.createNativeQuery("""

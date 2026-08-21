@@ -6,15 +6,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import today.inform.inform.admin.article.dto.response.AdminArticleDetail;
+import today.inform.inform.admin.article.dto.response.BulkResult;
+import today.inform.inform.admin.article.dto.response.MergeResult;
 import today.inform.inform.admin.article.dto.response.SimilarComparison;
 import today.inform.inform.admin.article.repository.AdminArticleQueryRepository;
 import today.inform.inform.admin.article.repository.ArticleMergeRepository;
+import today.inform.inform.admin.file.repository.AttachmentQueryRepository;
 import today.inform.inform.article.entity.Article;
 import today.inform.inform.article.entity.ArticleStatus;
 import today.inform.inform.article.repository.ArticleRepository;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
+import today.inform.inform.storage.FileStorage;
 
 /**
  * ADM-10 영구 삭제 · ADM-12 유사 비교 · ADM-13 병합.
@@ -31,6 +37,9 @@ public class ArticleMergeService {
     private final ArticleMergeRepository mergeRepository;
     private final AdminArticleQueryRepository queryRepository;
     private final AdminArticleWriteService writeService;
+    private final AttachmentQueryRepository attachmentQueryRepository;
+    private final FileStorage fileStorage;
+    private final BulkExecutor bulkExecutor;
 
     /**
      * ADM-12 유사 공지 비교.
@@ -60,7 +69,7 @@ public class ArticleMergeService {
      * @return 실제로 흡수된 공지 수
      */
     @Transactional
-    public int merge(Long targetId, List<Long> sourceIds, String memo, Long actorId) {
+    public MergeResult merge(Long targetId, List<Long> sourceIds, String memo, Long actorId) {
         List<Long> sources = sourceIds.stream()
                 .filter(Objects::nonNull)
                 .distinct()
@@ -73,10 +82,31 @@ public class ArticleMergeService {
         Article target = load(targetId);
         requireMergeable(target);
 
+        MovedCounter moved = new MovedCounter();
         for (Long sourceId : sources) {
-            absorb(target, load(sourceId), actorId, memo);
+            absorb(target, load(sourceId), actorId, memo, moved);
         }
-        return sources.size();
+        return new MergeResult(targetId, sources, moved.toResponse());
+    }
+
+    /**
+     * 옮겨진 건수를 모읍니다.
+     *
+     * <p>병합은 되돌릴 수 없고 흡수된 공지는 사라집니다. 관리자가 그 자리에서
+     * "예상한 만큼 옮겨졌나" 를 볼 수 없으면, 무언가 빠졌어도 알아챌 방법이 없습니다.
+     */
+    private static final class MovedCounter {
+        private int vendors;
+        private int bookmarks;
+        private int attachments;
+        private int categories;
+        private int comments;
+        private int notifications;
+
+        MergeResult.Moved toResponse() {
+            return new MergeResult.Moved(vendors, bookmarks, attachments, categories,
+                    comments, notifications);
+        }
     }
 
     /**
@@ -91,35 +121,65 @@ public class ArticleMergeService {
      * 관리자 조작 전용 감사 테이블이 없어서 지금은 애플리케이션 로그로만 남깁니다 —
      * 사용자 데이터를 영구히 지우는 기능치고는 약한 기록이라 <b>보완이 필요합니다.</b>
      *
+     * <p><b>S3 객체도 함께 지웁니다.</b> v1 은 삭제 코드를 만들어 두고 <b>어디서도 부르지 않아</b>
+     * 공지를 지워도 스토리지에 파일이 그대로 남았습니다. 그 경로가 여기입니다.
+     *
      * @return 지운 개수
      */
-    @Transactional
-    public int deletePermanently(List<Long> articleIds) {
-        List<Long> ids = articleIds.stream().filter(Objects::nonNull).distinct().toList();
+    public BulkResult deletePermanently(List<Long> articleIds) {
+        return bulkExecutor.runEach(articleIds, this::deleteOnePermanently);
+    }
 
-        List<Article> articles = articleRepository.findAllById(ids);
-        if (articles.size() != ids.size()) {
-            throw new BusinessException(ErrorCode.ARTICLE_NOT_FOUND);
+    /** 한 건 = 한 트랜잭션. 나머지 건에 영향을 주지 않습니다. */
+    private void deleteOnePermanently(Long articleId) {
+        Article article = articleRepository.findById(articleId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ARTICLE_NOT_FOUND));
+
+        if (article.getStatus() != ArticleStatus.TRASHED) {
+            throw new BusinessException(
+                    ErrorCode.NOT_IN_TRASH,
+                    "휴지통에 있는 공지만 영구 삭제할 수 있습니다. articleId=" + articleId);
         }
-        for (Article article : articles) {
-            if (article.getStatus() != ArticleStatus.TRASHED) {
-                throw new BusinessException(
-                        ErrorCode.NOT_IN_TRASH,
-                        "휴지통에 있는 공지만 영구 삭제할 수 있습니다. articleId=" + article.getId());
-            }
-        }
+
+        // ★ 지우기 전에 읽어야 합니다. attachments 가 ON DELETE CASCADE 라
+        //   공지를 지우는 순간 어떤 객체를 지워야 하는지 알 방법이 사라집니다.
+        List<String> objectKeys = attachmentQueryRepository.findS3ObjectKeys(List.of(articleId));
 
         // ★ 지우기 전에 기록합니다. 지운 뒤에는 남길 곳이 없습니다 —
         //   article_status_logs 도 CASCADE 로 함께 사라지므로 DB 에는 흔적이 하나도 안 남습니다.
         //   지금은 애플리케이션 로그가 유일한 기록입니다.
         //   관리자 조작 전용 감사 테이블이 생기면 그쪽으로 옮겨야 합니다.
-        for (Article article : articles) {
-            log.warn("공지 영구 삭제. articleId={} status={} title={}",
-                    article.getId(), article.getStatus(), article.getTitle());
-        }
+        log.warn("공지 영구 삭제. articleId={} status={} title={} 첨부={}",
+                article.getId(), article.getStatus(), article.getTitle(), objectKeys.size());
 
-        articleRepository.deleteAll(articles);
-        return articles.size();
+        articleRepository.delete(article);
+        deleteObjectsAfterCommit(objectKeys);
+    }
+
+    /**
+     * S3 삭제를 <b>커밋 이후로</b> 미룹니다.
+     *
+     * <p>트랜잭션 안에서 지우면 이후 롤백됐을 때 <b>공지는 살아 있는데 이미지만 사라진</b>
+     * 상태가 됩니다. 되돌릴 방법이 없습니다.
+     *
+     * <p>반대로 커밋 뒤에 지우다 실패하면 고아 객체가 남지만, 그건 비용 문제일 뿐
+     * 사용자에게 깨진 화면을 보이지는 않습니다. 두 실패 중 이쪽이 낫습니다.
+     * ({@code FileStorage#deleteAll} 은 실패해도 예외를 던지지 않고 로그만 남깁니다)
+     */
+    private void deleteObjectsAfterCommit(List<String> objectKeys) {
+        if (objectKeys.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            fileStorage.deleteAll(objectKeys);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                fileStorage.deleteAll(objectKeys);
+            }
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -131,18 +191,18 @@ public class ArticleMergeService {
      * 하나라도 빠지면 그 데이터는 오류 없이 사라집니다 —
      * 새 테이블이 {@code articles} 를 참조하게 되면 <b>여기에도 반드시 추가</b>해야 합니다.
      */
-    private void absorb(Article target, Article source, Long actorId, String memo) {
+    private void absorb(Article target, Article source, Long actorId, String memo, MovedCounter moved) {
         requireSameSourceType(target, source);
 
         Long targetId = target.getId();
         Long sourceId = source.getId();
 
-        mergeRepository.moveVendors(targetId, sourceId);
-        mergeRepository.mergeCategories(targetId, sourceId);
-        mergeRepository.moveAttachments(targetId, sourceId);
-        mergeRepository.moveUserReactions(targetId, sourceId);
-        mergeRepository.moveComments(targetId, sourceId);
-        mergeRepository.moveNotifications(targetId, sourceId);
+        moved.vendors += mergeRepository.moveVendors(targetId, sourceId);
+        moved.categories += mergeRepository.mergeCategories(targetId, sourceId);
+        moved.attachments += mergeRepository.moveAttachments(targetId, sourceId);
+        moved.bookmarks += mergeRepository.moveUserReactions(targetId, sourceId);
+        moved.comments += mergeRepository.moveComments(targetId, sourceId);
+        moved.notifications += mergeRepository.moveNotifications(targetId, sourceId);
         mergeRepository.moveStatusLogs(targetId, sourceId);
 
         mergeRepository.recordMerge(targetId, sourceId, actorId, memo);

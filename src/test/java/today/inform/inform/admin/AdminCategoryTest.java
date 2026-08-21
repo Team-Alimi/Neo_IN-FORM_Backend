@@ -14,6 +14,8 @@ import today.inform.inform.admin.category.dto.request.UpdateCategoryRequest;
 import today.inform.inform.admin.category.dto.response.AdminCategoryResponse;
 import today.inform.inform.admin.category.service.AdminCategoryService;
 import today.inform.inform.article.entity.Article;
+import today.inform.inform.category.entity.Category;
+import today.inform.inform.category.repository.CategoryRepository;
 import today.inform.inform.article.repository.ArticleRepository;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
@@ -35,6 +37,9 @@ class AdminCategoryTest extends IntegrationTest {
 
     @Autowired
     private ArticleRepository articleRepository;
+
+    @Autowired
+    private CategoryRepository categoryRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -116,9 +121,29 @@ class AdminCategoryTest extends IntegrationTest {
         flushAndClear();
         assertThat(column(id, "name")).isEqualTo("바뀐 이름");
         assertThat(column(id, "sort_order")).isEqualTo(5);
+        assertThat(column(id, "code")).isEqualTo("FORM_CODE");
+    }
+
+    @Test
+    @DisplayName("★ 분류 코드는 UPDATE 문에 실리지 않는다 — 매핑을 지우면 실패해야 한다")
+    void codeColumnNeverReachesTheDatabase() throws Exception {
+        Long id = create("IMMUTABLE_CODE", "불변 코드").id();
+        flushAndClear();
+
+        // ★ 서비스에는 code 를 세팅하는 코드가 없어서, 서비스를 거치면 매핑이 없어도 같은 값이
+        //   다시 쓰일 뿐입니다. 필드를 강제로 바꿔야 updatable=false 가 하는 일이 드러납니다.
+        Category managed = categoryRepository.findById(id).orElseThrow();
+        java.lang.reflect.Field field = Category.class.getDeclaredField("code");
+        field.setAccessible(true);
+        field.set(managed, "CHANGED_CODE");
+        managed.rename("이름도 변경");
+
+        flushAndClear();
+
         assertThat(column(id, "code"))
-                .as("code 는 updatable=false 라 UPDATE 문에 실리지 않아야 합니다")
-                .isEqualTo("FORM_CODE");
+                .as("크롤러가 이 문자열로 분류 결과를 보냅니다 — 바뀌면 다음 수집분이 분류 없이 쌓입니다")
+                .isEqualTo("IMMUTABLE_CODE");
+        assertThat(column(id, "name")).isEqualTo("이름도 변경");
     }
 
     @Test

@@ -26,6 +26,7 @@ import org.springframework.stereotype.Repository;
 import today.inform.inform.admin.article.dto.request.AdminArticleSearchCondition;
 import today.inform.inform.admin.article.dto.response.AdminArticleDetail;
 import today.inform.inform.admin.article.dto.response.AdminArticleSummary;
+import today.inform.inform.admin.article.dto.response.DuplicateCandidate;
 import today.inform.inform.admin.article.dto.response.ReviewStats;
 import today.inform.inform.admin.article.dto.response.StatusLogResponse;
 import today.inform.inform.admin.config.ReviewProperties;
@@ -86,6 +87,30 @@ public class AdminArticleQueryRepository {
                              WHERE av.article_id = a.id AND av.source_url IS NOT NULL))
             """;
 
+    /**
+     * 재검수 대기 판정.
+     *
+     * <p>명세는 {@code review_requested_at IS NOT NULL} 이라고 적고 있지만 그 컬럼은
+     * 스키마에서 제거됐습니다({@code SCHEMA_STATUS} 3장 2번). 재검수 정책이
+     * "노출 유지 + 플래그" 에서 <b>"검수 대기로 강등"</b> 으로 바뀌었기 때문입니다.
+     *
+     * <p>{@code published_at} 이 "한 번이라도 배포된 적 있음" 의 표식이라
+     * 신규 수집분(아직 배포 전)과 재검수 대기가 이것으로 갈립니다.
+     * {@code ArticleQueryRepository.VISIBLE_OR_UNDER_REVIEW} 도 같은 판정을 씁니다.
+     */
+    private static final String NEEDS_REVIEW =
+            "(a.status = 'PENDING_REVIEW' AND a.published_at IS NOT NULL)";
+
+    /**
+     * ADM-12 중복 의심. 유사도만 봅니다 — 정보 누락은 별개 축입니다.
+     *
+     * <p><b>휴지통은 뺍니다.</b> 목록({@code GET /admin/articles})의 기본 조건이 그렇기 때문입니다.
+     * 카드가 휴지통까지 세면 관리자가 눌러서 이동한 목록에는 그만큼이 없어,
+     * <b>카드 숫자와 목록이 어긋납니다</b> — 그러면 무엇을 믿어야 할지 알 수 없습니다.
+     */
+    private static final String DUPLICATE_SUSPECTED =
+            "(a.status <> 'TRASHED' AND a.similarity_score >= :similarityThreshold)";
+
     @PersistenceContext
     private EntityManager em;
 
@@ -103,20 +128,82 @@ public class AdminArticleQueryRepository {
      */
     public ReviewStats stats() {
         Query query = em.createNativeQuery("""
-                SELECT count(*) FILTER (WHERE a.status = 'PENDING_REVIEW')    AS pending_review,
+                SELECT count(*) FILTER (WHERE a.status = 'DRAFT')             AS draft,
+                       count(*) FILTER (WHERE a.status = 'PENDING_REVIEW')    AS pending_review,
+                       count(*) FILTER (WHERE """ + DUPLICATE_SUSPECTED + """
+                       )                                                      AS duplicate_suspected,
                        count(*) FILTER (WHERE a.status = 'READY_TO_PUBLISH')  AS ready_to_publish,
-                       count(*) FILTER (WHERE a.status = 'PENDING_REVIEW' AND """ + NEEDS_CHECK + """
-                       )                                                      AS needs_check
+                       count(*) FILTER (WHERE a.status = 'PUBLISHED')         AS published,
+                       count(*) FILTER (WHERE a.status = 'TRASHED')           AS trashed,
+                       count(*) FILTER (WHERE """ + NEEDS_REVIEW + """
+                       )                                                      AS needs_review
                   FROM articles a
                 """);
         query.setParameter("similarityThreshold", BigDecimal.valueOf(reviewProperties.similarityThreshold()));
-        query.setParameter("minContentLength", reviewProperties.minContentLength());
 
         Object[] row = (Object[]) query.getSingleResult();
         return new ReviewStats(
                 ((Number) row[0]).longValue(),
                 ((Number) row[1]).longValue(),
-                ((Number) row[2]).longValue());
+                ((Number) row[2]).longValue(),
+                ((Number) row[3]).longValue(),
+                ((Number) row[4]).longValue(),
+                ((Number) row[5]).longValue(),
+                ((Number) row[6]).longValue());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ADM-12 중복 확인 — GET /admin/articles/duplicates
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 같은 원본이 이미 들어와 있는지 확인합니다.
+     *
+     * <p>관리자가 공지를 수기로 등록하기 전에 <b>중복 등록을 막기 위한</b> 조회입니다.
+     * {@code external_key} 는 원본 게시판의 글 번호라 정확 일치로,
+     * {@code title} 은 사람이 기억나는 대로 치므로 부분 일치로 찾습니다.
+     *
+     * <p>상한을 둡니다 — 흔한 단어로 검색하면 수백 건이 걸리는데,
+     * 화면은 "이미 있는지" 만 판단하면 되므로 몇 건만 보여 주면 충분합니다.
+     */
+    public List<DuplicateCandidate> findDuplicates(String externalKey, String title, int limit) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        StringBuilder where = new StringBuilder();
+
+        if (externalKey != null && !externalKey.isBlank()) {
+            where.append("EXISTS (SELECT 1 FROM article_vendors av"
+                    + " WHERE av.article_id = a.id AND av.external_key = :externalKey)");
+            params.put("externalKey", externalKey.trim());
+        }
+        if (title != null && !title.isBlank()) {
+            if (!where.isEmpty()) {
+                where.append(" OR ");
+            }
+            where.append("a.title ILIKE :title ESCAPE '\\'");
+            params.put("title", LikePattern.contains(title.trim()));
+        }
+        if (where.isEmpty()) {
+            return List.of();
+        }
+
+        Query query = em.createNativeQuery(
+                "SELECT a.id AS id, a.title AS title, a.status AS status"
+                        + " FROM articles a WHERE " + where
+                        + " ORDER BY a.id DESC LIMIT :limit");
+        bind(query, params);
+        query.setParameter("limit", limit);
+
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = query.unwrap(NativeQuery.class)
+                .addScalar("id", StandardBasicTypes.LONG)
+                .addScalar("title", StandardBasicTypes.STRING)
+                .addScalar("status", StandardBasicTypes.STRING)
+                .getResultList();
+
+        return rows.stream()
+                .map(row -> new DuplicateCandidate(
+                        (Long) row[0], (String) row[1], ArticleStatus.valueOf((String) row[2])))
+                .toList();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -371,22 +458,37 @@ public class AdminArticleQueryRepository {
     // ─────────────────────────────────────────────────────────────────────────
 
     private String buildWhere(AdminArticleSearchCondition condition, Map<String, Object> params) {
-        StringBuilder where = new StringBuilder("a.status = :status");
-        params.put("status", condition.status().name());
+        StringBuilder where = new StringBuilder();
 
+        if (condition.hasStatusFilter()) {
+            where.append("a.status IN (:statuses)");
+            params.put("statuses", condition.statusNames());
+        } else {
+            // ★ 생략하면 휴지통을 뺀 전체입니다(명세). 휴지통은 "지운 것" 이라 기본 목록에 섞이면
+            //   관리자가 살아 있는 공지와 구분하지 못합니다. 보려면 status=TRASHED 로 명시합니다.
+            where.append("a.status <> 'TRASHED'");
+        }
+
+        if (condition.sourceType() != null) {
+            where.append(" AND a.source_type = :sourceType");
+            params.put("sourceType", condition.sourceType().name());
+        }
         if (condition.articleId() != null) {
             where.append(" AND a.id = :articleId");
             params.put("articleId", condition.articleId());
         }
-        if (condition.hasTitle()) {
+        if (condition.hasKeyword()) {
             // 관리자 검색은 제목만 봅니다. 사용자 검색과 달리 pg_bigm 을 쓰지 않는 이유는
-            // 대상이 한 상태로 이미 좁혀져 있고, 관리자는 정확한 제목 조각으로 찾기 때문입니다.
+            // 관리자가 정확한 제목 조각으로 찾기 때문입니다.
             //
             // ★ 검색어의 %, _ 를 이스케이프합니다. 그대로 넘기면 사용자가 입력한 글자가
             //   패턴 문법으로 해석됩니다 — "100%" 를 찾으면 "100" 으로 시작하는 제목이 전부 걸리고,
             //   "%" 하나면 전체가 걸립니다. 제목에 % 가 들어가는 공지는 드물지 않습니다.
-            where.append(" AND a.title ILIKE :title ESCAPE '\\'");
-            params.put("title", LikePattern.contains(condition.title().trim()));
+            where.append(" AND a.title ILIKE :keyword ESCAPE '\\'");
+            params.put("keyword", LikePattern.contains(condition.keyword().trim()));
+        }
+        if (condition.isNeedsReview()) {
+            where.append(" AND ").append(NEEDS_REVIEW);
         }
         if (condition.vendorId() != null) {
             where.append(" AND EXISTS (SELECT 1 FROM article_vendors av"

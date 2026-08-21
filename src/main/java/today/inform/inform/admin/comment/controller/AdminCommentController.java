@@ -59,7 +59,7 @@ public class AdminCommentController {
     public ApiResponse<Map<String, Integer>> deleteAll(
             @AuthenticationPrincipal AuthPrincipal principal,
             @Valid @RequestBody CommentIdsRequest request) {
-        int deleted = adminCommentService.deleteAll(request.commentIds(), principal.userId());
+        int deleted = adminCommentService.deleteAll(request.ids(), principal.userId());
         return ApiResponse.success(Map.of("deleted", deleted));
     }
 }

@@ -17,6 +17,8 @@ import today.inform.inform.article.entity.SourceType;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
 import today.inform.inform.support.IntegrationTest;
+import today.inform.inform.vendor.entity.Vendor;
+import today.inform.inform.vendor.repository.VendorRepository;
 
 /**
  * VND-01 ~ VND-03 제공처 관리.
@@ -30,6 +32,9 @@ class AdminVendorTest extends IntegrationTest {
 
     @Autowired
     private AdminVendorService vendorService;
+
+    @Autowired
+    private VendorRepository vendorRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -167,18 +172,37 @@ class AdminVendorTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("★ 불변 컬럼은 UPDATE 문에 아예 실리지 않는다 — DB 값이 그대로여야 한다")
-    void immutableColumnsNeverReachTheDatabase() {
+    @DisplayName("★ 불변 컬럼은 UPDATE 문에 아예 실리지 않는다 — 매핑을 지우면 실패해야 한다")
+    void immutableColumnsNeverReachTheDatabase() throws Exception {
         Long vendorId = create("불변학과", "불변키", SourceType.SCHOOL).id();
-        em.flush();
+        flushAndClear();
 
-        vendorService.update(vendorId,
-                new UpdateVendorRequest("이름 변경", null, false, "불변키", SourceType.SCHOOL));
+        // ★ 서비스를 거치면 아무것도 검증되지 않습니다 — 거기엔 initial/type 을 세팅하는 코드가
+        //   아예 없어서, updatable=false 가 없어도 같은 값이 다시 쓰일 뿐입니다.
+        //   매핑이 하는 일은 "필드가 실제로 바뀌었을 때 UPDATE 에 안 싣는 것" 이므로
+        //   필드를 강제로 바꿔 놓고 확인해야 구분이 생깁니다.
+        Vendor managed = vendorRepository.findById(vendorId).orElseThrow();
+        setField(managed, "initial", "바뀐키");
+        setField(managed, "type", SourceType.CLUB);
+        managed.rename("이름도 변경");
 
         flushAndClear();
-        assertThat(column(vendorId, "initial")).isEqualTo("불변키");
+
+        assertThat(column(vendorId, "initial"))
+                .as("실리면 트리거가 IN001 로 막지만, 그건 최후 방어입니다. "
+                        + "매핑이 먼저 걸러야 크롤러 시드가 어긋나는 경로 자체가 안 생깁니다")
+                .isEqualTo("불변키");
         assertThat(column(vendorId, "type")).isEqualTo("SCHOOL");
-        assertThat(column(vendorId, "name")).isEqualTo("이름 변경");
+        assertThat(column(vendorId, "name"))
+                .as("같은 UPDATE 의 다른 컬럼은 정상 반영돼야 합니다")
+                .isEqualTo("이름도 변경");
+    }
+
+    /** 엔티티의 불변 필드를 강제로 바꿉니다. 정상 경로에는 이런 수단이 없습니다 — 매핑 검증 전용입니다. */
+    private static void setField(Object target, String name, Object value) throws Exception {
+        java.lang.reflect.Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
