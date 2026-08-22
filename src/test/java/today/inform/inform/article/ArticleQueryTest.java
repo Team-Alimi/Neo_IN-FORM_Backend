@@ -156,8 +156,8 @@ class ArticleQueryTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("관심 분야만 보기는 기본으로 켜져 있다")
-    void interestOnlyIsOnByDefault() {
+    @DisplayName("★ 관심 분야만 보기는 기본으로 꺼져 있다 — 안 보내면 전체가 나온다")
+    void interestOnlyIsOffByDefault() {
         Article mine = publish("내 관심 분야 공지");
         publish("관심 없는 공지");
         link("article_categories", "category_id", mine.getId(), scholarshipCategoryId);
@@ -165,9 +165,41 @@ class ArticleQueryTest extends IntegrationTest {
 
         // interestOnly 를 주지 않았습니다.
         List<ArticleSummaryResponse> found = search(new ArticleSearchCondition(
-                null, null, null, null, null, null, null, null));
+                null, null, null, null, false, null, null, null));
+
+        assertThat(found)
+                .as("""
+                        기본이 켬이면 프론트가 파라미터를 빠뜨렸을 때 사용자가 공지를 못 봅니다.
+                        이 필터에는 폴백이 없어 관심 분류가 0개면 목록이 그냥 빕니다.""")
+                .extracting(ArticleSummaryResponse::title)
+                .containsExactlyInAnyOrder("내 관심 분야 공지", "관심 없는 공지");
+    }
+
+    @Test
+    @DisplayName("true 를 명시하면 관심 분야로 거른다")
+    void interestOnlyFiltersWhenExplicitlyOn() {
+        Article mine = publish("내 관심 분야 공지");
+        publish("관심 없는 공지");
+        link("article_categories", "category_id", mine.getId(), scholarshipCategoryId);
+        link("user_interest_categories", "category_id", userId, scholarshipCategoryId, "user_id");
+
+        List<ArticleSummaryResponse> found = search(new ArticleSearchCondition(
+                null, null, null, null, true, null, null, null));
 
         assertThat(found).extracting(ArticleSummaryResponse::title).containsExactly("내 관심 분야 공지");
+    }
+
+    @Test
+    @DisplayName("★ 관심 분야가 하나도 없는 사용자가 true 로 부르면 빈 목록이다 — 폴백이 없다")
+    void interestOnlyWithNoInterestsReturnsNothing() {
+        publish("아무 공지");
+
+        List<ArticleSummaryResponse> found = search(new ArticleSearchCondition(
+                null, null, null, null, true, null, null, null));
+
+        assertThat(found)
+                .as("이 동작이 기본값이면 온보딩을 안 끝낸 사용자가 빈 피드를 봅니다. 그래서 기본을 껐습니다")
+                .isEmpty();
     }
 
     @Test

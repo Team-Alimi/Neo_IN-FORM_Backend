@@ -41,8 +41,9 @@ public class ArticleController {
     /**
      * ART-01 / 03 / 04 목록.
      *
-     * @param interestOnly 안 보내면 <b>켜짐</b>입니다. 그래서 {@code Boolean} 입니다 —
-     *                     {@code boolean} 이면 "안 보냄" 과 "false" 가 구분되지 않아 토글을 끌 수 없습니다.
+     * @param interestOnly 관심 분류로 거를지. <b>안 보내면 꺼짐</b>입니다 —
+     *                     이유는 {@link ArticleSearchCondition#isInterestOnly()} 주석에 있습니다.
+     *                     "안 보냄" 과 "false" 가 같은 뜻이므로 삼상태가 필요 없습니다.
      * @param sort         {@code published_at,desc} 형태. 허용 기준은 화이트리스트이고
      *                     서버가 항상 {@code id DESC} 를 뒤에 붙입니다.
      */
@@ -53,7 +54,7 @@ public class ArticleController {
             @RequestParam(name = "category_id", required = false) List<Long> categoryIds,
             @RequestParam(name = "vendor_id", required = false) List<Long> vendorIds,
             @RequestParam(name = "keyword", required = false) String keyword,
-            @RequestParam(name = "interest_only", required = false) Boolean interestOnly,
+            @RequestParam(name = "interest_only", defaultValue = "false") boolean interestOnly,
             @RequestParam(name = "starts_from", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startsFrom,
             @RequestParam(name = "ends_to", required = false)
