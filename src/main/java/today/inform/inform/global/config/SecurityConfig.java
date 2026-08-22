@@ -21,8 +21,8 @@ import today.inform.inform.global.security.JwtAuthenticationFilter;
  * 접근 권한 (POLICY 22장).
  *
  * <pre>
- * Guest 가능 :  캘린더 · 서비스 공지 · 제공처/카테고리 목록
- *               로그인 · 토큰 재발급 · 알림 수신거부(HMAC 서명 링크)
+ * Guest 가능 :  캘린더 · 인기 공지 · 서비스 공지 · 제공처/카테고리 목록
+ *               로그인 · 토큰 재발급
  * 로그인 필요:  공지 목록 · 상세 · 검색 · 댓글 열람 · 그 외 전부
  * 관리자     :  /admin 이하
  * </pre>
@@ -67,10 +67,6 @@ public class SecurityConfig {
                                 P + "/announcements/*",
                                 P + "/vendors",
                                 P + "/categories").permitAll()
-
-                        // 수신거부는 메일 링크로 들어오므로 비로그인 접근입니다.
-                        // 위조 방지는 링크에 실린 HMAC 서명 토큰이 담당합니다.
-                        .requestMatchers(HttpMethod.GET, P + "/notifications/unsubscribe").permitAll()
 
                         // ── 인프라 ──────────────────────────────────────────
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()

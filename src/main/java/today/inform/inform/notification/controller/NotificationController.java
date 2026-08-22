@@ -16,14 +16,12 @@ import today.inform.inform.global.response.PageResponse;
 import today.inform.inform.global.security.AuthPrincipal;
 import today.inform.inform.notification.dto.response.NotificationResponse;
 import today.inform.inform.notification.service.NotificationService;
-import today.inform.inform.notification.service.UnsubscribeService;
 
 /**
  * NTF-01 ~ NTF-04. 전부 로그인이 필요합니다.
  *
- * <p><b>{@code GET /notifications/unsubscribe} 하나만 예외</b>입니다.
- * 메일 하단 링크로 들어오는 <b>비로그인 경로</b>라 위조 방지를 HMAC 서명 토큰이 담당합니다
- * ({@code SecurityConfig} 에서 이 경로만 열려 있습니다).
+ * <p>메일 수신 여부는 여기가 아니라 {@code PATCH /users/me} 에서 켜고 끕니다 —
+ * 설정 화면 하나로 끝나는 편이 낫다고 판단해, 메일 하단의 비로그인 수신거부 링크는 두지 않습니다.
  */
 @RestController
 @RequestMapping("/notifications")
@@ -31,7 +29,6 @@ import today.inform.inform.notification.service.UnsubscribeService;
 public class NotificationController {
 
     private final NotificationService notificationService;
-    private final UnsubscribeService unsubscribeService;
 
     /** NTF-01 목록. 최신순 고정입니다. */
     @GetMapping
@@ -74,23 +71,5 @@ public class NotificationController {
             @AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.success(
                 Map.of("read_count", notificationService.markAllRead(principal.userId())));
-    }
-
-    /**
-     * USER-04 메일 수신거부. <b>비로그인 경로</b>입니다 — 메일 하단 링크의 목적지입니다.
-     *
-     * <p>본인 확인은 {@code token} 에 실린 HMAC 서명이 합니다. 서명이 없으면
-     * 남의 번호를 넣어 타인의 수신을 끌 수 있습니다.
-     *
-     * <p><b>이미 꺼져 있어도 성공입니다.</b> 메일함에서 링크를 두 번 누르는 일은 흔한데,
-     * 두 번째에 오류가 뜨면 사용자는 수신거부가 안 된 줄 알고 다시 시도합니다.
-     *
-     * <p>응답은 JSON 입니다. 명세는 "안내 페이지로" 라고 적고 있지만 프론트 주소가
-     * 설정에 없어서 여기서 정할 수 없습니다. 리다이렉트로 바꾸려면 그 주소를 설정에 추가해야 합니다.
-     */
-    @GetMapping("/unsubscribe")
-    public ApiResponse<Map<String, Boolean>> unsubscribe(@RequestParam(name = "token") String token) {
-        unsubscribeService.unsubscribe(token);
-        return ApiResponse.success(Map.of("email_notification_enabled", false));
     }
 }

@@ -16,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.support.TransactionTemplate;
-import today.inform.inform.notification.service.UnsubscribeTokenProvider;
 import today.inform.inform.support.IntegrationTest;
 
 /**
@@ -51,9 +50,6 @@ class PublicEndpointsTest extends IntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
-    private UnsubscribeTokenProvider tokenProvider;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -216,66 +212,6 @@ class PublicEndpointsTest extends IntegrationTest {
                         .param("year", "2026").param("month", "5")
                         .param("my_major_only", "true"))
                 .andExpect(status().isUnauthorized());
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // USER-04 수신거부
-    // ─────────────────────────────────────────────────────────────────────────
-
-    @Test
-    @DisplayName("★ 서명이 유효하면 메일 수신이 꺼진다")
-    void validTokenTurnsOffEmail() throws Exception {
-        mockMvc.perform(get("/api/v1/notifications/unsubscribe")
-                        .param("token", tokenProvider.issue(userId)))
-                .andExpect(status().isOk());
-
-        assertThat(emailEnabled(userId)).isFalse();
-    }
-
-    @Test
-    @DisplayName("★ 두 번 눌러도 성공이다 — 두 번째에 오류가 뜨면 안 된 줄 알고 계속 시도한다")
-    void unsubscribeIsIdempotent() throws Exception {
-        String token = tokenProvider.issue(userId);
-        mockMvc.perform(get("/api/v1/notifications/unsubscribe").param("token", token))
-                .andExpect(status().isOk());
-        mockMvc.perform(get("/api/v1/notifications/unsubscribe").param("token", token))
-                .andExpect(status().isOk());
-
-        assertThat(emailEnabled(userId)).isFalse();
-    }
-
-    @Test
-    @DisplayName("★ 서명을 고친 토큰은 400 — 아니면 남의 번호를 넣어 타인의 수신을 끌 수 있다")
-    void forgedTokenIsRejected() throws Exception {
-        String token = tokenProvider.issue(userId);
-        // payload 만 남의 것으로 바꾸고 서명은 그대로 붙입니다.
-        String forged = java.util.Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(((userId + 1) + ":" + (System.currentTimeMillis() / 1000 + 3600))
-                        .getBytes(java.nio.charset.StandardCharsets.UTF_8))
-                + token.substring(token.indexOf('.'));
-
-        mockMvc.perform(get("/api/v1/notifications/unsubscribe").param("token", forged))
-                .andExpect(status().isBadRequest());
-
-        assertThat(emailEnabled(userId))
-                .as("위조가 통하면 아무나 남의 알림을 끌 수 있습니다")
-                .isTrue();
-    }
-
-    @Test
-    @DisplayName("모양이 깨진 토큰도 400 (500 이 아니다)")
-    void malformedTokenIsBadRequest() throws Exception {
-        for (String bad : new String[] {"", "no-dot", "...", "@@@.@@@"}) {
-            mockMvc.perform(get("/api/v1/notifications/unsubscribe").param("token", bad))
-                    .andExpect(status().isBadRequest());
-        }
-    }
-
-    @Test
-    @DisplayName("토큰이 아예 없으면 400")
-    void missingTokenIsBadRequest() throws Exception {
-        mockMvc.perform(get("/api/v1/notifications/unsubscribe"))
-                .andExpect(status().isBadRequest());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
