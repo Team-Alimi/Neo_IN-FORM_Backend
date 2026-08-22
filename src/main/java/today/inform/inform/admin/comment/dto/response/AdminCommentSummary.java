@@ -19,14 +19,10 @@ public record AdminCommentSummary(
         Long id,
         Long articleId,
         String articleTitle,
-        Long parentId,
-        boolean isReply,
         Long authorId,
         String authorEmail,
         String authorName,
         boolean authorWithdrawn,
         String content,
-        boolean deleted,
-        int replyCount,
         OffsetDateTime createdAt) {
 }

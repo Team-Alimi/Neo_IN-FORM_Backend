@@ -33,17 +33,16 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     @Query(value = "SELECT id FROM comments WHERE id = :id FOR UPDATE", nativeQuery = true)
     Optional<Long> lockById(@Param("id") Long id);
 
-    boolean existsByParentId(Long parentId);
-
     /** 알림 본문에 넣을 공지 제목. 알림 한 건 때문에 공지 엔티티를 통째로 읽지 않습니다. */
     @Query("SELECT a.title FROM today.inform.inform.article.entity.Article a WHERE a.id = :articleId")
     Optional<String> findArticleTitle(@Param("articleId") Long articleId);
 
     /**
-     * CMT-02 원댓글 목록. 답글은 {@link #findReplies} 가 따로 가져옵니다.
+     * CMT-02 댓글 목록. 평면입니다 — 답글이 없으므로 중첩할 것이 없습니다.
      *
-     * <p>삭제된 원댓글도 포함합니다 — 답글이 달려 있어 자리를 남긴 경우라
-     * 빼면 그 아래 답글들이 갈 곳을 잃습니다.
+     * <p><b>삭제된 댓글은 뺍니다.</b> 예전에는 답글이 달린 원댓글의 자리를 남겨야 해서
+     * {@code deleted_at} 이 찍힌 행을 포함했지만, 답글이 사라지면서 자리를 남길 이유도 없어졌습니다.
+     * 남아 있는 옛 행은 목록에서 빠집니다 — {@code comment_count} 트리거도 같은 기준으로 셉니다.
      */
     @Query("""
             SELECT new today.inform.inform.comment.repository.CommentRow(
@@ -51,10 +50,10 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
                        u.id, u.name, u.status)
               FROM Comment c
               JOIN today.inform.inform.user.entity.User u ON u.id = c.userId
-             WHERE c.articleId = :articleId AND c.parentId IS NULL
+             WHERE c.articleId = :articleId AND c.deletedAt IS NULL
              ORDER BY c.createdAt ASC, c.id ASC
             """)
-    Page<CommentRow> findRoots(@Param("articleId") Long articleId, Pageable pageable);
+    Page<CommentRow> findByArticle(@Param("articleId") Long articleId, Pageable pageable);
 
     /**
      * 단건 조회. 작성 직후 응답을 만들 때 씁니다.
@@ -74,15 +73,4 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             """)
     Optional<CommentRow> findRowById(@Param("id") Long id);
 
-    /** 원댓글 목록 한 페이지의 답글을 한 번에. 부모마다 부르면 그게 N+1 입니다. */
-    @Query("""
-            SELECT new today.inform.inform.comment.repository.CommentRow(
-                       c.id, c.parentId, c.content, c.deletedAt, c.createdAt, c.updatedAt,
-                       u.id, u.name, u.status)
-              FROM Comment c
-              JOIN today.inform.inform.user.entity.User u ON u.id = c.userId
-             WHERE c.parentId IN :parentIds
-             ORDER BY c.createdAt ASC, c.id ASC
-            """)
-    List<CommentRow> findReplies(@Param("parentIds") List<Long> parentIds);
 }

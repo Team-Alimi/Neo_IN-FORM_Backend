@@ -54,14 +54,11 @@ public class AdminCommentQueryRepository {
                 SELECT c.id            AS id,
                        c.article_id    AS article_id,
                        a.title         AS article_title,
-                       c.parent_id     AS parent_id,
                        u.id            AS author_id,
                        u.email         AS author_email,
                        u.name          AS author_name,
                        u.status        AS author_status,
                        c.content       AS content,
-                       c.deleted_at    AS deleted_at,
-                       (SELECT count(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
                        c.created_at    AS created_at
                   FROM comments c
                   JOIN users    u ON u.id = c.user_id
@@ -87,7 +84,7 @@ public class AdminCommentQueryRepository {
      * 답글을 먼저 없애면 원댓글은 답글 없는 상태가 되어 행째로 사라지고, 글타래가 깔끔히 없어집니다.
      *
      * <p><b>왜 순서를 고정하는가</b> — 두 관리자가 겹치는 댓글을 동시에 지울 때
-     * 잠그는 순서가 다르면 교착이 납니다. {@code parent_id} 는 불변이라
+     * 잠그는 순서가 다르면 교착이 납니다. {@code id} 는 불변이라
      * 어느 트랜잭션이 계산해도 같은 순서가 나옵니다.
      *
      * <p><b>다만 이 순서만으로는 교착이 막히지 않습니다.</b> 여기서 정하는 것은 comments 행 잠금의
@@ -103,7 +100,7 @@ public class AdminCommentQueryRepository {
         List<Number> rows = em.createNativeQuery("""
                         SELECT id FROM comments
                          WHERE id IN (:ids)
-                         ORDER BY (parent_id IS NULL) ASC, id ASC
+                         ORDER BY id ASC
                         """)
                 .setParameter("ids", commentIds)
                 .getResultList();
@@ -115,9 +112,8 @@ public class AdminCommentQueryRepository {
     private static String buildWhere(AdminCommentSearchCondition condition, Map<String, Object> params) {
         StringBuilder where = new StringBuilder("1 = 1");
 
-        if (!condition.includeDeleted()) {
-            where.append(" AND c.deleted_at IS NULL");
-        }
+        // 지워진 댓글은 행째 없어야 정상입니다. 옛 soft delete 잔여 행이 목록에 섞이지 않게 걸러 둡니다.
+        where.append(" AND c.deleted_at IS NULL");
         if (condition.articleId() != null) {
             where.append(" AND c.article_id = :articleId");
             params.put("articleId", condition.articleId());
@@ -173,14 +169,11 @@ public class AdminCommentQueryRepository {
                 .addScalar("id", StandardBasicTypes.LONG)
                 .addScalar("article_id", StandardBasicTypes.LONG)
                 .addScalar("article_title", StandardBasicTypes.STRING)
-                .addScalar("parent_id", StandardBasicTypes.LONG)
                 .addScalar("author_id", StandardBasicTypes.LONG)
                 .addScalar("author_email", StandardBasicTypes.STRING)
                 .addScalar("author_name", StandardBasicTypes.STRING)
                 .addScalar("author_status", StandardBasicTypes.STRING)
                 .addScalar("content", StandardBasicTypes.STRING)
-                .addScalar("deleted_at", StandardBasicTypes.OFFSET_DATE_TIME)
-                .addScalar("reply_count", StandardBasicTypes.INTEGER)
                 .addScalar("created_at", StandardBasicTypes.OFFSET_DATE_TIME);
     }
 
@@ -189,20 +182,15 @@ public class AdminCommentQueryRepository {
     }
 
     private static AdminCommentSummary toSummary(Object[] row) {
-        Long parentId = (Long) row[3];
         return new AdminCommentSummary(
                 (Long) row[0],
                 (Long) row[1],
                 (String) row[2],
-                parentId,
-                parentId != null,
-                (Long) row[4],
+                (Long) row[3],
+                (String) row[4],
                 (String) row[5],
-                (String) row[6],
-                UserStatus.valueOf((String) row[7]) == UserStatus.WITHDRAWN,
-                (String) row[8],
-                row[9] != null,
-                (Integer) row[10],
-                (java.time.OffsetDateTime) row[11]);
+                UserStatus.valueOf((String) row[6]) == UserStatus.WITHDRAWN,
+                (String) row[7],
+                (java.time.OffsetDateTime) row[8]);
     }
 }

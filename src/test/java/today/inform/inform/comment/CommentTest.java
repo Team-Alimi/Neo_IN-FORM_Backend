@@ -66,7 +66,7 @@ class CommentTest extends IntegrationTest {
     @Test
     @DisplayName("댓글을 쓰면 공지의 댓글 수가 올라간다")
     void createIncrementsCount() {
-        CommentResponse created = commentService.create(articleId, userId, "첫 댓글", null);
+        CommentResponse created = commentService.create(articleId, userId, "첫 댓글");
         em.flush();
 
         assertThat(created.content()).isEqualTo("첫 댓글");
@@ -77,61 +77,21 @@ class CommentTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("답글은 원댓글에만 달 수 있다")
-    void replyToRootComment() {
-        CommentResponse root = commentService.create(articleId, userId, "원댓글", null);
-        CommentResponse reply = commentService.create(articleId, otherUserId, "답글", root.id());
-        em.flush();
-
-        assertThat(reply.id()).isNotNull();
-        assertThat(commentCount()).isEqualTo(2);
-    }
-
-    @Test
-    @DisplayName("★ 답글에 답글은 DB 가 막는다 — IN004")
-    void replyToReplyIsRejected() {
-        CommentResponse root = commentService.create(articleId, userId, "원댓글", null);
-        CommentResponse reply = commentService.create(articleId, userId, "답글", root.id());
-        em.flush();
-
-        Throwable thrown = catchThrowable(() ->
-                commentService.create(articleId, userId, "답글의 답글", reply.id()));
-
-        assertThat(SqlStateErrorMapper.resolve(thrown))
-                .as("트리거의 IN004 가 COMMENT_DEPTH_EXCEEDED 로 매핑되어야 400 이 됩니다")
-                .isEqualTo(ErrorCode.COMMENT_DEPTH_EXCEEDED);
-    }
-
-    @Test
-    @DisplayName("★ 다른 공지의 댓글을 상위로 지정할 수 없다 — IN005")
-    void replyAcrossArticlesIsRejected() {
-        CommentResponse root = commentService.create(articleId, userId, "원댓글", null);
-        em.flush();
-        Long otherArticleId = publish("다른 공지").getId();
-
-        Throwable thrown = catchThrowable(() ->
-                commentService.create(otherArticleId, userId, "엉뚱한 답글", root.id()));
-
-        assertThat(SqlStateErrorMapper.resolve(thrown))
-                .isEqualTo(ErrorCode.INVALID_COMMENT_PARENT);
-    }
-
-    @Test
     @DisplayName("배포되지 않은 공지에는 댓글을 쓸 수 없다")
     void cannotCommentOnHiddenArticle() {
         Article hidden = articleRepository.saveAndFlush(
                 Article.createSchoolArticle("검수 대기", "내용", null, null, null));
 
-        assertThatThrownBy(() -> commentService.create(hidden.getId(), userId, "댓글", null))
+        assertThatThrownBy(() -> commentService.create(hidden.getId(), userId, "댓글"))
                 .isInstanceOf(BusinessException.class);
     }
 
     @Test
     @DisplayName("빈 내용과 1000자 초과는 거부한다")
     void contentLengthIsValidated() {
-        assertThatThrownBy(() -> commentService.create(articleId, userId, "   ", null))
+        assertThatThrownBy(() -> commentService.create(articleId, userId, "   "))
                 .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> commentService.create(articleId, userId, "가".repeat(1001), null))
+        assertThatThrownBy(() -> commentService.create(articleId, userId, "가".repeat(1001)))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -142,7 +102,7 @@ class CommentTest extends IntegrationTest {
     @Test
     @DisplayName("남의 댓글은 수정할 수 없다")
     void cannotEditOthersComment() {
-        CommentResponse comment = commentService.create(articleId, userId, "내 댓글", null);
+        CommentResponse comment = commentService.create(articleId, userId, "내 댓글");
         em.flush();
 
         assertThatThrownBy(() -> commentService.update(comment.id(), otherUserId, "고침"))
@@ -154,9 +114,9 @@ class CommentTest extends IntegrationTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("★ 답글이 없으면 행째 지운다")
+    @DisplayName("★ 댓글을 지우면 행째 사라진다 — 자리를 남기지 않는다")
     void deleteWithoutRepliesRemovesRow() {
-        CommentResponse comment = commentService.create(articleId, userId, "혼자 있는 댓글", null);
+        CommentResponse comment = commentService.create(articleId, userId, "혼자 있는 댓글");
         em.flush();
 
         commentService.delete(comment.id(), userId);
@@ -167,36 +127,9 @@ class CommentTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("★ 답글이 있으면 자리를 남긴다 — 지우면 답글까지 CASCADE 로 사라진다")
-    void deleteWithRepliesKeepsPlaceholder() {
-        CommentResponse root = commentService.create(articleId, userId, "지울 원댓글", null);
-        commentService.create(articleId, otherUserId, "살아남아야 할 답글", root.id());
-        em.flush();
-
-        commentService.delete(root.id(), userId);
-        em.flush();
-        em.clear();
-
-        assertThat(rowCount()).as("원댓글 자리 + 답글").isEqualTo(2);
-        assertThat(commentCount())
-                .as("자리만 남은 댓글은 개수에서 빠집니다")
-                .isEqualTo(1);
-
-        Page<CommentResponse> page = commentService.list(articleId, userId, PageRequest.of(0, 20));
-        CommentResponse placeholder = page.getContent().get(0);
-
-        assertThat(placeholder.deleted()).isTrue();
-        assertThat(placeholder.content()).as("본문은 내보내지 않습니다").isNull();
-        assertThat(placeholder.author()).as("지운 댓글의 작성자도 남기지 않습니다").isNull();
-        assertThat(placeholder.replies()).hasSize(1);
-        assertThat(placeholder.replies().get(0).content()).isEqualTo("살아남아야 할 답글");
-    }
-
-    @Test
     @DisplayName("이미 삭제된 댓글은 다시 지울 수 없다")
     void cannotDeleteTwice() {
-        CommentResponse root = commentService.create(articleId, userId, "원댓글", null);
-        commentService.create(articleId, userId, "답글", root.id());
+        CommentResponse root = commentService.create(articleId, userId, "원댓글");
         em.flush();
 
         commentService.delete(root.id(), userId);
@@ -209,7 +142,7 @@ class CommentTest extends IntegrationTest {
     @Test
     @DisplayName("남의 댓글은 지울 수 없다")
     void cannotDeleteOthersComment() {
-        CommentResponse comment = commentService.create(articleId, userId, "내 댓글", null);
+        CommentResponse comment = commentService.create(articleId, userId, "내 댓글");
         em.flush();
 
         assertThatThrownBy(() -> commentService.delete(comment.id(), otherUserId))
@@ -223,7 +156,7 @@ class CommentTest extends IntegrationTest {
     @Test
     @DisplayName("★ 클라이언트가 보낸 정렬은 무시된다 — 그대로 쓰면 JPQL 에 섞여 500 이 난다")
     void clientSortIsIgnored() {
-        commentService.create(articleId, userId, "댓글", null);
+        commentService.create(articleId, userId, "댓글");
         em.flush();
 
         assertThatCode(() -> commentService.list(
@@ -245,8 +178,7 @@ class CommentTest extends IntegrationTest {
     @Test
     @DisplayName("★ 수정이 다른 트랜잭션의 삭제를 되돌리지 않는다")
     void editDoesNotResurrectDeletedComment() {
-        CommentResponse root = commentService.create(articleId, userId, "원댓글", null);
-        commentService.create(articleId, otherUserId, "답글", root.id());
+        CommentResponse root = commentService.create(articleId, userId, "원댓글");
         em.flush();
         em.clear();
 
@@ -273,28 +205,27 @@ class CommentTest extends IntegrationTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("원댓글은 시간순이고 답글은 그 아래 중첩된다")
-    void listNestsReplies() {
-        CommentResponse first = commentService.create(articleId, userId, "1번", null);
-        commentService.create(articleId, userId, "2번", null);
-        commentService.create(articleId, otherUserId, "1번의 답글", first.id());
+    @DisplayName("댓글은 시간순 평면 목록이다")
+    void listIsFlatAndChronological() {
+        commentService.create(articleId, userId, "1번");
+        commentService.create(articleId, otherUserId, "2번");
+        commentService.create(articleId, userId, "3번");
         em.flush();
         em.clear();
 
         Page<CommentResponse> page = commentService.list(articleId, userId, PageRequest.of(0, 20));
 
-        assertThat(page.getTotalElements()).as("페이징 단위는 원댓글입니다").isEqualTo(2);
+        assertThat(page.getTotalElements())
+                .as("답글이 없으므로 페이징 단위가 곧 댓글입니다")
+                .isEqualTo(3);
         assertThat(page.getContent()).extracting(CommentResponse::content)
-                .containsExactly("1번", "2번");
-        assertThat(page.getContent().get(0).replies()).extracting(CommentResponse::content)
-                .containsExactly("1번의 답글");
-        assertThat(page.getContent().get(1).replies()).isEmpty();
+                .containsExactly("1번", "2번", "3번");
     }
 
     @Test
     @DisplayName("★ 탈퇴한 사용자의 댓글은 남지만 이름은 가려진다")
     void withdrawnAuthorIsMasked() {
-        commentService.create(articleId, otherUserId, "탈퇴할 사람의 댓글", null);
+        commentService.create(articleId, otherUserId, "탈퇴할 사람의 댓글");
         em.flush();
 
         em.createNativeQuery("UPDATE users SET status='WITHDRAWN', withdrawn_at=now() WHERE id=:id")
@@ -313,8 +244,8 @@ class CommentTest extends IntegrationTest {
     @Test
     @DisplayName("is_mine 은 보는 사람 기준이다")
     void isMineFollowsViewer() {
-        commentService.create(articleId, userId, "내 댓글", null);
-        commentService.create(articleId, otherUserId, "남의 댓글", null);
+        commentService.create(articleId, userId, "내 댓글");
+        commentService.create(articleId, otherUserId, "남의 댓글");
         em.flush();
         em.clear();
 

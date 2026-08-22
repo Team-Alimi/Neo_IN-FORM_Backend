@@ -58,7 +58,7 @@ public class CommentController {
             @PathVariable Long articleId,
             @Valid @RequestBody CreateCommentRequest request) {
         return ApiResponse.success(commentService.create(
-                articleId, principal.userId(), request.content(), request.parentId()));
+                articleId, principal.userId(), request.content()));
     }
 
     /** CMT-03 수정. 본인만. */

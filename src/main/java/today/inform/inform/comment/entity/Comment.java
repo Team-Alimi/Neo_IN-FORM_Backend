@@ -74,7 +74,7 @@ public class Comment extends BaseTimeEntity {
     @Column(name = "version", nullable = false)
     private Long version;
 
-    private Comment(Long articleId, Long userId, Long parentId, String content) {
+    private Comment(Long articleId, Long userId, String content) {
         validateContent(content);
         this.articleId = articleId;
         this.userId = userId;
@@ -82,8 +82,8 @@ public class Comment extends BaseTimeEntity {
         this.content = content;
     }
 
-    public static Comment create(Long articleId, Long userId, Long parentId, String content) {
-        return new Comment(articleId, userId, parentId, content);
+    public static Comment create(Long articleId, Long userId, String content) {
+        return new Comment(articleId, userId, content);
     }
 
     public boolean isReply() {

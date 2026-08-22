@@ -1,7 +1,6 @@
 package today.inform.inform.comment.dto.response;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import today.inform.inform.comment.repository.CommentRow;
 import today.inform.inform.user.entity.UserStatus;
 
@@ -19,9 +18,7 @@ public record CommentResponse(
         Author author,
         OffsetDateTime createdAt,
         boolean edited,
-        boolean deleted,
-        boolean isMine,
-        List<CommentResponse> replies) {
+        boolean isMine) {
 
     /**
      * @param name 탈퇴한 사용자면 실명 대신 고정 문구가 들어갑니다.
@@ -39,16 +36,17 @@ public record CommentResponse(
         }
     }
 
-    public static CommentResponse from(CommentRow row, Long viewerId, List<CommentResponse> replies) {
-        boolean deleted = row.isDeleted();
+    /**
+     * 목록 쿼리가 삭제된 행을 이미 걸러 내므로 여기서는 삭제 분기를 다루지 않습니다.
+     * 답글이 없어지면서 자리를 남길 이유도 사라졌습니다.
+     */
+    public static CommentResponse from(CommentRow row, Long viewerId) {
         return new CommentResponse(
                 row.id(),
-                deleted ? null : row.content(),
-                deleted ? null : Author.of(row),
+                row.content(),
+                Author.of(row),
                 row.createdAt(),
-                !deleted && row.isEdited(),
-                deleted,
-                !deleted && row.authorId().equals(viewerId),
-                replies);
+                row.isEdited(),
+                row.authorId().equals(viewerId));
     }
 }

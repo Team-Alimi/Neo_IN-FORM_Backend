@@ -59,118 +59,12 @@ class NotificationTest extends IntegrationTest {
     // CMT-05 답글 알림
     // ─────────────────────────────────────────────────────────────────────────
 
-    @Test
-    @DisplayName("★ 남이 내 댓글에 답글을 달면 알림이 온다")
-    void replyCreatesNotification() {
-        CommentResponse root = commentService.create(articleId, authorId, "원댓글", null);
-        commentService.create(articleId, replierId, "답글입니다", root.id());
-        em.flush();
-
-        List<NotificationResponse> received = list(authorId);
-
-        assertThat(received).hasSize(1);
-        NotificationResponse notification = received.get(0);
-        assertThat(notification.type()).isEqualTo(NotificationType.COMMENT_REPLY);
-        assertThat(notification.articleId()).isEqualTo(articleId);
-        assertThat(notification.message()).contains("알림 테스트 공지").contains("답글입니다");
-        assertThat(notification.read()).isFalse();
-
-        assertThat(list(replierId)).as("답글 쓴 사람에게는 오지 않습니다").isEmpty();
-    }
-
-    @Test
-    @DisplayName("★ 내 댓글에 내가 답글을 달면 알림이 오지 않는다")
-    void selfReplyDoesNotNotify() {
-        CommentResponse root = commentService.create(articleId, authorId, "원댓글", null);
-        commentService.create(articleId, authorId, "자문자답", root.id());
-        em.flush();
-
-        assertThat(list(authorId)).isEmpty();
-    }
-
-    @Test
-    @DisplayName("원댓글에는 알림이 생기지 않는다 — 알릴 대상이 없다")
-    void rootCommentDoesNotNotify() {
-        commentService.create(articleId, replierId, "그냥 원댓글", null);
-        em.flush();
-
-        assertThat(list(authorId)).isEmpty();
-    }
-
-    @Test
-    @DisplayName("★ 탈퇴한 사용자에게는 알림을 만들지 않는다 — 읽을 수 없는 행이다")
-    void withdrawnUserGetsNoNotification() {
-        CommentResponse root = commentService.create(articleId, authorId, "원댓글", null);
-        em.flush();
-
-        em.createNativeQuery("UPDATE users SET status='WITHDRAWN', withdrawn_at=now() WHERE id=:id")
-                .setParameter("id", authorId).executeUpdate();
-
-        commentService.create(articleId, replierId, "답글", root.id());
-        em.flush();
-
-        assertThat(rowCount(authorId)).isZero();
-    }
-
-    @Test
-    @DisplayName("★ 같은 답글로 알림이 두 번 생기지 않는다 — 유니크 인덱스가 막는다")
-    void duplicateNotificationIsIgnored() {
-        CommentResponse root = commentService.create(articleId, authorId, "원댓글", null);
-        CommentResponse reply = commentService.create(articleId, replierId, "답글", root.id());
-        em.flush();
-
-        // 재시도를 흉내 냅니다. ON CONFLICT DO NOTHING 이라 조용히 넘어가야 합니다.
-        notificationService.notifyReply(root.id(), reply.id(), replierId, "제목", "내용");
-        em.flush();
-
-        assertThat(rowCount(authorId)).isEqualTo(1);
-    }
-
-    @Test
-    @DisplayName("삭제된 원댓글에는 알림을 만들지 않는다")
-    void deletedParentGetsNoNotification() {
-        CommentResponse root = commentService.create(articleId, authorId, "지울 원댓글", null);
-        commentService.create(articleId, replierId, "첫 답글", root.id());
-        em.flush();
-        commentService.delete(root.id(), authorId);   // 답글이 있어 자리만 남습니다
-        em.flush();
-
-        int before = rowCount(authorId);
-        commentService.create(articleId, replierId, "두 번째 답글", root.id());
-        em.flush();
-
-        assertThat(rowCount(authorId))
-                .as("지운 댓글에 대한 알림은 열어 봐도 볼 것이 없습니다")
-                .isEqualTo(before);
-    }
-
     /**
      * 미리보기를 UTF-16 코드 단위로 자르면 이모지가 두 조각으로 갈라집니다.
      *
      * <p>짝을 잃은 조각은 UTF-8 로 인코딩할 수 없어 <b>드라이버가 조용히 {@code '?'} 로 바꿉니다.</b>
      * 예외가 나지 않아서 깨진 글자가 그대로 저장되고, 로그에도 아무것도 남지 않습니다.
      */
-    @Test
-    @DisplayName("★ 알림 미리보기가 이모지를 반토막 내지 않는다")
-    void previewDoesNotSplitEmoji() {
-        CommentResponse root = commentService.create(articleId, authorId, "원댓글", null);
-
-        // 자르는 경계(60)가 이모지 한가운데 떨어지도록 맞춥니다.
-        String thumbsUp = new String(Character.toChars(0x1F44D));
-        String reply = "가".repeat(59) + thumbsUp + " 뒤에 더 있는 내용";
-
-        commentService.create(articleId, replierId, reply, root.id());
-        em.flush();
-
-        String message = (String) em.createNativeQuery(
-                        "SELECT message FROM notifications WHERE user_id = :id")
-                .setParameter("id", authorId).getSingleResult();
-
-        assertThat(message)
-                .as("짝 없는 서로게이트는 인코딩 과정에서 '?' 로 치환됩니다")
-                .doesNotContain("?");
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // NTF-01 ~ 04
     // ─────────────────────────────────────────────────────────────────────────

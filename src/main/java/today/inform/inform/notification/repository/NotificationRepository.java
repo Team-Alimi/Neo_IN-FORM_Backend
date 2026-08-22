@@ -57,40 +57,4 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             + "WHERE user_id = :userId AND read_at IS NULL", nativeQuery = true)
     int markAllRead(@Param("userId") Long userId);
 
-    /**
-     * CMT-05 답글 알림.
-     *
-     * <p><b>한 문장에 규칙 네 가지가 들어 있습니다.</b> 조회해서 자바로 판정하면
-     * 그 사이 원댓글이 지워지거나 작성자가 탈퇴할 수 있고, 쿼리도 세 번 나갑니다.
-     * <ul>
-     *   <li>수신자는 원댓글 작성자 — 서브쿼리가 {@code comments} 에서 직접 가져옵니다</li>
-     *   <li>{@code c.user_id <> :actorId} — <b>자기 댓글에 자기가 단 답글은 알리지 않습니다</b></li>
-     *   <li>{@code u.status = 'ACTIVE'} — 탈퇴한 사용자에게는 만들지 않습니다.
-     *       읽을 수 없는 행이라 테이블만 불립니다</li>
-     *   <li>{@code ON CONFLICT DO NOTHING} — 유니크 인덱스
-     *       {@code (user_id, article_id, type, dedup_key)} 위에서 중복 발송을 막습니다.
-     *       재시도나 동시 요청이 겹쳐도 안전합니다</li>
-     * </ul>
-     *
-     * @param replyId 답글 댓글 id. 중복 방지 키로 씁니다
-     * @return 실제로 만들어졌으면 1. 대상이 없거나 이미 있으면 0
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query(value = """
-            INSERT INTO notifications (user_id, article_id, type, dedup_key, title, message)
-            SELECT c.user_id, c.article_id, 'COMMENT_REPLY', CAST(:replyId AS varchar),
-                   :title, :message
-              FROM comments c
-              JOIN users u ON u.id = c.user_id
-             WHERE c.id = :parentId
-               AND c.user_id <> :actorId
-               AND c.deleted_at IS NULL
-               AND u.status = 'ACTIVE'
-            ON CONFLICT DO NOTHING
-            """, nativeQuery = true)
-    int createReplyNotification(@Param("parentId") Long parentId,
-                                @Param("replyId") Long replyId,
-                                @Param("actorId") Long actorId,
-                                @Param("title") String title,
-                                @Param("message") String message);
 }

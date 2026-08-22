@@ -111,12 +111,11 @@ class ArticleMergeTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("★ 답글이 달린 댓글도 옮겨진다 — 원댓글을 먼저 옮기지 않으면 IN005 로 막힌다")
-    void commentThreadsAreMoved() {
+    @DisplayName("★ 흡수된 공지의 댓글이 함께 옮겨진다 — 사용자가 남긴 글이 사라지면 안 된다")
+    void commentsAreMoved() {
         Article target = publish("남을 공지");
         Article source = publish("흡수될 공지");
-        CommentResponse root = commentService.create(source.getId(), userId, "원댓글", null);
-        commentService.create(source.getId(), otherUserId, "답글", root.id());
+        CommentResponse root = commentService.create(source.getId(), userId, "원댓글");
         em.flush();
 
         mergeService.merge(target.getId(), List.of(source.getId()), null, adminId);
@@ -124,8 +123,8 @@ class ArticleMergeTest extends IntegrationTest {
 
         assertThat(commentCount(target.getId()))
                 .as("사용자가 남긴 댓글이 사라지면 안 됩니다")
-                .isEqualTo(2);
-        assertThat(counter(target.getId(), "comment_count")).isEqualTo(2);
+                .isEqualTo(1);
+        assertThat(counter(target.getId(), "comment_count")).isEqualTo(1);
     }
 
     @Test
@@ -250,7 +249,7 @@ class ArticleMergeTest extends IntegrationTest {
     void movedCommentsAreNotMarkedEdited() {
         Article target = publish("남을 공지");
         Article source = publish("흡수될 공지");
-        CommentResponse comment = commentService.create(source.getId(), userId, "원래 댓글", null);
+        CommentResponse comment = commentService.create(source.getId(), userId, "원래 댓글");
         em.flush();
 
         // 작성 시각을 과거로 밀어 둡니다. now() 가 트랜잭션 고정이라

@@ -33,18 +33,16 @@ public class AdminCommentController {
      * 댓글 목록·검색. 공지를 가로질러 찾습니다.
      *
      * @param keyword        본문 부분 일치. 2글자 미만은 무시합니다
-     * @param includeDeleted 기본 {@code false}. 삭제된 댓글은 본문이 비어 있어 검색으로는 못 찾습니다
      */
     @GetMapping
     public ApiResponse<PageResponse<AdminCommentSummary>> search(
             @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "article_id", required = false) Long articleId,
             @RequestParam(name = "user_id", required = false) Long userId,
-            @RequestParam(name = "include_deleted", defaultValue = "false") boolean includeDeleted,
             @PageableDefault(size = 20) Pageable pageable) {
 
         AdminCommentSearchCondition condition =
-                new AdminCommentSearchCondition(keyword, articleId, userId, includeDeleted);
+                new AdminCommentSearchCondition(keyword, articleId, userId);
 
         return ApiResponse.success(
                 PageResponse.from(adminCommentService.search(condition, pageable)));
