@@ -46,7 +46,9 @@ public class ArticleService {
     @Transactional(readOnly = true)
     public List<ArticleSummaryResponse> getPopular(AuthPrincipal principal, int limit) {
         int bounded = Math.clamp(limit, 1, POPULAR_MAX_LIMIT);
-        return articleQueryRepository.findPopular(principal.userId(), bounded);
+        // ★ 비로그인으로 열려 있는 경로라 principal 이 null 로 들어옵니다.
+        //   저장소가 null 을 익명 id 로 바꿔 개인화 값을 전부 false 로 만듭니다.
+        return articleQueryRepository.findPopular(principal == null ? null : principal.userId(), bounded);
     }
 
     /**

@@ -177,7 +177,7 @@ public class ArticleQueryRepository {
                 "SELECT " + SUMMARY_COLUMNS
                         + " FROM articles a WHERE " + VISIBLE
                         + " ORDER BY a.bookmark_count DESC, a.id DESC LIMIT :limit");
-        query.setParameter("userId", userId);
+        query.setParameter("userId", anonymousSafe(userId));
         query.setParameter("limit", limit);
 
         return toSummaries(declareSummaryScalars(query).getResultList());

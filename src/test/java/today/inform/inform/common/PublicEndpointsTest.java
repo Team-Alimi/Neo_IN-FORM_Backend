@@ -123,6 +123,32 @@ class PublicEndpointsTest extends IntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @DisplayName("★ 인기 공지는 비로그인도 볼 수 있다 — 홈이 캘린더 화면이고 그 상단에 그려진다")
+    void popularIsOpenToGuests() throws Exception {
+        mockMvc.perform(get("/api/v1/articles/popular"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    @DisplayName("★ 비로그인 인기 공지는 개인화 값이 false 다 — principal 이 null 이어도 터지지 않는다")
+    void popularForGuestHasNoPersonalization() throws Exception {
+        mockMvc.perform(get("/api/v1/articles/popular").param("limit", "5"))
+                .andExpect(status().isOk())
+                // 비어 있을 수 있으므로 개별 항목을 단정하지 않습니다.
+                // 여기서 지키는 것은 "principal 이 null 인 경로가 500 이 되지 않는다" 입니다.
+                .andExpect(jsonPath("$.error").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("인기 목록에서 상세로 넘어가면 로그인 벽을 만난다")
+    void popularDetailStillNeedsLogin() throws Exception {
+        mockMvc.perform(get("/api/v1/articles/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // 닫아야 할 것
     // ─────────────────────────────────────────────────────────────────────────

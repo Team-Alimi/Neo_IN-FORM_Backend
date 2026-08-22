@@ -59,6 +59,10 @@ public class SecurityConfig {
                         // 캘린더는 열지만 여기서 상세로 넘어가면 로그인이 필요합니다.
                         .requestMatchers(HttpMethod.GET,
                                 P + "/calendar/**",
+                                // 홈 화면이 캘린더이고, 그 상단의 인기 목록도 같은 화면에 그려집니다.
+                                // 캘린더만 열고 이것을 닫으면 비로그인 홈이 반쪽만 나옵니다.
+                                // 상세로 넘어가는 순간은 여전히 로그인이 필요합니다.
+                                P + "/articles/popular",
                                 P + "/announcements",
                                 P + "/announcements/*",
                                 P + "/vendors",
