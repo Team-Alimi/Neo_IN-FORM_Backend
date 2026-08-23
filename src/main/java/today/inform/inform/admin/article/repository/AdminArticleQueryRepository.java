@@ -161,7 +161,7 @@ public class AdminArticleQueryRepository {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // ADM-12 중복 확인 — GET /admin/articles/duplicates
+    // ADM-12 등록 전 중복 확인 — GET /admin/articles/duplicate-check
     // ─────────────────────────────────────────────────────────────────────────
 
     /**

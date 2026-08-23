@@ -103,14 +103,18 @@ public class AdminArticleController {
     }
 
     /**
-     * ADM-12 중복 확인.
+     * ADM-12 등록 전 중복 확인.
+     *
+     * <p><b>경로가 {@code /duplicates} 가 아닌 이유</b> — 복수형은 "중복된 공지들을 내놔라" 로 읽힙니다.
+     * 이 API 는 목록을 주는 것이 아니라 <b>"이거 이미 있어?" 를 묻는 검사</b>입니다.
+     * 시스템에 쌓인 중복 의심 목록은 {@code GET /admin/articles?needs_check=true} 쪽입니다.
      *
      * <p>수기 등록 전에 <b>같은 원본이 이미 들어와 있는지</b> 봅니다.
      * {@code external_key} 는 원본 게시판 글 번호라 정확 일치, {@code title} 은 부분 일치입니다.
      * 둘 다 비우면 빈 결과입니다 — 조건 없이 전체를 훑을 이유가 없습니다.
      */
-    @GetMapping("/duplicates")
-    public ApiResponse<DuplicateCandidate.Result> duplicates(
+    @GetMapping("/duplicate-check")
+    public ApiResponse<DuplicateCandidate.Result> duplicateCheck(
             @RequestParam(name = "external_key", required = false) String externalKey,
             @RequestParam(name = "title", required = false) String title) {
         return ApiResponse.success(
