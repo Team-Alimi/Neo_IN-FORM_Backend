@@ -32,11 +32,6 @@ public class AdminVendorService {
         return AdminVendorResponse.from(vendorRepository.search(type, active));
     }
 
-    @Transactional(readOnly = true)
-    public AdminVendorResponse get(Long vendorId) {
-        return AdminVendorResponse.from(load(vendorId));
-    }
-
     /**
      * VND-01 등록.
      *

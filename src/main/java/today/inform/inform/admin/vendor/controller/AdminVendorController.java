@@ -50,11 +50,6 @@ public class AdminVendorController {
         return ApiResponse.success(vendorService.search(type, active));
     }
 
-    @GetMapping("/{vendorId}")
-    public ApiResponse<AdminVendorResponse> detail(@PathVariable Long vendorId) {
-        return ApiResponse.success(vendorService.get(vendorId));
-    }
-
     /** VND-01. 응답의 {@code warning} 에 크롤러 시드 등록 안내가 함께 나갑니다. */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
