@@ -34,7 +34,7 @@ public class AdminCategoryService {
      * 그래서 제공처(D7 규약)와 같은 2단계입니다 — 앱에서 끄고, 크롤러 목록에서도 빼야 합니다.
      */
     private static final String DEACTIVATION_WARNING =
-            "이미 붙어 있는 공지 분류는 그대로 유지되고, 크롤러 AI 분류 목록에서도 이 코드를 빼야 "
+            "이미 붙어 있는 공지 카테고리는 그대로 유지되고, 크롤러 AI 카테고리 목록에서도 이 코드를 빼야 "
                     + "새 공지에 더 이상 붙지 않습니다.";
 
     private final CategoryRepository categoryRepository;
@@ -59,7 +59,7 @@ public class AdminCategoryService {
 
         if (categoryRepository.existsByCode(category.getCode())) {
             throw new BusinessException(
-                    ErrorCode.DUPLICATE_RESOURCE, "이미 쓰이고 있는 분류 코드입니다: " + category.getCode());
+                    ErrorCode.DUPLICATE_RESOURCE, "이미 쓰이고 있는 카테고리 코드입니다: " + category.getCode());
         }
         requireNameAvailable(category.getName(), null);
 
@@ -82,8 +82,8 @@ public class AdminCategoryService {
         if (requestedCode != null && !requestedCode.equals(category.getCode())) {
             throw new BusinessException(
                     ErrorCode.IMMUTABLE_FIELD,
-                    "분류 코드는 등록 후 바꿀 수 없습니다. 크롤러가 이 값으로 분류 결과를 보냅니다. "
-                            + "바꿔야 한다면 새 분류를 만들고 기존 것은 비활성화하세요.");
+                    "카테고리 코드는 등록 후 바꿀 수 없습니다. 크롤러가 이 값으로 카테고리 결과를 보냅니다. "
+                            + "바꿔야 한다면 새 카테고리를 만들고 기존 것은 비활성화하세요.");
         }
 
         if (request.name() != null) {
@@ -136,7 +136,7 @@ public class AdminCategoryService {
                 .filter(found -> !found.getId().equals(selfId))
                 .ifPresent(found -> {
                     throw new BusinessException(
-                            ErrorCode.DUPLICATE_RESOURCE, "이미 쓰이고 있는 분류 이름입니다: " + name);
+                            ErrorCode.DUPLICATE_RESOURCE, "이미 쓰이고 있는 카테고리 이름입니다: " + name);
                 });
     }
 

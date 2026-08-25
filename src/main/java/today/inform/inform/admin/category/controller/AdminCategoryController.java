@@ -20,7 +20,7 @@ import today.inform.inform.admin.category.dto.response.AdminCategoryResponse;
 import today.inform.inform.admin.category.service.AdminCategoryService;
 import today.inform.inform.global.response.ApiResponse;
 
-/** CAT-01 ~ CAT-03 분류 관리. {@code /admin/**} 전체가 {@code hasRole("ADMIN")} 입니다. */
+/** CAT-01 ~ CAT-03 카테고리 관리. {@code /admin/**} 전체가 {@code hasRole("ADMIN")} 입니다. */
 @RestController
 @RequestMapping("/admin/categories")
 @RequiredArgsConstructor

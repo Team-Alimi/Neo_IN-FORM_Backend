@@ -13,12 +13,12 @@ import today.inform.inform.category.entity.Category;
  * @param sortOrder 화면 정렬. 생략하면 0 입니다
  */
 public record CreateCategoryRequest(
-        @NotBlank(message = "분류 코드를 입력해 주세요.")
-        @Size(max = Category.CODE_MAX_LENGTH, message = "분류 코드는 50자를 넘을 수 없습니다.")
+        @NotBlank(message = "카테고리 코드를 입력해 주세요.")
+        @Size(max = Category.CODE_MAX_LENGTH, message = "카테고리 코드는 50자를 넘을 수 없습니다.")
         String code,
 
-        @NotBlank(message = "분류 이름을 입력해 주세요.")
-        @Size(max = Category.NAME_MAX_LENGTH, message = "분류 이름은 100자를 넘을 수 없습니다.")
+        @NotBlank(message = "카테고리 이름을 입력해 주세요.")
+        @Size(max = Category.NAME_MAX_LENGTH, message = "카테고리 이름은 100자를 넘을 수 없습니다.")
         String name,
 
         Integer sortOrder) {
