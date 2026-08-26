@@ -37,25 +37,32 @@ public class CalendarService {
     @Transactional(readOnly = true)
     public List<ArticleSummaryResponse> findMonthly(CalendarQuery query, AuthPrincipal principal) {
         Long userId = (principal == null) ? null : principal.userId();
-        requireLoginForMyMajor(query, userId);
+        requireLoginForPersonalFilters(query, userId);
 
         return articleQueryRepository.findForCalendar(
                 query.monthStart(), query.monthEnd(),
-                query.categoryIds(), query.myMajorOnly(),
+                query.categoryIds(), query.myMajorOnly(), query.interestOnly(),
                 userId, MAX_RESULTS);
     }
 
     /**
-     * "내 학과만" 은 로그인해야 합니다.
+     * 개인화 필터("내 학과만" · "관심 카테고리만")는 로그인해야 합니다.
      *
-     * <p>비로그인 상태로 통과시키면 구독 학과가 없으니 <b>빈 목록</b>이 나갑니다.
-     * 그건 "이번 달에 내 학과 공지가 없다" 와 구분되지 않아서, 사용자는 로그인이 필요한 줄 모른 채
+     * <p>비로그인 상태로 통과시키면 구독·관심사가 없으니 <b>빈 목록</b>이 나갑니다.
+     * 그건 "이번 달에 그런 공지가 없다" 와 구분되지 않아서, 사용자는 로그인이 필요한 줄 모른 채
      * 공지가 없다고 믿게 됩니다. 조용히 틀린 답을 주느니 401 이 낫습니다.
      */
-    private static void requireLoginForMyMajor(CalendarQuery query, Long userId) {
-        if (query.myMajorOnly() && userId == null) {
+    private static void requireLoginForPersonalFilters(CalendarQuery query, Long userId) {
+        if (userId != null) {
+            return;
+        }
+        if (query.myMajorOnly()) {
             throw new BusinessException(
                     ErrorCode.UNAUTHORIZED, "내 학과 공지만 보려면 로그인이 필요합니다.");
+        }
+        if (query.interestOnly()) {
+            throw new BusinessException(
+                    ErrorCode.UNAUTHORIZED, "관심 카테고리 공지만 보려면 로그인이 필요합니다.");
         }
     }
 }

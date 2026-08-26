@@ -157,7 +157,7 @@ class CalendarTest extends IntegrationTest {
         em.flush();
 
         List<ArticleSummaryResponse> found = calendarService.findMonthly(
-                new CalendarQuery(YEAR, MONTH, List.of(categoryId), false), guest());
+                new CalendarQuery(YEAR, MONTH, List.of(categoryId), false, false), guest());
 
         assertThat(ids(found)).contains(wanted).doesNotContain(other);
     }
@@ -180,11 +180,52 @@ class CalendarTest extends IntegrationTest {
         em.flush();
 
         List<ArticleSummaryResponse> found = calendarService.findMonthly(
-                new CalendarQuery(YEAR, MONTH, null, true), user());
+                new CalendarQuery(YEAR, MONTH, null, true, false), user());
 
         assertThat(ids(found))
                 .contains(mine)
                 .doesNotContain(otherVendor, noVendor);
+    }
+
+    @Test
+    @DisplayName("★ 관심 카테고리만 보기가 캘린더에서도 걸린다")
+    void interestOnlyFiltersCalendar() {
+        Long mine = publish("관심 있는 일정", LocalDate.of(2026, 5, 3), LocalDate.of(2026, 5, 10));
+        Long other = publish("관심 없는 일정", LocalDate.of(2026, 5, 4), LocalDate.of(2026, 5, 11));
+        link(mine, categoryId);
+        // ★ 대조군에도 카테고리를 붙입니다. 안 붙이면 조건이 "내 관심 카테고리인가" 에서
+        //   "카테고리가 붙어 있는가" 로 약해져도 결과가 같아 통과합니다.
+        link(other, otherCategoryId);
+        addInterest(userId, categoryId);
+        em.flush();
+
+        List<ArticleSummaryResponse> found = calendarService.findMonthly(
+                new CalendarQuery(YEAR, MONTH, null, false, true), user());
+
+        assertThat(ids(found)).contains(mine).doesNotContain(other);
+    }
+
+    @Test
+    @DisplayName("★ 관심 카테고리가 없는 사용자는 빈 달력을 받는다 — 폴백이 없다")
+    void interestOnlyWithNoInterestsIsEmpty() {
+        Long article = publish("아무 일정", LocalDate.of(2026, 5, 3), LocalDate.of(2026, 5, 10));
+        link(article, categoryId);
+        em.flush();
+
+        List<ArticleSummaryResponse> found = calendarService.findMonthly(
+                new CalendarQuery(YEAR, MONTH, null, false, true), user());
+
+        assertThat(found)
+                .as("공지 목록의 interest_only 와 같은 동작입니다. 그래서 기본이 꺼짐입니다")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("비로그인으로 '관심 카테고리만' 을 요청하면 401")
+    void interestOnlyRequiresLogin() {
+        assertThatThrownBy(() ->
+                calendarService.findMonthly(new CalendarQuery(YEAR, MONTH, null, false, true), guest()))
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -212,7 +253,7 @@ class CalendarTest extends IntegrationTest {
     @DisplayName("★ 비로그인으로 '내 학과만' 을 요청하면 401 — 조용히 빈 목록을 주면 안 된다")
     void myMajorOnlyRequiresLogin() {
         assertThatThrownBy(() ->
-                calendarService.findMonthly(new CalendarQuery(YEAR, MONTH, null, true), guest()))
+                calendarService.findMonthly(new CalendarQuery(YEAR, MONTH, null, true, false), guest()))
                 .as("빈 목록은 '내 학과 공지가 없다' 와 구분되지 않습니다")
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -226,16 +267,16 @@ class CalendarTest extends IntegrationTest {
     @Test
     @DisplayName("★ 잘못된 월은 400 — LocalDate 가 던지는 예외는 SQLSTATE 가 없어 500 이 된다")
     void invalidMonthIsRejected() {
-        assertThatThrownBy(() -> new CalendarQuery(YEAR, 13, null, false))
+        assertThatThrownBy(() -> new CalendarQuery(YEAR, 13, null, false, false))
                 .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> new CalendarQuery(YEAR, 0, null, false))
+        assertThatThrownBy(() -> new CalendarQuery(YEAR, 0, null, false, false))
                 .isInstanceOf(BusinessException.class);
     }
 
     @Test
     @DisplayName("터무니없는 연도는 400")
     void invalidYearIsRejected() {
-        assertThatThrownBy(() -> new CalendarQuery(999_999_999, MONTH, null, false))
+        assertThatThrownBy(() -> new CalendarQuery(999_999_999, MONTH, null, false, false))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -260,7 +301,7 @@ class CalendarTest extends IntegrationTest {
                 });
 
         List<ArticleSummaryResponse> mine = calendarService.findMonthly(
-                new CalendarQuery(YEAR, MONTH, null, false), user());
+                new CalendarQuery(YEAR, MONTH, null, false, false), user());
 
         assertThat(mine)
                 .filteredOn(row -> row.id().equals(articleId))
@@ -274,7 +315,7 @@ class CalendarTest extends IntegrationTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     private List<ArticleSummaryResponse> monthly() {
-        return calendarService.findMonthly(new CalendarQuery(YEAR, MONTH, null, false), guest());
+        return calendarService.findMonthly(new CalendarQuery(YEAR, MONTH, null, false, false), guest());
     }
 
     private static List<Long> ids(List<ArticleSummaryResponse> rows) {
@@ -284,6 +325,12 @@ class CalendarTest extends IntegrationTest {
     /** 비로그인 요청. {@code @AuthenticationPrincipal} 이 null 로 들어오는 상황입니다. */
     private static AuthPrincipal guest() {
         return null;
+    }
+
+    private void addInterest(Long user, Long category) {
+        em.createNativeQuery("INSERT INTO user_interest_categories (user_id, category_id) "
+                        + "VALUES (:user, :category)")
+                .setParameter("user", user).setParameter("category", category).executeUpdate();
     }
 
     private AuthPrincipal user() {

@@ -205,7 +205,7 @@ public class ArticleQueryRepository {
      */
     public List<ArticleSummaryResponse> findForCalendar(LocalDate monthStart, LocalDate monthEnd,
                                                         List<Long> categoryIds, boolean myMajorOnly,
-                                                        Long userId, int limit) {
+                                                        boolean interestOnly, Long userId, int limit) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", anonymousSafe(userId));
         params.put("monthStart", monthStart);
@@ -236,6 +236,13 @@ public class ArticleQueryRepository {
             where.append(" AND EXISTS (SELECT 1 FROM article_vendors av"
                     + " JOIN user_vendors uv ON uv.vendor_id = av.vendor_id"
                     + " WHERE av.article_id = a.id AND uv.user_id = :userId)");
+        }
+        if (interestOnly) {
+            // 공지 목록의 interest_only 와 같은 판정입니다. 두 화면이 갈라지면 안 됩니다.
+            // 폴백이 없으므로 관심 카테고리가 0개면 결과가 빕니다 — 그래서 기본이 꺼짐입니다.
+            where.append(" AND EXISTS (SELECT 1 FROM article_categories ac"
+                    + " JOIN user_interest_categories ui ON ui.category_id = ac.category_id"
+                    + " WHERE ac.article_id = a.id AND ui.user_id = :userId)");
         }
 
         Query query = em.createNativeQuery(

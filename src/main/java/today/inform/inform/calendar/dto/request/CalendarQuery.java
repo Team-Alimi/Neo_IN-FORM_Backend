@@ -14,13 +14,17 @@ import today.inform.inform.global.exception.ErrorCode;
  * 그건 SQLSTATE 가 없어 {@code GlobalExceptionHandler} 의 마지막 그물에 걸려 <b>500</b> 으로 나갑니다.
  * 잘못된 입력이 5xx 로 나가면 프론트가 재시도 대상으로 다뤄 무한 재시도가 됩니다.
  *
- * @param myMajorOnly CAL-02. 로그인해야 의미가 있습니다 — 구독 학과가 있어야 거를 수 있습니다
+ * @param myMajorOnly  CAL-02. 로그인해야 의미가 있습니다 — 구독 학과가 있어야 거를 수 있습니다
+ * @param interestOnly 온보딩에서 고른 관심 카테고리의 공지만. 역시 로그인이 필요합니다.
+ *                     공지 목록({@code GET /articles})의 같은 이름 파라미터와 <b>동작이 같습니다</b> —
+ *                     두 화면이 같은 토글을 다르게 해석하면 사용자가 필터를 신뢰할 수 없습니다
  */
 public record CalendarQuery(
         int year,
         int month,
         List<Long> categoryIds,
-        boolean myMajorOnly) {
+        boolean myMajorOnly,
+        boolean interestOnly) {
 
     /**
      * 달력이 다룰 수 있는 연도 범위.
