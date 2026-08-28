@@ -15,7 +15,6 @@ import today.inform.inform.article.entity.SourceType;
  *                       ({@link DeadlineStatus} 참조)
  * @param summary        AI 생성. <b>미생성이면 null</b> 이고 프론트는 요약 박스를 생략합니다
  * @param isBookmarked   ART-06. 로그인 사용자 기준. 비로그인이면 항상 false
- * @param isLiked        같은 기준
  * @param hasAttachment  첨부가 하나라도 있는지. 목록에 클립 아이콘을 그리기 위한 값이라
  *                       개수나 목록까지는 내보내지 않습니다
  * @param underReview    <b>명세에 없는 확장</b>입니다. 크롤러가 원본 수정을 감지해 재검수로 내려간 공지에
@@ -32,11 +31,9 @@ public record ArticleSummaryResponse(
         LocalDate endsOn,
         DeadlineStatus deadlineStatus,
         int bookmarkCount,
-        int likeCount,
         int commentCount,
         long viewCount,
         boolean isBookmarked,
-        boolean isLiked,
         boolean hasAttachment,
         boolean underReview,
         List<VendorSummary> vendors,

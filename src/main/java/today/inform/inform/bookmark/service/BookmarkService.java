@@ -10,7 +10,6 @@ import today.inform.inform.article.dto.response.ArticleSummaryResponse;
 import today.inform.inform.article.entity.SourceType;
 import today.inform.inform.article.repository.ArticleQueryRepository;
 import today.inform.inform.article.repository.ArticleReactionRepository;
-import today.inform.inform.article.repository.ReactionType;
 import today.inform.inform.article.service.ArticleQueryValidator;
 import today.inform.inform.article.service.ArticleReadableChecker;
 import today.inform.inform.global.exception.BusinessException;
@@ -44,7 +43,7 @@ public class BookmarkService {
     @Transactional
     public void add(Long userId, Long articleId) {
         readableChecker.requireReadable(articleId);
-        reactionRepository.add(ReactionType.BOOKMARK, userId, articleId);
+        reactionRepository.add(userId, articleId);
     }
 
     /**
@@ -55,7 +54,7 @@ public class BookmarkService {
      */
     @Transactional
     public void remove(Long userId, Long articleId) {
-        reactionRepository.remove(ReactionType.BOOKMARK, userId, articleId);
+        reactionRepository.remove(userId, articleId);
     }
 
     /**
@@ -66,7 +65,7 @@ public class BookmarkService {
      */
     @Transactional
     public int removeAll(Long userId, SourceType sourceType) {
-        return reactionRepository.removeAll(ReactionType.BOOKMARK, userId, sourceType);
+        return reactionRepository.removeAll(userId, sourceType);
     }
 
     /**

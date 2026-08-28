@@ -111,13 +111,10 @@ public class ArticleQueryRepository {
             a.starts_on         AS starts_on,
             a.ends_on           AS ends_on,
             a.bookmark_count    AS bookmark_count,
-            a.like_count        AS like_count,
             a.comment_count     AS comment_count,
             a.view_count        AS view_count,
             EXISTS (SELECT 1 FROM bookmarks b
                      WHERE b.article_id = a.id AND b.user_id = :userId)     AS is_bookmarked,
-            EXISTS (SELECT 1 FROM article_likes l
-                     WHERE l.article_id = a.id AND l.user_id = :userId)     AS is_liked,
             (a.status = 'PENDING_REVIEW')                                   AS under_review
             """;
 
@@ -298,19 +295,17 @@ public class ArticleQueryRepository {
                 (Long) row[0],
                 SourceType.valueOf((String) row[1]),
                 (String) row[2],
-                (String) row[14],                       // content
+                (String) row[12],                       // content
                 (String) row[3],                        // summary — null 일 수 있습니다
                 (OffsetDateTime) row[4],
                 (LocalDate) row[5],
                 (LocalDate) row[6],
                 DeadlineStatus.of((LocalDate) row[5], (LocalDate) row[6], LocalDate.now()),
-                (Integer) row[7],
-                (Integer) row[8],
-                (Integer) row[9],
-                (Long) row[10],
-                (Boolean) row[11],
-                (Boolean) row[12],
-                (Boolean) row[13],                      // under_review
+                (Integer) row[7],                       // bookmark_count
+                (Integer) row[8],                       // comment_count
+                (Long) row[9],                          // view_count
+                (Boolean) row[10],                      // is_bookmarked
+                (Boolean) row[11],                      // under_review
                 findCategories(List.of(articleId)).getOrDefault(articleId, List.of()),
                 findSources(articleId),
                 findAttachments(articleId)));
@@ -571,11 +566,9 @@ public class ArticleQueryRepository {
                 .addScalar("starts_on", StandardBasicTypes.LOCAL_DATE)
                 .addScalar("ends_on", StandardBasicTypes.LOCAL_DATE)
                 .addScalar("bookmark_count", StandardBasicTypes.INTEGER)
-                .addScalar("like_count", StandardBasicTypes.INTEGER)
                 .addScalar("comment_count", StandardBasicTypes.INTEGER)
                 .addScalar("view_count", StandardBasicTypes.LONG)
                 .addScalar("is_bookmarked", StandardBasicTypes.BOOLEAN)
-                .addScalar("is_liked", StandardBasicTypes.BOOLEAN)
                 .addScalar("under_review", StandardBasicTypes.BOOLEAN);
     }
 
@@ -606,14 +599,12 @@ public class ArticleQueryRepository {
                     startsOn,
                     endsOn,
                     DeadlineStatus.of(startsOn, endsOn, today),
-                    (Integer) row[7],
-                    (Integer) row[8],
-                    (Integer) row[9],
-                    (Long) row[10],
-                    (Boolean) row[11],
-                    (Boolean) row[12],
+                    (Integer) row[7],                   // bookmark_count
+                    (Integer) row[8],                   // comment_count
+                    (Long) row[9],                      // view_count
+                    (Boolean) row[10],                  // is_bookmarked
                     withAttachment.contains(id),
-                    (Boolean) row[13],
+                    (Boolean) row[11],                  // under_review
                     vendors.getOrDefault(id, Collections.emptyList()),
                     categories.getOrDefault(id, Collections.emptyList())));
         }

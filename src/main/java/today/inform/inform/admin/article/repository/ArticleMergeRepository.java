@@ -23,7 +23,6 @@ import org.springframework.stereotype.Repository;
  * <table border="1">
  *   <tr><th>테이블</th><th>충돌 키</th><th>방식</th></tr>
  *   <tr><td>bookmarks</td><td>PK(user_id, article_id)</td><td>2단계</td></tr>
- *   <tr><td>article_likes</td><td>PK(user_id, article_id)</td><td>2단계</td></tr>
  *   <tr><td>article_categories</td><td>PK(article_id, category_id)</td><td>2단계(합집합)</td></tr>
  *   <tr><td>attachments</td><td>(article_id, md5(file_url))</td><td>2단계</td></tr>
  *   <tr><td>notifications</td><td>(user_id, article_id, type, dedup_key)</td><td>2단계</td></tr>
@@ -54,7 +53,6 @@ public class ArticleMergeRepository {
      */
     public int moveUserReactions(Long targetId, Long sourceId) {
         int bookmarks = moveByUser("bookmarks", targetId, sourceId);
-        moveByUser("article_likes", targetId, sourceId);
         return bookmarks;
     }
 

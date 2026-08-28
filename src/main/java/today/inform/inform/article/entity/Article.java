@@ -166,10 +166,6 @@ public class Article extends BaseTimeEntity {
     private int bookmarkCount;
 
     @Generated(event = EventType.INSERT)
-    @Column(name = "like_count", nullable = false, insertable = false, updatable = false)
-    private int likeCount;
-
-    @Generated(event = EventType.INSERT)
     @Column(name = "comment_count", nullable = false, insertable = false, updatable = false)
     private int commentCount;
 

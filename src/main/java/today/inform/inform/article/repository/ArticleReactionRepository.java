@@ -6,18 +6,19 @@ import org.springframework.stereotype.Repository;
 import today.inform.inform.article.entity.SourceType;
 
 /**
- * 북마크·좋아요의 추가/해제.
+ * 북마크의 추가/해제.
+ *
+ * <p>예전에는 좋아요와 테이블 이름만 바꿔 공유했지만(추천 기능 제거), 지금은 북마크 전용입니다.
  *
  * <h2>JPA 엔티티를 두지 않는 이유</h2>
  * 복합 PK 엔티티는 Spring Data {@code save()} 가 {@code merge()} 로 빠져
  * INSERT 전에 SELECT 가 한 번 더 나가고 {@code ON CONFLICT} 를 쓸 수 없습니다.
- * 이 테이블들은 관계 그 자체가 전부라 엔티티로 얻을 게 없습니다.
+ * 이 테이블은 관계 그 자체가 전부라 엔티티로 얻을 게 없습니다.
  * ({@code PreferenceType} 을 다루는 방식과 같습니다)
  *
  * <h2>왜 article 패키지에 있는가</h2>
- * 두 테이블의 개수를 세는 트리거가 {@code articles.bookmark_count} /
- * {@code like_count} 를 갱신합니다. 공지 집계의 일부라 공지 쪽에 둡니다.
- * bookmark·like 서비스가 이걸 함께 씁니다.
+ * 개수를 세는 트리거가 {@code articles.bookmark_count} 를 갱신합니다.
+ * 공지 집계의 일부라 공지 쪽에 둡니다.
  *
  * <h2>카운터를 직접 건드리지 않는 이유</h2>
  * {@code UPDATE articles SET bookmark_count = ...} 를 앱이 같이 실행하면
@@ -40,9 +41,9 @@ public class ArticleReactionRepository {
      *
      * @return 실제로 추가됐으면 true. 이미 있었으면 false
      */
-    public boolean add(ReactionType type, Long userId, Long articleId) {
+    public boolean add(Long userId, Long articleId) {
         int inserted = em.createNativeQuery(
-                        "INSERT INTO " + type.table() + " (user_id, article_id) "
+                        "INSERT INTO bookmarks (user_id, article_id) "
                                 + "VALUES (:userId, :articleId) ON CONFLICT DO NOTHING")
                 .setParameter("userId", userId)
                 .setParameter("articleId", articleId)
@@ -55,9 +56,9 @@ public class ArticleReactionRepository {
      *
      * @return 실제로 지워졌으면 true
      */
-    public boolean remove(ReactionType type, Long userId, Long articleId) {
+    public boolean remove(Long userId, Long articleId) {
         int deleted = em.createNativeQuery(
-                        "DELETE FROM " + type.table() + " WHERE user_id = :userId AND article_id = :articleId")
+                        "DELETE FROM bookmarks WHERE user_id = :userId AND article_id = :articleId")
                 .setParameter("userId", userId)
                 .setParameter("articleId", articleId)
                 .executeUpdate();
@@ -73,8 +74,8 @@ public class ArticleReactionRepository {
      *
      * @return 지운 개수
      */
-    public int removeAll(ReactionType type, Long userId, SourceType sourceType) {
-        String sql = "DELETE FROM " + type.table() + " r WHERE r.user_id = :userId";
+    public int removeAll(Long userId, SourceType sourceType) {
+        String sql = "DELETE FROM bookmarks r WHERE r.user_id = :userId";
         if (sourceType != null) {
             sql += " AND EXISTS (SELECT 1 FROM articles a"
                     + " WHERE a.id = r.article_id AND a.source_type = :sourceType)";

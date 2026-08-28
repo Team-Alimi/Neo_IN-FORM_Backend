@@ -285,20 +285,16 @@ class CalendarTest extends IntegrationTest {
     void personalisationIsScopedToTheViewer() {
         Long articleId = publish("개인화 확인 공지", LocalDate.of(2026, 5, 5), LocalDate.of(2026, 5, 15));
 
-        // ★ 실제로 북마크·좋아요 행이 있어야 검증이 성립합니다.
+        // ★ 실제로 북마크 행이 있어야 검증이 성립합니다.
         //   행이 하나도 없으면 어떤 userId 를 넣어도 false 라, "비로그인이라서 false" 와
         //   "데이터가 없어서 false" 가 구분되지 않습니다.
         react("bookmarks", userId, articleId);
-        react("article_likes", userId, articleId);
         em.flush();
 
         assertThat(monthly())
                 .filteredOn(row -> row.id().equals(articleId))
-                .as("게스트 자리에 실재하는 사용자 번호가 들어가면 남의 하트가 켜진 채로 그려집니다")
-                .allSatisfy(row -> {
-                    assertThat(row.isBookmarked()).isFalse();
-                    assertThat(row.isLiked()).isFalse();
-                });
+                .as("게스트 자리에 실재하는 사용자 번호가 들어가면 남의 북마크가 켜진 채로 그려집니다")
+                .allSatisfy(row -> assertThat(row.isBookmarked()).isFalse());
 
         List<ArticleSummaryResponse> mine = calendarService.findMonthly(
                 new CalendarQuery(YEAR, MONTH, null, false, false), user());
@@ -306,10 +302,7 @@ class CalendarTest extends IntegrationTest {
         assertThat(mine)
                 .filteredOn(row -> row.id().equals(articleId))
                 .as("반대로 로그인 사용자에게는 자기 북마크가 보여야 합니다 — 안 그러면 달력에서만 해제된 것처럼 보입니다")
-                .allSatisfy(row -> {
-                    assertThat(row.isBookmarked()).isTrue();
-                    assertThat(row.isLiked()).isTrue();
-                });
+                .allSatisfy(row -> assertThat(row.isBookmarked()).isTrue());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

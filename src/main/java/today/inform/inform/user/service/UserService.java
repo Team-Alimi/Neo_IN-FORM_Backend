@@ -114,7 +114,6 @@ public class UserService {
             preferenceRepository.deleteAll(userId, type);
         }
         executeDelete("DELETE FROM bookmarks     WHERE user_id = :userId", userId);
-        executeDelete("DELETE FROM article_likes WHERE user_id = :userId", userId);
         executeDelete("DELETE FROM notifications WHERE user_id = :userId", userId);
 
         user.withdraw();

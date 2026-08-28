@@ -233,7 +233,6 @@ class ArticleQueryTest extends IntegrationTest {
         assertThat(found).filteredOn(ArticleSummaryResponse::isBookmarked)
                 .extracting(ArticleSummaryResponse::title)
                 .containsExactly("북마크한 공지");
-        assertThat(found).noneMatch(ArticleSummaryResponse::isLiked);
     }
 
     @Test

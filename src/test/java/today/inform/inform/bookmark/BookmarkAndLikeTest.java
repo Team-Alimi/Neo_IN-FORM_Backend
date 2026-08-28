@@ -23,7 +23,6 @@ import today.inform.inform.article.repository.ArticleQueryRepository;
 import today.inform.inform.article.repository.ArticleRepository;
 import today.inform.inform.bookmark.service.BookmarkService;
 import today.inform.inform.global.exception.BusinessException;
-import today.inform.inform.like.service.LikeService;
 import today.inform.inform.support.IntegrationTest;
 
 /**
@@ -37,9 +36,6 @@ class BookmarkAndLikeTest extends IntegrationTest {
 
     @Autowired
     private BookmarkService bookmarkService;
-
-    @Autowired
-    private LikeService likeService;
 
     @Autowired
     private ArticleRepository articleRepository;
@@ -87,32 +83,16 @@ class BookmarkAndLikeTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("좋아요도 계정당 1표다")
-    void likeIsIdempotent() {
-        Article article = publish("좋아요 대상");
-
-        likeService.like(userId, article.getId());
-        likeService.like(userId, article.getId());
-        em.flush();
-
-        assertThat(countRows("article_likes", article.getId())).isEqualTo(1);
-        assertThat(counter(article.getId(), "like_count")).isEqualTo(1);
-    }
-
-    @Test
     @DisplayName("해제하면 카운터도 함께 내려간다")
     void removeSyncsCounter() {
         Article article = publish("올렸다 내릴 공지");
         bookmarkService.add(userId, article.getId());
-        likeService.like(userId, article.getId());
         em.flush();
 
         bookmarkService.remove(userId, article.getId());
-        likeService.unlike(userId, article.getId());
         em.flush();
 
         assertThat(counter(article.getId(), "bookmark_count")).isZero();
-        assertThat(counter(article.getId(), "like_count")).isZero();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -126,8 +106,6 @@ class BookmarkAndLikeTest extends IntegrationTest {
                 Article.createSchoolArticle("검수 대기 공지", "내용", null, null, null));
 
         assertThatThrownBy(() -> bookmarkService.add(userId, hidden.getId()))
-                .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> likeService.like(userId, hidden.getId()))
                 .isInstanceOf(BusinessException.class);
     }
 

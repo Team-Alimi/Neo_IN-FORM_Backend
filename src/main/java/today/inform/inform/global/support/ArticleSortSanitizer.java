@@ -30,7 +30,6 @@ public final class ArticleSortSanitizer {
     private static final Map<String, Allowed> ALLOWED = Map.of(
             "published_at",   new Allowed("publishedAt",   "published_at"),
             "bookmark_count", new Allowed("bookmarkCount", "bookmark_count"),
-            "like_count",     new Allowed("likeCount",     "like_count"),
             "ends_on",        new Allowed("endsOn",        "ends_on"),
             "created_at",     new Allowed("createdAt",     "created_at"),
             "updated_at",     new Allowed("updatedAt",     "updated_at")

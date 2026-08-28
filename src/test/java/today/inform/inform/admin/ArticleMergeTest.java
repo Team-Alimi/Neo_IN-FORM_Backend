@@ -87,7 +87,7 @@ class ArticleMergeTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("★ 북마크·좋아요가 옮겨지고, 둘 다 가진 사용자는 잃는 것이 없다")
+    @DisplayName("★ 북마크가 옮겨지고, 양쪽 다 가진 사용자는 잃는 것이 없다")
     void reactionsAreMoved() {
         Article target = publish("남을 공지");
         Article source = publish("흡수될 공지");
@@ -95,7 +95,6 @@ class ArticleMergeTest extends IntegrationTest {
         react("bookmarks", userId, source.getId());         // 흡수될 쪽만
         react("bookmarks", otherUserId, source.getId());    // 양쪽 다
         react("bookmarks", otherUserId, target.getId());
-        react("article_likes", userId, source.getId());
         em.flush();
 
         mergeService.merge(target.getId(), List.of(source.getId()), null, adminId);
@@ -104,7 +103,6 @@ class ArticleMergeTest extends IntegrationTest {
         assertThat(reactionUsers("bookmarks", target.getId()))
                 .as("복합 PK 라 단일 UPDATE 면 둘 다 가진 사용자 하나에 전체가 실패합니다")
                 .containsExactlyInAnyOrder(userId, otherUserId);
-        assertThat(reactionUsers("article_likes", target.getId())).containsExactly(userId);
         assertThat(counter(target.getId(), "bookmark_count"))
                 .as("카운터는 트리거가 맞춥니다")
                 .isEqualTo(2);
