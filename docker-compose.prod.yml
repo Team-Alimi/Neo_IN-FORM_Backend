@@ -14,6 +14,18 @@ services:
   app:
     image: ${APP_IMAGE:-inform-app:local}
     restart: unless-stopped
+    # ★ 이 한도가 없으면 Dockerfile 의 -XX:MaxRAMPercentage=70 이 무의미해집니다.
+    #   컨테이너에 제한이 없으면 JVM 은 호스트 전체(1.9GB)의 70% = 약 1.33GB 를
+    #   힙 상한으로 잡습니다. 그러면 PostgreSQL·Redis 몫이 안 남고,
+    #   커널 OOM Killer 가 앱을 SIGKILL 로 죽입니다 — 자바 예외도 로그도 없이
+    #   컨테이너가 Exited(137) 로 사라지고, restart 정책 때문에 재기동만 반복합니다.
+    #   원인은 컨테이너 로그가 아니라 호스트 dmesg 에만 남습니다.
+    #
+    #   memswap_limit 을 같은 값으로 두면 이 컨테이너는 스왑을 못 씁니다.
+    #   일부러 그렇게 합니다 — 스왑에 밀린 1GB 힙을 SerialGC 가 훑으면
+    #   응답이 수 초씩 멈추는데, 그건 죽는 것보다 진단하기 어렵습니다.
+    mem_limit: 1g
+    memswap_limit: 1g
     env_file: .env
     environment:
       # 컨테이너끼리는 서비스 이름으로 찾습니다. .env 의 localhost 를 덮어씁니다.
@@ -42,6 +54,8 @@ services:
       # pg_bigm 이 들어간 우리 이미지여야 합니다. 공식 postgres 로는 Flyway V1 이 실패합니다.
       context: ./docker/db
     restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -60,8 +74,17 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
+    # 공유 메모리. postgres 는 /dev/shm 을 쓰는데 Docker 기본값이 64MB 라
+    # 병렬 쿼리에서 "could not resize shared memory segment" 가 납니다.
+    shm_size: 128m
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      # ★ -h 127.0.0.1 이 필수입니다. 빼면 유닉스 소켓으로 붙는데,
+      #   postgres 엔트리포인트는 initdb 스크립트를 돌리는 동안
+      #   listen_addresses='' 인 임시 서버를 띄웁니다. 그 임시 서버도
+      #   유닉스 소켓은 열려 있어서 pg_isready 가 성공해 버립니다.
+      #   그러면 초기화가 끝나기도 전에 healthy 로 확정되고,
+      #   app 이 붙으러 갔다가 TCP 는 아직 닫혀 있어 Connection refused 가 납니다.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -72,7 +95,21 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     # ★ 포트를 노출하지 않습니다. 앱만 쓰고, 앱은 같은 네트워크 안에 있습니다.
-    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    mem_limit: 128m
+    memswap_limit: 128m
+    # maxmemory 를 컨테이너 한도보다 낮게 잡습니다. 이게 없으면 Redis 가
+    # 한도까지 채운 뒤 OOM Killer 에게 죽습니다 — 스스로 키를 비우지 않습니다.
+    command:
+      - redis-server
+      - --save
+      - "60"
+      - "1"
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 96mb
+      - --maxmemory-policy
+      - allkeys-lru
     volumes:
       - redis-data:/data
     logging: *logging

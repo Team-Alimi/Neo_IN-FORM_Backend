@@ -48,6 +48,13 @@ EXPOSE 8080
 #   컨테이너 한도를 넘겨 OOM Killer 에게 죽습니다 — 로그도 안 남기고 사라집니다.
 #
 #   UseSerialGC: 2 vCPU 환경에서는 G1 의 병렬 GC 스레드가 오히려 손해입니다.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -Duser.timezone=Asia/Seoul"
+#   MaxRAMPercentage 는 "힙" 상한일 뿐입니다. 메타스페이스·스레드 스택·코드캐시·
+#   다이렉트 버퍼는 그 바깥이라, 70% 로 두면 나머지가 컨테이너 한도를 넘길 수 있습니다.
+#   60% + 메타스페이스·다이렉트 상한으로 총합을 예측 가능하게 묶습니다.
+#   (compose 의 mem_limit: 1g 기준 → 힙 600m + 메타 192m + 다이렉트 64m + 여유)
+#
+#   ExitOnOutOfMemoryError: 힙이 마르면 절뚝거리지 말고 즉시 죽으라는 뜻입니다.
+#   restart 정책이 다시 띄웁니다. OOM 상태로 살아 있는 프로세스가 제일 진단하기 어렵습니다.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60 -XX:MaxMetaspaceSize=192m -XX:MaxDirectMemorySize=64m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -Duser.timezone=Asia/Seoul"
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
