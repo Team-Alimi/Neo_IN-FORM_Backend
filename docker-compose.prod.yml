@@ -1,0 +1,82 @@
+# 운영용 (EC2 / Amazon Linux 2023)
+#
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# ★ 로컬용 docker-compose.yml 과 일부러 분리했습니다.
+#   로컬 파일은 편의를 위해 DB·Redis 를 호스트 포트에 노출하는데,
+#   그 설정이 운영에 새어 들어가면 안 됩니다.
+#
+# ★ nginx 는 여기 없습니다. 호스트에 dnf 로 설치해 씁니다.
+#   컨테이너로 올리면 certbot 인증서를 볼륨으로 넘기고 갱신 후 리로드 훅까지 직접 엮어야 합니다.
+#   호스트 nginx 면 `certbot --nginx` 한 줄로 발급·갱신·리로드가 전부 끝납니다.
+
+services:
+  app:
+    image: ${APP_IMAGE:-inform-app:local}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 컨테이너끼리는 서비스 이름으로 찾습니다. .env 의 localhost 를 덮어씁니다.
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      # ★ 127.0.0.1 에만 바인딩합니다. 0.0.0.0 으로 열면 보안 그룹과 무관하게
+      #   인스턴스의 8080 이 노출되어 nginx 를 우회한 평문 접근이 가능해집니다.
+      - "127.0.0.1:8080:8080"
+    logging: &logging
+      driver: json-file
+      options:
+        # 이걸 안 걸면 로그가 디스크(20GB)를 조용히 채우고 어느 날 서버가 멈춥니다.
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    build:
+      # pg_bigm 이 들어간 우리 이미지여야 합니다. 공식 postgres 로는 Flyway V1 이 실패합니다.
+      context: ./docker/db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      CRAWLER_PASSWORD: ${CRAWLER_PASSWORD}
+    ports:
+      # ★ 127.0.0.1 에만 바인딩합니다. 인터넷에는 절대 열리지 않습니다 —
+      #   보안 그룹 규칙을 잘못 건드려도 루프백이라 밖에서 닿을 수 없습니다.
+      #
+      #   왜 아예 막지 않는가: 크롤러가 이 서버에서 도는데, 그게 컨테이너가 아니라
+      #   호스트 프로세스(python 직접 실행)라면 Docker 내부 네트워크에 못 들어옵니다.
+      #   그때 localhost:5432 로 붙을 길이 필요합니다.
+      #
+      #   크롤러를 컨테이너로 만들어 이 compose 에 넣으면 이 두 줄을 지우세요 —
+      #   컨테이너끼리는 서비스 이름(db:5432)으로 통합니다.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # ★ 포트를 노출하지 않습니다. 앱만 쓰고, 앱은 같은 네트워크 안에 있습니다.
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - redis-data:/data
+    logging: *logging
+
+volumes:
+  pg-data:
+  redis-data:

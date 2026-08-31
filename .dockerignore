@@ -1,0 +1,25 @@
+# 빌드 컨텍스트에서 뺄 것.
+#
+# ★ .env 를 반드시 빼야 합니다. 넣으면 운영 비밀번호·JWT 시크릿이 이미지 레이어에 박히고,
+#   레지스트리에 올라간 뒤에는 지워도 이전 레이어에 남습니다.
+
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+.github
+
+build/
+.gradle/
+
+docs/
+*.md
+
+.idea/
+.vscode/
+.claude/
+
+# 로컬 개발용 — 운영 이미지와 무관
+docker-compose.yml
