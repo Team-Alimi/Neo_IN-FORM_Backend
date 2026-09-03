@@ -66,7 +66,8 @@ public class SecurityConfig {
                                 P + "/announcements",
                                 P + "/announcements/*",
                                 P + "/vendors",
-                                P + "/categories").permitAll()
+                                P + "/categories",
+                                P + "/club-types").permitAll()
 
                         // ── 인프라 ──────────────────────────────────────────
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
