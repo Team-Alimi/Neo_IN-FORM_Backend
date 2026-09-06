@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Tag;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.utility.DockerImageName;
@@ -46,8 +47,27 @@ public abstract class IntegrationTest {
             // initdb 스크립트가 요구합니다. 없으면 컨테이너가 기동 중에 죽습니다.
             .withEnv("CRAWLER_PASSWORD", CRAWLER_PASSWORD);
 
+    /**
+     * Redis 도 컨테이너로 띄웁니다.
+     *
+     * <p><b>예전에는 {@code localhost:6379} 를 하드코딩했습니다.</b> "테스트에서 실제로 쓰지 않는
+     * 값" 이라고 봤기 때문인데, 사실이 아니었습니다. {@code TokenRevocationStore} 가 Redis 를 쓰고
+     * 토큰 무효화 테스트 5개가 그걸 검증합니다.
+     *
+     * <p>더 나빴던 건 조용히 실패했다는 점입니다. {@code TokenRevocationStore.isRevoked} 는
+     * Redis 장애 시 <b>일부러 통과시킵니다</b>(가용성 우선). 그래서 Redis 가 없으면 예외 대신
+     * "무효화 안 됨" 이 되고, 개발자 PC 에는 docker-compose 의 Redis 가 6379 에 떠 있어서
+     * 로컬에서는 통과합니다. CI 에는 없으니 거기서만 5개가 실패했습니다.
+     *
+     * <p>컨테이너로 띄우면 어디서 돌리든 같고, 개발용 Redis 에 테스트 키를 남기지도 않습니다.
+     */
+    private static final GenericContainer<?> REDIS =
+            new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+                    .withExposedPorts(6379);
+
     static {
-        DB.start();   // JVM 종료 시 Ryuk 이 정리합니다
+        DB.start();      // JVM 종료 시 Ryuk 이 정리합니다
+        REDIS.start();
     }
 
     /**
@@ -80,10 +100,13 @@ public abstract class IntegrationTest {
         registry.add("spring.datasource.username", DB::getUsername);
         registry.add("spring.datasource.password", DB::getPassword);
 
-        // 애플리케이션이 요구하지만 이 테스트에서 실제로 쓰지 않는 값들.
+        // ★ 실제로 쓰입니다. TokenRevocationStore 가 이 Redis 에 무효화 시각을 기록하고,
+        //   토큰 무효화 테스트 5개가 그 동작을 검증합니다. 하드코딩하면 안 됩니다.
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+
+        // 아래는 애플리케이션이 요구하지만 이 테스트에서 실제로 쓰지 않는 값들.
         // 없으면 컨텍스트가 뜨지 않아 형태만 맞춰 채웁니다.
-        registry.add("spring.data.redis.host", () -> "localhost");
-        registry.add("spring.data.redis.port", () -> 6379);
         registry.add("jwt.secret", () ->
                 "dGVzdC1vbmx5LXNlY3JldC1kby1ub3QtdXNlLWFueXdoZXJlLWVsc2UtcGFkZGluZy0xMjM0NTY3OA==");
         registry.add("google.oauth.client-id", () -> "test-client-id");
