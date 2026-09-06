@@ -78,7 +78,12 @@ jobs:
       # Flyway 순서 그대로 적용합니다. 하나라도 실패하면 즉시 중단됩니다.
       - name: Apply migrations
         run: |
-          for f in src/main/resources/db/migration/V*.sql; do
+          # ★ sort -V 가 필수입니다. glob 은 사전순이라 V10 이 V1 보다 앞에 옵니다
+          #   ("V1" 다음 글자를 비교하면 '0'(0x30) < '_'(0x5F)).
+          #   그대로 두면 V10 이 맨 먼저 적용돼 아직 없는 테이블을 건드리고 즉시 실패합니다.
+          #   V10 을 추가한 시점부터 이 잡이 계속 실패하고 있었습니다.
+          #   앱의 Flyway 는 버전 숫자를 파싱하므로 영향이 없습니다 — 이 루프만의 문제입니다.
+          for f in $(ls src/main/resources/db/migration/V*.sql | sort -V); do
             echo "── $(basename "$f")"
             docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -q < "$f"
           done
