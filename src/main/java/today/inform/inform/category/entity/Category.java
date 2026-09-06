@@ -59,6 +59,20 @@ public class Category extends BaseTimeEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    /**
+     * false = 분류에는 쓰지만 사용자가 관심분야로 고를 수는 없습니다.
+     *
+     * <p>{@code active} 와 나눠 둔 이유는 <b>기타(ETC)</b> 때문입니다. 크롤러는 "어디에도
+     * 안 맞음" 을 기타로 표시해야 하는데(분류가 0개인 것과 구분되어야 합니다 — 0개는
+     * 관리자 "확인 필요" 로 잡힙니다), 온보딩에서 "기타에 관심 있으세요?" 를 묻는 건
+     * 말이 안 됩니다.
+     *
+     * <p>플래그 하나로는 "크롤러가 붙일 수 있는가" 와 "사용자가 고를 수 있는가" 를
+     * 동시에 표현할 수 없어 V14 에서 분리했습니다.
+     */
+    @Column(name = "is_selectable", nullable = false)
+    private boolean selectable;
+
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
@@ -67,6 +81,7 @@ public class Category extends BaseTimeEntity {
         this.name = requireName(name);
         this.sortOrder = sortOrder;
         this.active = true;
+        this.selectable = true;
     }
 
     /** CAT-01 등록. {@code code} 는 크롤러 AI 분류 목록과 <b>먼저 맞춰 두고</b> 넣어야 합니다. */

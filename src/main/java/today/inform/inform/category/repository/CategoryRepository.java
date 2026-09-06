@@ -22,6 +22,23 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     List<Category> search(@Param("active") Boolean active);
 
     /**
+     * 사용자가 <b>관심분야로 고를 수 있는</b> 분류만. 온보딩 화면과 목록 필터가 이걸 씁니다.
+     *
+     * <p>{@link #search}(true) 와 다릅니다 — 활성이지만 고를 수 없는 분류가 있습니다.
+     * 기타(ETC)가 그렇습니다. 크롤러는 "어디에도 안 맞음" 을 기타로 표시해야 하는데
+     * (분류 0개는 관리자 "확인 필요" 로 잡히므로 구분되어야 합니다),
+     * 온보딩에서 사용자에게 기타를 고르라고 할 수는 없습니다.
+     *
+     * <p>이걸로 거르지 않으면 화면에는 보이는데 저장에서 IN010 으로 거부됩니다(V14 트리거).
+     */
+    @Query("""
+            SELECT c FROM Category c
+             WHERE c.active = true AND c.selectable = true
+             ORDER BY c.sortOrder ASC, c.name ASC, c.id ASC
+            """)
+    List<Category> findSelectable();
+
+    /**
      * 삭제 판정 전에 분류 행을 잠급니다.
      *
      * <p><b>{@code FOR UPDATE} 여야 합니다.</b> 자식 INSERT
