@@ -2,6 +2,7 @@ package today.inform.inform.article.dto.request;
 
 import java.time.LocalDate;
 import java.util.List;
+import today.inform.inform.article.dto.response.DeadlineStatus;
 import today.inform.inform.article.entity.SourceType;
 
 /**
@@ -22,10 +23,24 @@ public record ArticleSearchCondition(
         boolean interestOnly,
         LocalDate startsFrom,
         LocalDate endsTo,
-        Boolean hasDeadline) {
+        Boolean hasDeadline,
+        List<DeadlineStatus> deadlineStatuses) {
 
     /** pg_bigm 은 2-gram 이라 1글자로는 인덱스가 후보를 좁히지 못합니다. */
     public static final int MIN_KEYWORD_LENGTH = 2;
+
+    /**
+     * 마감 상태 필터가 없던 시절의 생성자.
+     *
+     * <p>호출부가 열 곳이 넘어 전부 고치는 대신 남겨 둡니다. 마감 상태를 안 쓰는 경로
+     * (북마크 목록 등)는 이걸 그대로 씁니다.
+     */
+    public ArticleSearchCondition(SourceType sourceType, List<Long> categoryIds, List<Long> vendorIds,
+                                  String keyword, boolean interestOnly,
+                                  LocalDate startsFrom, LocalDate endsTo, Boolean hasDeadline) {
+        this(sourceType, categoryIds, vendorIds, keyword, interestOnly,
+                startsFrom, endsTo, hasDeadline, null);
+    }
 
     /**
      * 관심 분류로 거를지. <b>기본은 끔</b>입니다.
@@ -44,6 +59,17 @@ public record ArticleSearchCondition(
 
     public boolean isDeadlineOnly() {
         return Boolean.TRUE.equals(hasDeadline);
+    }
+
+    /**
+     * 마감 상태로 거를지. 여러 개를 함께 보낼 수 있습니다 (예: 진행중 + 마감임박).
+     *
+     * <p>{@code has_deadline} 과 역할이 겹쳐 보이지만 다릅니다 —
+     * 그쪽은 "마감일이 있는가", 이쪽은 "지금 어느 단계인가" 입니다.
+     * 프론트가 이미 쓰고 있을 수 있어 둘 다 남깁니다.
+     */
+    public boolean hasDeadlineStatusFilter() {
+        return deadlineStatuses != null && !deadlineStatuses.isEmpty();
     }
 
     public boolean hasKeyword() {

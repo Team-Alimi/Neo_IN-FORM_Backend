@@ -30,7 +30,7 @@ public enum DeadlineStatus {
     ALWAYS;
 
     /** 마감 임박 판정 기준. 명세 2.8 의 "3일 이내". */
-    private static final long CLOSING_SOON_DAYS = 3;
+    public static final long CLOSING_SOON_DAYS = 3;
 
     /**
      * @param today 판정 기준일. 파라미터로 받는 이유는 테스트가 날짜를 고정할 수 있어야 하기 때문입니다 —
@@ -52,5 +52,39 @@ public enum DeadlineStatus {
             return CLOSED;
         }
         return ChronoUnit.DAYS.between(today, endsOn) <= CLOSING_SOON_DAYS ? CLOSING_SOON : OPEN;
+    }
+
+    /**
+     * 위 {@link #of} 와 <b>같은 판정</b>을 SQL 로 옮긴 것. 목록의 마감 상태 필터가 씁니다.
+     *
+     * <p><b>★ 한쪽만 고치면 목록 필터와 카드 배지가 어긋납니다.</b> 분기 순서까지 1:1 로
+     * 맞춰 두었으니 반드시 같이 고치세요. 그래서 이 상수를 리포지토리가 아니라
+     * 판정 메서드 바로 아래에 둡니다 — 떨어뜨려 놓으면 언젠가 한쪽만 바뀝니다.
+     *
+     * <p><b>{@code UPCOMING} 을 마감 계산보다 먼저 보는 순서가 특히 중요합니다.</b>
+     * "내일 시작해서 모레 마감" 인 공지는 마감이 3일 이내여도 {@code UPCOMING} 입니다.
+     * 순서를 바꾸면 카드에는 "예정" 배지가 붙는데 마감임박 필터에 걸립니다.
+     *
+     * <p><b>{@code CURRENT_DATE} 를 쓰지 않습니다.</b> DB 컨테이너 시간대는 UTC 인데
+     * 앱은 {@code -Duser.timezone=Asia/Seoul} 이라, KST 00~09시에 "오늘" 이 하루 어긋납니다.
+     * 새벽에만 필터와 배지가 달라지는 버그는 재현이 거의 안 됩니다.
+     * 앱이 계산한 날짜를 {@code :today} 로 넘겨 같은 기준을 쓰게 합니다.
+     *
+     * <p>{@code CAST} 를 붙이는 이유는 Hibernate 네이티브 쿼리에서 바인딩 파라미터의
+     * 타입이 추론되지 않아 {@code date - date} 연산자를 못 찾는 경우가 있기 때문입니다.
+     *
+     * @param alias 공지 테이블 별칭 (목록 쿼리는 {@code a})
+     */
+    public static String sqlExpression(String alias) {
+        return """
+                CASE
+                    WHEN %1$s.starts_on IS NULL AND %1$s.ends_on IS NULL THEN 'ALWAYS'
+                    WHEN %1$s.starts_on IS NOT NULL
+                         AND CAST(:today AS date) < %1$s.starts_on              THEN 'UPCOMING'
+                    WHEN %1$s.ends_on IS NULL                                   THEN 'OPEN'
+                    WHEN CAST(:today AS date) > %1$s.ends_on                    THEN 'CLOSED'
+                    WHEN %1$s.ends_on - CAST(:today AS date) <= :closingSoonDays THEN 'CLOSING_SOON'
+                    ELSE 'OPEN'
+                END""".formatted(alias);
     }
 }

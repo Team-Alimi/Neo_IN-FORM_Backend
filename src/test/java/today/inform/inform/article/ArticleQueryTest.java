@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform.article.dto.request.ArticleSearchCondition;
 import today.inform.inform.article.dto.response.ArticleDetailResponse;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse;
+import today.inform.inform.article.dto.response.DeadlineStatus;
 import today.inform.inform.article.dto.response.VendorSummary;
 import today.inform.inform.article.entity.Article;
 import today.inform.inform.article.entity.ArticleStatus;
@@ -217,6 +218,64 @@ class ArticleQueryTest extends IntegrationTest {
         assertThat(found).extracting(ArticleSummaryResponse::title).containsExactly("3월 행사");
     }
 
+    @Test
+    @DisplayName("★ 마감 상태 필터 결과가 카드 배지와 일치한다 — 어긋나면 화면이 앞뒤가 안 맞는다")
+    void deadlineStatusFilterMatchesBadge() {
+        LocalDate today = LocalDate.now();
+
+        publish("상시 안내");                                                   // ALWAYS
+        withPeriod("다음달 행사",     today.plusDays(10), today.plusDays(20));   // UPCOMING
+        withPeriod("내일 시작 모레 마감", today.plusDays(1),  today.plusDays(2));    // ★ UPCOMING (아래 참고)
+        withPeriod("진행중",         today.minusDays(5), today.plusDays(10));   // OPEN
+        withPeriod("시작만 있음",     today.minusDays(2), null);                 // OPEN
+        withPeriod("사흘 뒤 마감",    today.minusDays(1), today.plusDays(3));    // CLOSING_SOON (경계)
+        withPeriod("지난 행사",       today.minusDays(10), today.minusDays(1));  // CLOSED
+
+        List<ArticleSummaryResponse> all = search(deadline(null));
+
+        // 배지는 자바(DeadlineStatus.of)가, 필터는 SQL(DeadlineStatus.sqlExpression)이 판정합니다.
+        // 둘을 각각 기대값으로 쓰지 않고 서로 대조합니다 — 그래야 한쪽만 바뀌었을 때 잡힙니다.
+        for (DeadlineStatus status : DeadlineStatus.values()) {
+            List<String> byBadge = all.stream()
+                    .filter(a -> a.deadlineStatus() == status)
+                    .map(ArticleSummaryResponse::title).sorted().toList();
+            List<String> byFilter = search(deadline(List.of(status))).stream()
+                    .map(ArticleSummaryResponse::title).sorted().toList();
+
+            assertThat(byFilter)
+                    .as("%s 로 거른 결과가 배지가 %s 인 공지와 같아야 한다", status, status)
+                    .isEqualTo(byBadge);
+        }
+    }
+
+    @Test
+    @DisplayName("★ 내일 시작해 모레 마감이면 마감이 사흘 이내여도 UPCOMING 이다 — 판정 순서")
+    void upcomingWinsOverClosingSoon() {
+        LocalDate today = LocalDate.now();
+        withPeriod("내일 시작 모레 마감", today.plusDays(1), today.plusDays(2));
+
+        // SQL 이 UPCOMING 을 먼저 보지 않고 마감일부터 계산하면 여기 걸립니다.
+        assertThat(search(deadline(List.of(DeadlineStatus.CLOSING_SOON))))
+                .as("마감임박 필터에 잡히면 안 된다")
+                .isEmpty();
+        assertThat(search(deadline(List.of(DeadlineStatus.UPCOMING))))
+                .extracting(ArticleSummaryResponse::title)
+                .containsExactly("내일 시작 모레 마감");
+    }
+
+    @Test
+    @DisplayName("마감 상태는 여러 개를 함께 보낼 수 있다")
+    void deadlineStatusAcceptsMultiple() {
+        LocalDate today = LocalDate.now();
+        withPeriod("진행중",      today.minusDays(5), today.plusDays(10));
+        withPeriod("사흘 뒤 마감", today.minusDays(1), today.plusDays(3));
+        withPeriod("지난 행사",    today.minusDays(10), today.minusDays(1));
+
+        assertThat(search(deadline(List.of(DeadlineStatus.OPEN, DeadlineStatus.CLOSING_SOON))))
+                .extracting(ArticleSummaryResponse::title)
+                .containsExactlyInAnyOrder("진행중", "사흘 뒤 마감");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // 개인화 · 부가 정보
     // ─────────────────────────────────────────────────────────────────────────
@@ -297,6 +356,18 @@ class ArticleQueryTest extends IntegrationTest {
 
     private List<ArticleSummaryResponse> search(ArticleSearchCondition condition) {
         return queryRepository.search(condition, userId, PageRequest.of(0, 20)).getContent();
+    }
+
+    /** 마감 상태만 지정한 조건. */
+    private ArticleSearchCondition deadline(List<DeadlineStatus> statuses) {
+        return new ArticleSearchCondition(null, null, null, null, false, null, null, null, statuses);
+    }
+
+    /** 기간을 가진 공지를 발행합니다. */
+    private void withPeriod(String title, LocalDate startsOn, LocalDate endsOn) {
+        Article article = publish(title);
+        article.edit(title, "내용", startsOn, endsOn);
+        em.flush();
     }
 
     /** interestOnly 를 끈 기본 조건. 대부분의 테스트는 관심 분야를 설정하지 않습니다. */

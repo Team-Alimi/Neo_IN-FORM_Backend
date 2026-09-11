@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import today.inform.inform.article.dto.request.ArticleSearchCondition;
+import today.inform.inform.article.dto.response.DeadlineStatus;
 import today.inform.inform.article.dto.response.ArticleDetailResponse;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse;
 import today.inform.inform.article.entity.SourceType;
@@ -46,6 +47,10 @@ public class ArticleController {
      *                     "안 보냄" 과 "false" 가 같은 뜻이므로 삼상태가 필요 없습니다.
      * @param sort         {@code published_at,desc} 형태. 허용 기준은 화이트리스트이고
      *                     서버가 항상 {@code id DESC} 를 뒤에 붙입니다.
+     * @param deadlineStatuses 마감 상태로 거릅니다. 여러 개를 쉼표로 보낼 수 있습니다
+     *                     ({@code ?deadline_status=OPEN,CLOSING_SOON}).
+     *                     값은 응답의 {@code deadline_status} 와 같은 문자열이라,
+     *                     화면이 카드에 붙인 배지 값을 그대로 필터로 넘길 수 있습니다.
      */
     @GetMapping
     public ApiResponse<PageResponse<ArticleSummaryResponse>> search(
@@ -60,10 +65,12 @@ public class ArticleController {
             @RequestParam(name = "ends_to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endsTo,
             @RequestParam(name = "has_deadline", required = false) Boolean hasDeadline,
+            @RequestParam(name = "deadline_status", required = false) List<DeadlineStatus> deadlineStatuses,
             @PageableDefault(size = 20) Pageable pageable) {
 
         ArticleSearchCondition condition = new ArticleSearchCondition(
-                sourceType, categoryIds, vendorIds, keyword, interestOnly, startsFrom, endsTo, hasDeadline);
+                sourceType, categoryIds, vendorIds, keyword, interestOnly,
+                startsFrom, endsTo, hasDeadline, deadlineStatuses);
 
         return ApiResponse.success(
                 PageResponse.from(articleService.search(condition, pageable, principal)));

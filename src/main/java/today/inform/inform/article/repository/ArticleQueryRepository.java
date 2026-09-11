@@ -486,9 +486,39 @@ public class ArticleQueryRepository {
         if (condition.isDeadlineOnly()) {
             where.append(" AND a.ends_on IS NOT NULL");
         }
+        appendDeadlineStatus(condition, where, params);
         appendPeriodOverlap(condition, where, params);
 
         return where.toString();
+    }
+
+    /**
+     * 마감 상태 필터 (예: 진행중 + 마감임박).
+     *
+     * <p>{@code deadline_status} 는 <b>DB 컬럼이 아니라 파생값</b>입니다. 응답에 나가는 배지는
+     * {@link DeadlineStatus#of} 가 자바에서 계산하고, 여기서는 같은 판정을 SQL 로 다시 합니다.
+     * 그 SQL 은 {@link DeadlineStatus#sqlExpression} 에 — <b>자바 판정 바로 옆에</b> — 있습니다.
+     * 한쪽만 고치면 목록에 나온 공지의 배지와 필터가 어긋나므로 일부러 붙여 뒀습니다.
+     *
+     * <p><b>{@code today} 를 앱에서 넘깁니다.</b> SQL 의 {@code CURRENT_DATE} 를 쓰면
+     * DB 컨테이너(UTC)와 앱(KST)의 "오늘" 이 KST 00~09시에 하루 어긋납니다.
+     * 배지도 앱이 계산하므로, 같은 시계를 쓰게 해야 둘이 일치합니다.
+     *
+     * <p><b>인덱스 참고</b>: {@code idx_articles_deadline(ends_on)} 이 있어 {@code CLOSED}·
+     * {@code CLOSING_SOON} 쪽은 도움을 받지만, CASE 식이라 완전히 타지는 않습니다.
+     * {@code starts_on} 에는 인덱스가 아예 없어 {@code UPCOMING} 은 스캔입니다.
+     * 공지가 수만 건이 되면 그때 부분 인덱스를 검토하세요 — 지금 넣으면 근거 없는 최적화입니다.
+     */
+    private void appendDeadlineStatus(ArticleSearchCondition condition,
+                                      StringBuilder where, Map<String, Object> params) {
+        if (!condition.hasDeadlineStatusFilter()) {
+            return;
+        }
+        where.append(" AND ").append(DeadlineStatus.sqlExpression("a")).append(" IN (:deadlineStatuses)");
+        params.put("today", LocalDate.now());
+        params.put("closingSoonDays", DeadlineStatus.CLOSING_SOON_DAYS);
+        params.put("deadlineStatuses",
+                condition.deadlineStatuses().stream().map(Enum::name).toList());
     }
 
     /**
