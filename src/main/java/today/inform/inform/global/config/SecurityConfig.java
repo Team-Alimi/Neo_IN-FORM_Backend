@@ -10,7 +10,14 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -38,12 +45,29 @@ public class SecurityConfig {
 
     private static final String P = WebConfig.API_PREFIX;
 
+    /**
+     * CORS 허용 출처. 쉼표로 여러 개.
+     *
+     * <p>기본값에 로컬 개발 주소를 넣어 둔 이유는, 프론트가 별도 설정 없이 바로 붙을 수 있어야
+     * 하기 때문입니다. 운영에서 좁히려면 {@code CORS_ALLOWED_ORIGINS} 로 덮어쓰면 됩니다.
+     *
+     * <p><b>와일드카드를 쓰지 않습니다.</b> 지금은 자격증명을 안 보내서 {@code *} 도 동작하지만,
+     * 나중에 쿠키를 쓰기 시작하는 순간 브라우저가 거부하고 원인을 찾기 어려워집니다.
+     */
+    @Value("${cors.allowed-origins}")
+    private List<String> allowedOrigins;
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 // JWT 기반 stateless API 이므로 세션과 CSRF 토큰을 쓰지 않습니다.
+                // ★ CORS 를 여기서 켜야 preflight 가 인증보다 먼저 처리됩니다.
+                //   안 켜면 브라우저의 OPTIONS 요청이 인증 필터까지 가서 401 을 받습니다.
+                //   OPTIONS 에는 Authorization 헤더가 안 붙으므로 절대 통과할 수 없고,
+                //   프론트는 "CORS 차단" 으로만 보게 됩니다 — 원인이 인증이라는 게 안 보입니다.
+                .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
@@ -87,6 +111,32 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * CORS 정책.
+     *
+     * <p><b>{@code allowCredentials} 를 켜지 않습니다.</b> 이 API 는 토큰을
+     * {@code Authorization} 헤더로 받습니다 — 쿠키를 안 쓰므로 켤 이유가 없고,
+     * 켜는 순간 출처 와일드카드가 금지되고 CSRF 고려가 다시 따라붙습니다.
+     *
+     * <p>{@code maxAge} 는 preflight 결과를 브라우저가 캐시하는 시간입니다.
+     * 없으면 요청마다 OPTIONS 가 한 번씩 더 나갑니다.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With"));
+        // 첨부 업로드 응답의 Location 을 프론트가 읽어야 합니다.
+        config.setExposedHeaders(List.of("Location", "Content-Disposition"));
+        config.setAllowCredentials(false);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     /**

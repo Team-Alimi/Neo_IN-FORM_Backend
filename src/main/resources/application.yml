@@ -48,6 +48,12 @@ spring:
     #   PageResponse 의 currentPage 와 반드시 짝으로 움직여야 합니다.
     one-indexed-parameters: true
 
+# 브라우저에서 이 API 를 부를 수 있는 출처.
+# 로컬 개발 주소를 기본값에 두어 프론트가 설정 없이 붙을 수 있게 합니다.
+# 운영 프론트 주소가 정해지면 CORS_ALLOWED_ORIGINS 로 덮어씁니다.
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173}
+
 jwt:
   secret: ${JWT_SECRET}
   access-token-validity: 3600000        # 1h (ms)
