@@ -49,10 +49,18 @@ spring:
     one-indexed-parameters: true
 
 # 브라우저에서 이 API 를 부를 수 있는 출처.
-# 로컬 개발 주소를 기본값에 두어 프론트가 설정 없이 붙을 수 있게 합니다.
-# 운영 프론트 주소가 정해지면 CORS_ALLOWED_ORIGINS 로 덮어씁니다.
+# 운영 프론트(Vercel)와 로컬 개발 주소를 기본값에 둡니다 — 프론트가 설정 없이 붙습니다.
+# 임시로 다른 출처를 열어야 하면 CORS_ALLOWED_ORIGINS 로 통째로 덮어씁니다(추가가 아니라 치환입니다).
+#
+# ★ 뒤에 슬래시를 붙이지 마세요. 브라우저가 보내는 Origin 헤더에는 경로도 슬래시도 없고
+#   (https://inha-inform.today), 여기 값과 문자열이 정확히 같아야 통과합니다.
+#   "https://inha-inform.today/" 로 적으면 영원히 안 맞는데 에러는 프론트에서만 납니다.
+#
+# ★ Vercel 프리뷰 배포(*-git-*.vercel.app)는 매번 주소가 바뀌어 여기에 담을 수 없습니다.
+#   프리뷰에서는 구글 로그인도 origin_mismatch 로 막히므로 어차피 로그인 흐름을 못 봅니다.
+#   프리뷰로 테스트하려면 그 주소를 구글 콘솔과 여기 양쪽에 같이 등록해야 합니다.
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:https://inha-inform.today,https://www.inha-inform.today,http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173}
 
 jwt:
   secret: ${JWT_SECRET}

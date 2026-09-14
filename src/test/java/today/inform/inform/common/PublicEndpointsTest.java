@@ -2,6 +2,8 @@ package today.inform.inform.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,6 +52,10 @@ class PublicEndpointsTest extends IntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    /** 빈이 아니라 설정값 자체를 봅니다. 빈을 거치면 끝 슬래시 오타가 그대로 통과합니다. */
+    @org.springframework.beans.factory.annotation.Value("${cors.allowed-origins}")
+    private List<String> allowedOrigins;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -212,6 +218,58 @@ class PublicEndpointsTest extends IntegrationTest {
                         .param("year", "2026").param("month", "5")
                         .param("my_major_only", "true"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ── CORS ─────────────────────────────────────────────────────────────────
+    //
+    // 프론트는 다른 출처(Vercel·localhost)에서 이 API 를 부릅니다. CORS 가 깨지면
+    // 서비스가 통째로 멈추는데 <b>서버에는 아무 증상이 없습니다</b> — 200 이 정상으로 찍히고
+    // 예외도 로그도 없고 브라우저 콘솔에만 에러가 납니다.
+    // 실제로 설정이 아예 없는 채로 배포돼 있었고, 프론트 제보로야 알았습니다.
+
+    private static final String PROD_ORIGIN = "https://inha-inform.today";
+
+    @Test
+    @DisplayName("preflight 는 토큰 없이도 통과한다")
+    void preflightPassesWithoutAuth() throws Exception {
+        // 브라우저는 preflight 에 Authorization 을 싣지 않습니다.
+        // CORS 처리가 인증 필터 뒤로 밀리면 여기서 401 이 나고 본요청은 나가지도 못합니다.
+        // 그래서 일부러 로그인 전용 경로로 확인합니다.
+        mockMvc.perform(options("/api/v1/users/me")
+                        .header("Origin", PROD_ORIGIN)
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", PROD_ORIGIN));
+    }
+
+    @Test
+    @DisplayName("실제 응답에도 Access-Control-Allow-Origin 이 실린다")
+    void actualResponseCarriesCorsHeader() throws Exception {
+        // preflight 만 통과시키고 본요청 헤더가 빠지면 브라우저는 받아 놓고 버립니다.
+        mockMvc.perform(get("/api/v1/categories").header("Origin", PROD_ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", PROD_ORIGIN));
+    }
+
+    @Test
+    @DisplayName("허용하지 않은 출처는 거부한다")
+    void unknownOriginIsRejected() throws Exception {
+        mockMvc.perform(options("/api/v1/categories")
+                        .header("Origin", "https://evil.example.com")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    }
+
+    @Test
+    @DisplayName("허용 출처에 경로나 끝 슬래시가 붙어 있지 않다")
+    void configuredOriginsAreBareOrigins() {
+        // 브라우저가 보내는 Origin 은 "https://호스트" 뿐입니다 — 경로도 끝 슬래시도 없습니다.
+        // 설정에 "https://inha-inform.today/" 라고 적으면 문자열 비교가 영원히 어긋나는데
+        // 서버는 아무 불평도 하지 않습니다. 프론트가 준 주소를 그대로 붙여 넣기 쉬운 자리라 막아 둡니다.
+        assertThat(allowedOrigins).isNotEmpty();
+        assertThat(allowedOrigins).allSatisfy(origin ->
+                assertThat(origin.indexOf('/', origin.indexOf("//") + 2)).isEqualTo(-1));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
