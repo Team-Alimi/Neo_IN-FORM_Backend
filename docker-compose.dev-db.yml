@@ -1,0 +1,62 @@
+# 테스트 전용 DB. 운영과 완전히 분리됩니다.
+#
+# 무엇을 하는가 — PostgreSQL 16 + pg_bigm 을 띄우고 Flyway 로 V1~V15 를 적용합니다.
+# 앱도 Redis 도 띄우지 않습니다. DB 계약 검증에 필요한 것만 올립니다.
+#
+# 왜 Flyway 를 따로 띄우는가 — 이 프로젝트의 Flyway 는 앱 기동에 묶여 있습니다.
+# 마이그레이션만 적용하려고 앱을 띄우면 Redis·JWT·구글 클라이언트 ID 까지 전부
+# 있어야 하고, 테스트 DB 하나 만들자고 서비스 한 벌을 운영하게 됩니다.
+# Flyway CLI 를 일회성으로 돌리면 같은 SQL 을 같은 순서로 적용하면서
+# flyway_schema_history 도 동일하게 남습니다.
+#
+#   사용법:  docker compose -f docker-compose.dev-db.yml --env-file .env.dev-db up --build
+#   초기화:  docker compose -f docker-compose.dev-db.yml --env-file .env.dev-db down -v
+#
+# ★ down -v 는 볼륨을 지웁니다. 이 파일의 볼륨은 이름이 따로라 운영·로컬과 섞이지 않습니다.
+services:
+  db:
+    build:
+      context: ./docker/db
+    environment:
+      # ★ 기본값을 주지 않습니다. 저장소에 커밋된 로컬 비밀번호가
+      #   원격 테스트 DB 로 따라가는 것을 막습니다 — 없으면 기동이 실패합니다.
+      POSTGRES_DB: ${DB_NAME:?DB_NAME 이 필요합니다}
+      POSTGRES_USER: ${DB_USER:?DB_USER 가 필요합니다}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 가 필요합니다}
+      CRAWLER_PASSWORD: ${CRAWLER_PASSWORD:?CRAWLER_PASSWORD 가 필요합니다}
+    ports:
+      # 운영과 같은 규칙입니다. 기본값이 루프백이라 설정을 빠뜨리면 닫힌 채로 남습니다.
+      - "${DB_BIND_IP:-127.0.0.1}:${DB_PORT:-5432}:5432"
+    volumes:
+      - dev-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      # ★ -h 127.0.0.1 이 필수입니다. 빼면 유닉스 소켓으로 붙는데,
+      #   initdb 중에 뜨는 임시 서버가 그 소켓에 응답해
+      #   초기화가 끝나기도 전에 healthy 로 확정됩니다.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+  flyway:
+    image: flyway/flyway:11-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src/main/resources/db/migration:/flyway/sql:ro
+    command:
+      - -url=jdbc:postgresql://db:5432/${DB_NAME}
+      - -user=${DB_USER}
+      - -password=${DB_PASSWORD}
+      - -baselineOnMigrate=false
+      - -validateOnMigrate=true
+      - -connectRetries=10
+      - migrate
+    # 한 번 돌고 끝납니다. 재시작하면 안 됩니다.
+    restart: "no"
+
+volumes:
+  # ★ 이름이 따로입니다. 운영(pg-data)·로컬과 절대 섞이지 않습니다.
+  dev-pg-data:
