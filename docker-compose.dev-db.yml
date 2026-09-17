@@ -57,6 +57,37 @@ services:
     # 한 번 돌고 끝납니다. 재시작하면 안 됩니다.
     restart: "no"
 
+  # 계약 검증. 기본으로는 뜨지 않습니다(profile).
+  #
+  # 왜 서비스로 두는가 — 검증 스크립트는 psql 이 필요한데, 테스트 호스트에
+  # psql 이 깔려 있으리라 기대할 수 없습니다. DB 이미지에는 psql 도 bash 도
+  # 이미 있으므로 그 이미지를 그대로 씁니다. 호스트에는 Docker 만 있으면 됩니다.
+  #
+  # 접속 정보도 여기서 주입합니다. 호스트 셸에 PG* 를 내보내 둘 필요가 없고,
+  # --env-file 하나로 DB 와 검증이 같은 값을 봅니다.
+  #
+  #   docker compose -f docker-compose.dev-db.yml --env-file .env.dev-db   #     --profile verify run --rm verify --with-write-tests
+  #
+  # ★ 종료 코드가 그대로 셸까지 전달됩니다 — 실패하면 0 이 아닙니다.
+  verify:
+    profiles: ["verify"]
+    build:
+      context: ./docker/db
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./scripts:/scripts:ro
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${DB_NAME:?DB_NAME 이 필요합니다}
+      PGUSER: ${DB_USER:?DB_USER 가 필요합니다}
+      PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD 가 필요합니다}
+      # 쓰기 검사는 crawler 계정으로 붙습니다. 위 PGUSER 와 다른 계정입니다.
+      CRAWLER_PASSWORD: ${CRAWLER_PASSWORD:?CRAWLER_PASSWORD 가 필요합니다}
+    entrypoint: ["bash", "/scripts/verify-db-contract.sh"]
+
 volumes:
   # ★ 이름이 따로입니다. 운영(pg-data)·로컬과 절대 섞이지 않습니다.
   dev-pg-data:
