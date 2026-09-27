@@ -172,6 +172,40 @@ class PublicEndpointsTest extends IntegrationTest {
     }
 
     @Test
+    @DisplayName("★ 기본 응답에는 기타(선택불가)가 없다 — 온보딩이 이 목록을 그대로 그린다")
+    void unselectableIsHiddenByDefault() throws Exception {
+        mockMvc.perform(get("/api/v1/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.name == '기타')]").isEmpty());
+    }
+
+    @Test
+    @DisplayName("★ include_unselectable=true 면 기타가 나온다 — 목록 필터용")
+    void unselectableAppearsWhenAsked() throws Exception {
+        mockMvc.perform(get("/api/v1/categories").param("include_unselectable", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.name == '기타')]").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("★ 파라미터를 켜도 비활성 분류는 여전히 안 나온다")
+    void inactiveStaysHiddenEvenWhenAsked() throws Exception {
+        // 파라미터가 여는 것은 "선택불가" 뿐입니다. "비활성" 까지 새면
+        // 접어 둔 분류가 필터 칩에 되살아납니다.
+        mockMvc.perform(get("/api/v1/categories").param("include_unselectable", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.name == '접힌 분류')]").isEmpty());
+    }
+
+    @Test
+    @DisplayName("★ 해석할 수 없는 값은 400 — 조용히 false 로 떨어지지 않는다")
+    void unparsableFlagIsRejected() throws Exception {
+        mockMvc.perform(get("/api/v1/categories").param("include_unselectable", "maybe"))
+                .andExpect(status().isBadRequest());
+    }
+
+
+    @Test
     @DisplayName("★ 사용자 목록에는 크롤러 계약 키가 나가지 않는다")
     void internalContractKeysAreNotExposed() throws Exception {
         mockMvc.perform(get("/api/v1/vendors"))
