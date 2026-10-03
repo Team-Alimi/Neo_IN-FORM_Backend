@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -108,7 +109,7 @@ class AdminVendorTest extends IntegrationTest {
         em.flush();
 
         assertThatThrownBy(() -> vendorService.update(vendorId,
-                new UpdateVendorRequest(null, null, null, "새로운키", null)))
+                new UpdateVendorRequest(null, null, null, "새로운키", null, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.IMMUTABLE_FIELD);
@@ -121,7 +122,7 @@ class AdminVendorTest extends IntegrationTest {
         em.flush();
 
         AdminVendorResponse updated = vendorService.update(vendorId,
-                new UpdateVendorRequest("이름만 바꿈", null, null, "폼키", SourceType.SCHOOL));
+                new UpdateVendorRequest("이름만 바꿈", null, null, "폼키", SourceType.SCHOOL, null));
 
         assertThat(updated.name()).isEqualTo("이름만 바꿈");
         assertThat(updated.initial()).isEqualTo("폼키");
@@ -134,7 +135,7 @@ class AdminVendorTest extends IntegrationTest {
         em.flush();
 
         assertThatThrownBy(() -> vendorService.update(vendorId,
-                new UpdateVendorRequest(null, null, null, null, SourceType.CLUB)))
+                new UpdateVendorRequest(null, null, null, null, SourceType.CLUB, null)))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -148,7 +149,7 @@ class AdminVendorTest extends IntegrationTest {
         Long vendorId = create("유지학과", "유지키", SourceType.SCHOOL, "https://inha.ac.kr/keep").id();
         em.flush();
 
-        vendorService.update(vendorId, new UpdateVendorRequest("새 이름", null, null, null, null));
+        vendorService.update(vendorId, new UpdateVendorRequest("새 이름", null, null, null, null, null));
 
         // ★ 응답 DTO 는 방금 만진 managed 엔티티에서 값을 꺼내므로, UPDATE 가 DB 에 가지 않아도
         //   그대로 통과합니다. flush + clear 후 DB 를 직접 읽어야 실제 반영을 확인할 수 있습니다.
@@ -165,7 +166,7 @@ class AdminVendorTest extends IntegrationTest {
         Long vendorId = create("지움학과", "지움키", SourceType.SCHOOL, "https://inha.ac.kr/drop").id();
         em.flush();
 
-        vendorService.update(vendorId, new UpdateVendorRequest(null, "", null, null, null));
+        vendorService.update(vendorId, new UpdateVendorRequest(null, "", null, null, null, null));
 
         flushAndClear();
         assertThat(column(vendorId, "homepage_url")).isNull();
@@ -216,7 +217,7 @@ class AdminVendorTest extends IntegrationTest {
         em.flush();
 
         AdminVendorResponse updated = vendorService.update(vendorId,
-                new UpdateVendorRequest(null, null, false, null, null));
+                new UpdateVendorRequest(null, null, false, null, null, null));
 
         assertThat(updated.isActive()).isFalse();
         assertThat(updated.warning())
@@ -231,11 +232,11 @@ class AdminVendorTest extends IntegrationTest {
     @DisplayName("다시 켤 때는 경고가 붙지 않는다")
     void reactivationHasNoWarning() {
         Long vendorId = create("복귀학과", "복귀키", SourceType.SCHOOL).id();
-        vendorService.update(vendorId, new UpdateVendorRequest(null, null, false, null, null));
+        vendorService.update(vendorId, new UpdateVendorRequest(null, null, false, null, null, null));
         em.flush();
 
         AdminVendorResponse updated = vendorService.update(vendorId,
-                new UpdateVendorRequest(null, null, true, null, null));
+                new UpdateVendorRequest(null, null, true, null, null, null));
 
         assertThat(updated.isActive()).isTrue();
         assertThat(updated.warning()).isNull();
@@ -245,7 +246,7 @@ class AdminVendorTest extends IntegrationTest {
     @DisplayName("★ 관리 목록에는 비활성 제공처도 나온다 — 안 보이면 다시 켤 수 없다")
     void adminListIncludesInactiveVendors() {
         Long vendorId = create("숨은학과", "숨은키", SourceType.SCHOOL).id();
-        vendorService.update(vendorId, new UpdateVendorRequest(null, null, false, null, null));
+        vendorService.update(vendorId, new UpdateVendorRequest(null, null, false, null, null, null));
         em.flush();
 
         assertThat(vendorService.search(null, null))
@@ -264,10 +265,114 @@ class AdminVendorTest extends IntegrationTest {
     @DisplayName("없는 제공처를 수정하면 404")
     void updatingMissingVendorIsNotFound() {
         assertThatThrownBy(() -> vendorService.update(999_999_999L,
-                new UpdateVendorRequest("아무개", null, null, null, null)))
+                new UpdateVendorRequest("아무개", null, null, null, null, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.VENDOR_NOT_FOUND);
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 동아리 유형 (VND-01 / VND-02)
+    //
+    // 유형이 안 붙은 동아리는 추천 점수가 항상 0 이라 사용자에게 영원히 안 보입니다.
+    // 등록은 성공하고 관리 화면에도 멀쩡히 보이는데 추천에서만 사라지므로
+    // 아무도 눈치채지 못합니다 — 그래서 입력 시점에 막습니다.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("★ 동아리는 유형 없이 등록할 수 없다")
+    void clubRequiresClubType() {
+        assertThatThrownBy(() -> createClub("유형없는동아리", "NOTYPE", null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("하나 이상");
+
+        assertThatThrownBy(() -> createClub("빈배열동아리", "EMPTYTYPE", List.of()))
+                .as("빈 배열도 미지정과 같습니다")
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("동아리를 등록하면 응답에 유형이 id·이름까지 실려 나온다")
+    void clubReturnsTypesWithNames() {
+        List<Long> ids = activeClubTypeIds(2);
+
+        AdminVendorResponse created = createClub("학술동아리", "ACADCLUB", ids);
+
+        assertThat(created.clubTypes()).hasSize(2);
+        assertThat(created.clubTypes()).allSatisfy(ref -> {
+            assertThat(ref.id()).isNotNull();
+            // ★ 이름이 없으면 수정 화면이 기존 선택을 그릴 수 없습니다.
+            //   유형 목록에는 비활성이 없어서 프론트가 조인으로 못 찾습니다.
+            assertThat(ref.name()).isNotBlank();
+        });
+        assertThat(created.clubTypes()).extracting(ref -> ref.id())
+                .containsExactlyInAnyOrderElementsOf(ids);
+    }
+
+    @Test
+    @DisplayName("★ 학과·기관에는 유형을 붙일 수 없다")
+    void schoolRejectsClubType() {
+        assertThatThrownBy(() -> vendorService.create(new CreateVendorRequest(
+                "학과인데유형", "SCHOOLTYPE", SourceType.SCHOOL, null, activeClubTypeIds(1))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("CLUB");
+    }
+
+    @Test
+    @DisplayName("★ 없는 유형 번호는 400 — DB 제약 위반 메시지가 그대로 올라가지 않는다")
+    void unknownClubTypeIsRejected() {
+        assertThatThrownBy(() -> createClub("없는유형동아리", "BADTYPE", List.of(-1L)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("쓸 수 없는");
+    }
+
+    @Test
+    @DisplayName("같은 유형을 두 번 보내도 한 번만 저장된다")
+    void duplicateClubTypesAreCollapsed() {
+        Long id = activeClubTypeIds(1).get(0);
+
+        AdminVendorResponse created = createClub("중복유형동아리", "DUPTYPE", List.of(id, id));
+
+        assertThat(created.clubTypes())
+                .as("복합 PK 라 그대로 넣으면 제약 위반으로 500 이 납니다")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("수정에서 유형을 보내지 않으면 그대로 남는다")
+    void omittedClubTypesAreKept() {
+        List<Long> ids = activeClubTypeIds(2);
+        AdminVendorResponse created = createClub("유지동아리", "KEEPTYPE", ids);
+
+        AdminVendorResponse updated = vendorService.update(created.id(),
+                new UpdateVendorRequest("이름만바꿈", null, null, null, null, null));
+
+        assertThat(updated.clubTypes()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("수정에서 유형을 보내면 전체 교체된다")
+    void sentClubTypesReplaceAll() {
+        List<Long> all = activeClubTypeIds(3);
+        AdminVendorResponse created = createClub("교체동아리", "SWAPTYPE", all);
+
+        AdminVendorResponse updated = vendorService.update(created.id(),
+                new UpdateVendorRequest(null, null, null, null, null, List.of(all.get(0))));
+
+        assertThat(updated.clubTypes()).hasSize(1);
+        assertThat(updated.clubTypes().get(0).id()).isEqualTo(all.get(0));
+    }
+
+    @Test
+    @DisplayName("★ 수정으로도 동아리 유형을 전부 떼어낼 수 없다")
+    void updateCannotEmptyClubTypes() {
+        AdminVendorResponse created = createClub("비우기동아리", "EMPTYSWAP", activeClubTypeIds(1));
+
+        assertThatThrownBy(() -> vendorService.update(created.id(),
+                new UpdateVendorRequest(null, null, null, null, null, List.of())))
+                .as("등록만 막고 수정을 열어 두면 우회로가 됩니다")
+                .isInstanceOf(BusinessException.class);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -288,6 +393,21 @@ class AdminVendorTest extends IntegrationTest {
     }
 
     private AdminVendorResponse create(String name, String initial, SourceType type, String url) {
-        return vendorService.create(new CreateVendorRequest(name, initial, type, url));
+        return vendorService.create(new CreateVendorRequest(name, initial, type, url, null));
+    }
+
+    private AdminVendorResponse createClub(String name, String initial, List<Long> clubTypeIds) {
+        return vendorService.create(
+                new CreateVendorRequest(name, initial, SourceType.CLUB, null, clubTypeIds));
+    }
+
+    /** 활성 동아리 유형 id. 시드 값이라 환경마다 다를 수 있어 번호를 박지 않습니다. */
+    private List<Long> activeClubTypeIds(int count) {
+        return em.createNativeQuery(
+                        "SELECT id FROM club_types WHERE is_active ORDER BY sort_order LIMIT :n")
+                .setParameter("n", count)
+                .getResultList().stream()
+                .map(id -> ((Number) id).longValue())
+                .toList();
     }
 }

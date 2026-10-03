@@ -3,6 +3,7 @@ package today.inform.inform.admin.vendor.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import today.inform.inform.article.entity.SourceType;
 import today.inform.inform.vendor.entity.Vendor;
 
@@ -30,5 +31,15 @@ public record CreateVendorRequest(
         SourceType type,
 
         @Size(max = Vendor.HOMEPAGE_URL_MAX_LENGTH, message = "홈페이지 주소는 500자를 넘을 수 없습니다.")
-        String homepageUrl) {
+        String homepageUrl,
+
+        /*
+         * 동아리 유형. CLUB 이면 하나 이상 필수이고 SCHOOL 이면 보내면 안 됩니다.
+         * 유형이 안 붙은 동아리는 추천 점수가 항상 0 이라 사용자에게 영원히 노출되지 않습니다 —
+         * 등록 시점에 받지 않으면 나중에 "유형 없는 동아리" 를 찾아 메꾸는 일이 생깁니다.
+         *
+         * 여기서 @NotEmpty 를 걸지 않는 이유는 type 에 따라 규칙이 갈리기 때문입니다.
+         * 판정은 서비스가 합니다.
+         */
+        List<@NotNull(message = "동아리 유형 번호가 비어 있습니다.") Long> clubTypeIds) {
 }

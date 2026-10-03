@@ -1,6 +1,8 @@
 package today.inform.inform.admin.vendor.service;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,6 +12,9 @@ import today.inform.inform.admin.vendor.dto.response.AdminVendorResponse;
 import today.inform.inform.article.entity.SourceType;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
+import today.inform.inform.admin.vendor.repository.VendorClubTypeRepository;
+import today.inform.inform.clubtype.entity.ClubType;
+import today.inform.inform.clubtype.repository.ClubTypeRepository;
 import today.inform.inform.vendor.entity.Vendor;
 import today.inform.inform.vendor.repository.VendorRepository;
 
@@ -25,11 +30,16 @@ import today.inform.inform.vendor.repository.VendorRepository;
 public class AdminVendorService {
 
     private final VendorRepository vendorRepository;
+    private final VendorClubTypeRepository vendorClubTypeRepository;
+    private final ClubTypeRepository clubTypeRepository;
 
     /** 관리 화면 목록. 비활성 제공처도 보여야 다시 켤 수 있습니다. */
     @Transactional(readOnly = true)
     public List<AdminVendorResponse> search(SourceType type, Boolean active) {
-        return AdminVendorResponse.from(vendorRepository.search(type, active));
+        List<Vendor> vendors = vendorRepository.search(type, active);
+        // ★ 유형은 한 번에 읽습니다. 항목마다 조회하면 그게 N+1 입니다.
+        return AdminVendorResponse.from(vendors, vendorClubTypeRepository.findByVendorIds(
+                vendors.stream().map(Vendor::getId).toList()));
     }
 
     /**
@@ -53,8 +63,16 @@ public class AdminVendorService {
                     "이미 쓰이고 있는 크롤러 식별자입니다: " + vendor.getInitial());
         }
 
+        List<Long> clubTypeIds = normalizeClubTypes(request.type(), request.clubTypeIds());
+
         Vendor saved = vendorRepository.save(vendor);
-        return AdminVendorResponse.of(saved, seedReminder(saved));
+        // ★ flush 가 필요합니다. 아래 네이티브 INSERT 는 영속성 컨텍스트를 거치지 않아
+        //   vendors 행이 아직 DB 에 없으면 외래키 위반으로 떨어집니다.
+        vendorRepository.flush();
+        vendorClubTypeRepository.replace(saved.getId(), clubTypeIds);
+
+        return AdminVendorResponse.of(saved,
+                vendorClubTypeRepository.findByVendorId(saved.getId()), seedReminder(saved));
     }
 
     /**
@@ -83,16 +101,70 @@ public class AdminVendorService {
             vendor.changeHomepageUrl(request.homepageUrl());
         }
 
+        // ★ type 은 불변이라 "바꾸려는 유형" 이 아니라 "지금 유형" 으로 판정합니다.
+        if (request.clubTypeIds() != null) {
+            vendorClubTypeRepository.replace(vendor.getId(),
+                    normalizeClubTypes(vendor.getType(), request.clubTypeIds()));
+        }
+
         String warning = null;
         if (request.isActive() != null && request.isActive() != vendor.isActive()) {
             vendor.changeActive(request.isActive());
             warning = request.isActive() ? null : deactivationWarning(vendor);
         }
 
-        return AdminVendorResponse.of(vendor, warning);
+        return AdminVendorResponse.of(vendor,
+                vendorClubTypeRepository.findByVendorId(vendor.getId()), warning);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 동아리 유형 입력을 검사하고 중복을 걷어냅니다.
+     *
+     * <p><b>CLUB 은 하나 이상이 필수입니다.</b> 유형이 안 붙은 동아리는 추천 점수가 항상 0 이라
+     * 사용자에게 영원히 노출되지 않습니다. 등록은 성공하고 화면에도 보이는데 추천에서만
+     * 사라지므로 아무도 눈치채지 못합니다 — 그래서 입력 시점에 막습니다.
+     *
+     * <p>DB 트리거(IN008·IN009)가 같은 것을 최종적으로 막지만, 거기까지 가면 제약 위반 메시지가
+     * 그대로 올라와 관리자가 무엇을 고쳐야 할지 알 수 없습니다. 여기서 먼저 400 으로 돌려줍니다.
+     */
+    private List<Long> normalizeClubTypes(SourceType type, List<Long> requested) {
+        List<Long> ids = requested == null ? List.of()
+                : requested.stream().distinct().toList();
+
+        if (type != SourceType.CLUB) {
+            if (!ids.isEmpty()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE,
+                        "동아리 유형은 CLUB 제공처에만 지정할 수 있습니다.");
+            }
+            return ids;
+        }
+
+        if (ids.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE,
+                    "동아리 유형을 하나 이상 선택해 주세요. "
+                            + "유형이 없으면 추천 목록에 영원히 나오지 않습니다.");
+        }
+
+        // ★ 활성만 통과시킵니다. 접힌 유형을 새로 붙이는 것은 트리거도 IN008 로 막습니다.
+        //   이미 붙어 있던 연결은 그대로 두는 것이 정책이라, 여기서 거부하는 것은
+        //   "새로 고르는 경우" 뿐입니다 — 수정 화면이 기존 선택을 그대로 되돌려 보내면
+        //   접힌 유형이 섞여 400 이 날 수 있는데, 그건 의도된 동작입니다.
+        //   그 상황에서 관리자는 어차피 쓸 수 있는 유형으로 바꿔야 합니다.
+        Set<Long> activeIds = clubTypeRepository.findActive().stream()
+                .map(ClubType::getId)
+                .collect(Collectors.toSet());
+
+        List<Long> rejected = ids.stream().filter(id -> !activeIds.contains(id)).toList();
+        if (!rejected.isEmpty()) {
+            throw new BusinessException(ErrorCode.INACTIVE_CLUB_TYPE,
+                    "쓸 수 없는 동아리 유형입니다: " + rejected
+                            + ". 접었거나 없는 유형은 새로 지정할 수 없습니다.");
+        }
+        return ids;
+    }
+
 
     /**
      * D7 규약의 2단계를 잊지 않게 합니다.

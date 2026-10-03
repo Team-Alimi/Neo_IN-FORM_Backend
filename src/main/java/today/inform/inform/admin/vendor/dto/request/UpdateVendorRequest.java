@@ -1,6 +1,8 @@
 package today.inform.inform.admin.vendor.dto.request;
 
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import today.inform.inform.article.entity.SourceType;
 import today.inform.inform.vendor.entity.Vendor;
 
@@ -17,6 +19,7 @@ import today.inform.inform.vendor.entity.Vendor;
  * @param initial 바꿀 수 없습니다. 현재 값과 같으면 무시하고, 다르면 400 으로 거부합니다.
  *                받는 이유는 관리 화면이 폼 전체를 되돌려 보내는 흔한 구현을 막지 않기 위해서입니다
  * @param type    같은 이유로 받고, 같은 규칙으로 다룹니다
+ * @param clubTypeIds 동아리 유형. {@code null} 이면 유지, 보내면 전체 교체입니다
  */
 public record UpdateVendorRequest(
         @Size(max = Vendor.NAME_MAX_LENGTH, message = "제공처 이름은 100자를 넘을 수 없습니다.")
@@ -30,5 +33,12 @@ public record UpdateVendorRequest(
         @Size(max = Vendor.INITIAL_MAX_LENGTH, message = "크롤러 식별자는 100자를 넘을 수 없습니다.")
         String initial,
 
-        SourceType type) {
+        SourceType type,
+
+        /*
+         * 동아리 유형. null 이면 "그대로 두라" 이고, 보내면 전체 교체입니다.
+         * 이 필드만 다른 항목과 달리 배열이라 "빈 배열로 지우기" 가 가능해 보이지만,
+         * CLUB 은 유형이 필수라 빈 배열은 400 입니다. 유형을 떼고 싶으면 다른 유형으로 바꾸세요.
+         */
+        List<@NotNull(message = "동아리 유형 번호가 비어 있습니다.") Long> clubTypeIds) {
 }
