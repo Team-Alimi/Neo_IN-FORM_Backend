@@ -664,7 +664,12 @@ public class AdminArticleQueryRepository {
         for (Object[] row : rows) {
             byArticle.computeIfAbsent(((Number) row[0]).longValue(), key -> new ArrayList<>())
                     .add(new VendorSummary(((Number) row[1]).longValue(), (String) row[2],
-                            (String) row[3], SourceType.valueOf((String) row[4])));
+                            (String) row[3], SourceType.valueOf((String) row[4]),
+                            // ★ 관리 화면은 동아리 유형 해시태그를 그리지 않아 비워 둡니다.
+                            //   사용자 목록({@code ArticleQueryRepository})은 채웁니다.
+                            //   여기서도 필요해지면 그때 조회를 붙이세요 — 지금 넣으면
+                            //   아무도 안 보는 쿼리가 공지 목록마다 한 번씩 더 나갑니다.
+                            List.of()));
         }
         return byArticle;
     }

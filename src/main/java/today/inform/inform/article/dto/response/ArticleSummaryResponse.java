@@ -17,6 +17,9 @@ import today.inform.inform.article.entity.SourceType;
  * @param isBookmarked   ART-06. 로그인 사용자 기준. 비로그인이면 항상 false
  * @param hasAttachment  첨부가 하나라도 있는지. 목록에 클립 아이콘을 그리기 위한 값이라
  *                       개수나 목록까지는 내보내지 않습니다
+ * @param thumbnailUrl   동아리 공지 카드에 쓰는 대표 이미지. <b>CLUB 공지에만</b> 채워지고
+ *                       그 외에는 {@code null} 입니다. 첨부 중 가장 앞선 이미지 하나이며,
+ *                       이미지가 없으면 CLUB 이라도 {@code null} 입니다
  * @param underReview    <b>명세에 없는 확장</b>입니다. 크롤러가 원본 수정을 감지해 재검수로 내려간 공지에
  *                       "검수 중" 배지를 띄우기 위한 값입니다. 북마크 목록에서만 true 가 될 수 있고
  *                       일반 피드에는 그런 공지가 애초에 나오지 않습니다
@@ -35,6 +38,7 @@ public record ArticleSummaryResponse(
         long viewCount,
         boolean isBookmarked,
         boolean hasAttachment,
+        String thumbnailUrl,
         boolean underReview,
         List<VendorSummary> vendors,
         List<NamedRef> categories) {

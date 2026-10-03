@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse.NamedRef;
+import today.inform.inform.article.dto.response.VendorSummary;
 import today.inform.inform.article.entity.SourceType;
 
 /**
@@ -47,7 +48,8 @@ public record ArticleDetailResponse(
      * <p><b>같은 제공처가 여러 번 나올 수 있습니다.</b> 재게시된 원본은 각자 다른 URL 을 가지므로
      * 목록 카드({@code vendors})와 달리 여기서는 중복을 남깁니다.
      */
-    public record Source(Long id, String name, String initial, SourceType type, String sourceUrl) {
+    public record Source(Long id, String name, String initial, SourceType type, String sourceUrl,
+                        List<VendorSummary.ClubTypeRef> clubTypes) {
     }
 
     public record Attachment(Long id, String fileUrl, String originalName,

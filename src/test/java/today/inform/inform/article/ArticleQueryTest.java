@@ -392,6 +392,134 @@ class ArticleQueryTest extends IntegrationTest {
         return article;
     }
 
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 동아리 카드용 확장 (썸네일 · 유형 해시태그)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("★ 동아리 공지는 첫 이미지를 썸네일로 준다 — 이미지가 아닌 첨부는 건너뛴다")
+    void clubArticleCarriesFirstImage() {
+        Long clubArticle = publishClub("동아리 모집");
+        // 순서상 PDF 가 먼저입니다. 첨부 유무가 아니라 "이미지" 를 골라야 통과합니다.
+        attach(clubArticle, "https://cdn.example.com/a.pdf", "application/pdf", 0);
+        attach(clubArticle, "https://cdn.example.com/b.png", "image/png", 1);
+        attach(clubArticle, "https://cdn.example.com/c.png", "image/png", 2);
+        em.flush();
+
+        ArticleSummaryResponse found = searchClub().get(0);
+
+        assertThat(found.thumbnailUrl()).isEqualTo("https://cdn.example.com/b.png");
+        assertThat(found.hasAttachment()).isTrue();
+    }
+
+    @Test
+    @DisplayName("★ content_type 이 비어도 확장자로 이미지를 잡는다")
+    void imageDetectedByExtension() {
+        Long clubArticle = publishClub("확장자만 있는 동아리 공지");
+        // 크롤러가 수집한 EXTERNAL 첨부는 원본이 알려 주지 않으면 content_type 이 빕니다.
+        attach(clubArticle, "https://cdn.example.com/poster.JPG?size=1", null, 0);
+        em.flush();
+
+        assertThat(searchClub().get(0).thumbnailUrl())
+                .as("대소문자와 쿼리 문자열이 붙어도 잡아야 합니다")
+                .isEqualTo("https://cdn.example.com/poster.JPG?size=1");
+    }
+
+    @Test
+    @DisplayName("이미지가 없으면 첨부가 있어도 썸네일은 null")
+    void noImageMeansNoThumbnail() {
+        Long clubArticle = publishClub("문서만 붙은 동아리 공지");
+        attach(clubArticle, "https://cdn.example.com/a.pdf", "application/pdf", 0);
+        em.flush();
+
+        ArticleSummaryResponse found = searchClub().get(0);
+        assertThat(found.hasAttachment()).isTrue();
+        assertThat(found.thumbnailUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 학교 공지는 이미지가 있어도 썸네일을 주지 않는다")
+    void schoolArticleHasNoThumbnail() {
+        Long school = publish("학교 공지").getId();
+        attach(school, "https://cdn.example.com/x.png", "image/png", 0);
+        em.flush();
+
+        List<ArticleSummaryResponse> found = queryRepository.search(
+                new ArticleSearchCondition(SourceType.SCHOOL, null, null, null, false, null, null, null),
+                userId, PageRequest.of(0, 20)).getContent();
+
+        assertThat(found.get(0).hasAttachment()).isTrue();
+        assertThat(found.get(0).thumbnailUrl())
+                .as("동아리 카드 전용입니다. 학교 공지까지 주면 요청 범위를 넘습니다")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("★ 동아리 제공처에는 유형이 id·이름으로 함께 나간다")
+    void clubVendorCarriesClubTypes() {
+        Long clubArticle = publishClub("유형 붙은 동아리 공지");
+        Long vendor = insertClubVendor("테스트동아리", "TESTCLUB");
+        link("article_vendors", "vendor_id", clubArticle, vendor);
+        Long clubType = firstId("SELECT id FROM club_types WHERE is_active ORDER BY sort_order");
+        link("vendor_club_types", "club_type_id", vendor, clubType, "vendor_id");
+        em.flush();
+
+        VendorSummary found = searchClub().get(0).vendors().get(0);
+
+        assertThat(found.clubTypes()).hasSize(1);
+        // ★ 이름이 없으면 화면이 해시태그를 못 그립니다. 유형 목록에는 접힌 유형이 없어
+        //   프론트가 id 로 조인해 찾을 수도 없습니다.
+        assertThat(found.clubTypes().get(0).name()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("학과·기관 제공처의 유형은 빈 배열")
+    void schoolVendorHasEmptyClubTypes() {
+        Long school = publish("학교 공지").getId();
+        Long vendor = insertVendor("테스트학과", "TESTDEPT");
+        link("article_vendors", "vendor_id", school, vendor);
+        em.flush();
+
+        List<ArticleSummaryResponse> found = queryRepository.search(
+                new ArticleSearchCondition(SourceType.SCHOOL, null, null, null, false, null, null, null),
+                userId, PageRequest.of(0, 20)).getContent();
+
+        assertThat(found.get(0).vendors().get(0).clubTypes()).isEmpty();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private List<ArticleSummaryResponse> searchClub() {
+        return queryRepository.search(
+                new ArticleSearchCondition(SourceType.CLUB, null, null, null, false, null, null, null),
+                userId, PageRequest.of(0, 20)).getContent();
+    }
+
+    private Long publishClub(String title) {
+        Article club = articleRepository.saveAndFlush(
+                Article.createClubArticle(title, "내용", null, null, null));
+        club.changeStatus(ArticleStatus.PUBLISHED);
+        em.flush();
+        return club.getId();
+    }
+
+    private Long insertClubVendor(String name, String initial) {
+        em.createNativeQuery("INSERT INTO vendors (name, initial, type) "
+                        + "VALUES (:name, :initial, 'CLUB')")
+                .setParameter("name", name).setParameter("initial", initial).executeUpdate();
+        return firstId("SELECT id FROM vendors WHERE initial = '" + initial + "'");
+    }
+
+    private void attach(Long articleId, String fileUrl, String contentType, int sortOrder) {
+        em.createNativeQuery("INSERT INTO attachments "
+                        + "(article_id, file_url, storage_type, content_type, sort_order) "
+                        + "VALUES (:a, :u, 'EXTERNAL', :c, :s)")
+                .setParameter("a", articleId).setParameter("u", fileUrl)
+                .setParameter("c", contentType).setParameter("s", sortOrder)
+                .executeUpdate();
+    }
+
     private Long insertUser(String email) {
         em.createNativeQuery("INSERT INTO users (email, name, role, status) "
                         + "VALUES (:email, '질의테스터', 'USER', 'ACTIVE')")

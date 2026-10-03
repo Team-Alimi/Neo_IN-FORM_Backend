@@ -9,6 +9,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -327,11 +328,21 @@ public class ArticleQueryRepository {
                 .setParameter("articleId", articleId)
                 .getResultList();
 
+        Set<Long> clubVendorIds = new HashSet<>();
+        for (Object[] row : rows) {
+            if (SourceType.CLUB.name().equals(row[3])) {
+                clubVendorIds.add(((Number) row[0]).longValue());
+            }
+        }
+        Map<Long, List<VendorSummary.ClubTypeRef>> clubTypes = findClubTypes(clubVendorIds);
+
         List<ArticleDetailResponse.Source> vendors = new ArrayList<>(rows.size());
         for (Object[] row : rows) {
+            Long vendorId = ((Number) row[0]).longValue();
             vendors.add(new ArticleDetailResponse.Source(
-                    ((Number) row[0]).longValue(), (String) row[1], (String) row[2],
-                    SourceType.valueOf((String) row[3]), (String) row[4]));
+                    vendorId, (String) row[1], (String) row[2],
+                    SourceType.valueOf((String) row[3]), (String) row[4],
+                    clubTypes.getOrDefault(vendorId, List.of())));
         }
         return vendors;
     }
@@ -399,12 +410,52 @@ public class ArticleQueryRepository {
                 .getResultList();
 
         Map<Long, List<VendorSummary>> byArticle = new HashMap<>();
+        Set<Long> clubVendorIds = new HashSet<>();
         for (Object[] row : rows) {
+            if (SourceType.CLUB.name().equals(row[4])) {
+                clubVendorIds.add(((Number) row[1]).longValue());
+            }
+        }
+        Map<Long, List<VendorSummary.ClubTypeRef>> clubTypes = findClubTypes(clubVendorIds);
+
+        for (Object[] row : rows) {
+            Long vendorId = ((Number) row[1]).longValue();
             byArticle.computeIfAbsent(((Number) row[0]).longValue(), key -> new ArrayList<>())
-                    .add(new VendorSummary(((Number) row[1]).longValue(), (String) row[2],
-                            (String) row[3], SourceType.valueOf((String) row[4])));
+                    .add(new VendorSummary(vendorId, (String) row[2],
+                            (String) row[3], SourceType.valueOf((String) row[4]),
+                            clubTypes.getOrDefault(vendorId, List.of())));
         }
         return byArticle;
+    }
+
+    /**
+     * 동아리 유형. CLUB 제공처만 대상이라 비어 있으면 질의하지 않습니다.
+     *
+     * <p><b>접힌 유형도 그대로 내보냅니다.</b> 이미 붙어 있던 연결은 유형을 비활성화해도
+     * 유지되는데, 여기서 숨기면 화면에서 해시태그만 조용히 사라집니다.
+     */
+    private Map<Long, List<VendorSummary.ClubTypeRef>> findClubTypes(Set<Long> vendorIds) {
+        if (vendorIds.isEmpty()) {
+            return Map.of();
+        }
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery("""
+                        SELECT vct.vendor_id, t.id, t.name
+                          FROM vendor_club_types vct
+                          JOIN club_types t ON t.id = vct.club_type_id
+                         WHERE vct.vendor_id IN (:vendorIds)
+                         ORDER BY t.sort_order, t.id
+                        """)
+                .setParameter("vendorIds", vendorIds)
+                .getResultList();
+
+        Map<Long, List<VendorSummary.ClubTypeRef>> byVendor = new HashMap<>();
+        for (Object[] row : rows) {
+            byVendor.computeIfAbsent(((Number) row[0]).longValue(), key -> new ArrayList<>())
+                    .add(new VendorSummary.ClubTypeRef(
+                            ((Number) row[1]).longValue(), (String) row[2]));
+        }
+        return byVendor;
     }
 
     /**
@@ -413,17 +464,46 @@ public class ArticleQueryRepository {
      * <p>개수를 세지 않고 <b>존재만</b> 봅니다 — 목록에 필요한 것은 클립 아이콘 하나뿐입니다.
      */
     private Set<Long> findArticlesWithAttachment(List<Long> articleIds) {
+        return findAttachmentDigest(articleIds).keySet();
+    }
+
+    /**
+     * 공지별 첨부 요약 — <b>"첨부가 있는가" 와 "대표 이미지" 를 한 쿼리로</b> 얻습니다.
+     *
+     * <p>키에 있다는 것이 곧 첨부가 하나 이상 있다는 뜻이고, 값은 가장 앞선 이미지의 주소입니다.
+     * 이미지가 하나도 없으면 키는 있고 값이 {@code null} 입니다.
+     *
+     * <p><b>이미지 판정은 두 가지를 봅니다.</b> {@code content_type} 이 비어 있는 첨부가 있기
+     * 때문입니다 — 크롤러가 수집한 EXTERNAL 첨부는 원본 사이트가 알려 주지 않으면 채울 수 없습니다.
+     * 그래서 확장자도 함께 봅니다. 둘 중 하나만 맞아도 이미지로 칩니다.
+     *
+     * <p>정규식에 물음표를 쓰지 않습니다. 네이티브 쿼리에서 {@code ?} 는 위치 매개변수로
+     * 해석될 수 있어, 확장자 뒤를 {@code [^a-z]} 로 끊습니다. 쿼리 문자열이 붙은
+     * {@code photo.jpg?size=1} 같은 주소도 이 규칙으로 잡힙니다.
+     */
+    private Map<Long, String> findAttachmentDigest(List<Long> articleIds) {
         if (articleIds.isEmpty()) {
-            return Set.of();
+            return Map.of();
         }
         @SuppressWarnings("unchecked")
-        List<Number> rows = em.createNativeQuery("""
-                        SELECT DISTINCT article_id FROM attachments
+        List<Object[]> digest = em.createNativeQuery("""
+                        SELECT article_id,
+                               (array_agg(file_url ORDER BY sort_order, id)
+                                  FILTER (WHERE content_type LIKE 'image/%'
+                                             OR lower(file_url) ~ '[.](jpg|jpeg|png|gif|webp)([^a-z]|$)')
+                               )[1] AS thumbnail
+                          FROM attachments
                          WHERE article_id IN (:articleIds)
+                         GROUP BY article_id
                         """)
                 .setParameter("articleIds", articleIds)
                 .getResultList();
-        return rows.stream().map(Number::longValue).collect(Collectors.toSet());
+
+        Map<Long, String> byArticle = new HashMap<>();
+        for (Object[] row : digest) {
+            byArticle.put(((Number) row[0]).longValue(), (String) row[1]);
+        }
+        return byArticle;
     }
 
     private Map<Long, List<NamedRef>> findRefs(List<Long> articleIds, String sql) {
@@ -609,7 +689,8 @@ public class ArticleQueryRepository {
         List<Long> ids = rows.stream().map(row -> (Long) row[0]).toList();
         Map<Long, List<VendorSummary>> vendors = findVendors(ids);
         Map<Long, List<NamedRef>> categories = findCategories(ids);
-        Set<Long> withAttachment = findArticlesWithAttachment(ids);
+        // ★ 첨부 유무와 대표 이미지를 한 번에 받습니다. 썸네일 때문에 쿼리가 늘지 않습니다.
+        Map<Long, String> attachmentDigest = findAttachmentDigest(ids);
 
         // 마감 상태는 파생값이라 여기서 계산합니다. 기준일을 한 번만 읽어 페이지 안의 모든 칸이
         // 같은 날짜로 판정되게 합니다 - 자정을 걸치는 요청에서 칸마다 기준이 달라지면 안 됩니다.
@@ -633,7 +714,9 @@ public class ArticleQueryRepository {
                     (Integer) row[8],                   // comment_count
                     (Long) row[9],                      // view_count
                     (Boolean) row[10],                  // is_bookmarked
-                    withAttachment.contains(id),
+                    attachmentDigest.containsKey(id),
+                    // ★ 동아리 공지에만 썸네일을 줍니다(프론트 요청). 학교 공지는 이미지가 있어도 null 입니다.
+                    SourceType.CLUB.name().equals(row[1]) ? attachmentDigest.get(id) : null,
                     (Boolean) row[11],                  // under_review
                     vendors.getOrDefault(id, Collections.emptyList()),
                     categories.getOrDefault(id, Collections.emptyList())));
