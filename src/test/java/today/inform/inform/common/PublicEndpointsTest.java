@@ -21,7 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import today.inform.inform.support.IntegrationTest;
 
 /**
- * 비로그인으로 열려 있는 네 경로 — CAL-01, COM-01, COM-02, USER-04.
+ * 비로그인으로 열려 있는 경로 — CAL-01, COM-01, COM-02, USER-04, 인기 공지, 서비스 공지·팝업.
  *
  * <p><b>여기서 확인하는 것은 "열려 있는가" 와 "닫아야 할 것이 새지 않는가" 입니다.</b>
  * {@code SecurityConfig} 의 매처는 서비스 테스트로는 검증되지 않습니다 —
@@ -123,6 +123,28 @@ class PublicEndpointsTest extends IntegrationTest {
     void articleListStaysBehindLogin() throws Exception {
         mockMvc.perform(get("/api/v1/articles"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("★ 서비스 공지와 팝업은 비로그인도 볼 수 있다 — 점검 공지는 로그인이 안 될 때 가장 필요하다")
+    void announcementsAreOpenToGuests() throws Exception {
+        // 인증을 걸면 "로그인이 안 됩니다" 를 알리는 공지를 로그인해야 볼 수 있게 됩니다.
+        mockMvc.perform(get("/api/v1/announcements"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        // ★ 띄울 팝업이 없어도 200 + 빈 배열입니다. 앱 진입마다 부르는 호출이라
+        //   404 로 만들면 클라이언트가 매번 오류 처리를 타고 재시도합니다.
+        mockMvc.perform(get("/api/v1/announcements/popup"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    @DisplayName("없는 공지 상세는 404 다 — /popup 이 공지 번호로 해석되지 않는지도 함께 본다")
+    void unknownAnnouncementIsNotFound() throws Exception {
+        mockMvc.perform(get("/api/v1/announcements/99999999"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
