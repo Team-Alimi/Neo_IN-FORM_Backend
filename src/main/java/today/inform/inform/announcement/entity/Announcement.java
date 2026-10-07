@@ -49,6 +49,9 @@ public class Announcement extends BaseTimeEntity {
 
     public static final int TITLE_MAX_LENGTH = 500;
 
+    /** {@code attachments.file_url} 과 같은 길이. 같은 스토리지가 만든 주소라 기준을 맞춥니다. */
+    public static final int IMAGE_URL_MAX_LENGTH = 1000;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -62,6 +65,25 @@ public class Announcement extends BaseTimeEntity {
 
     @Column(name = "content", nullable = false, columnDefinition = "text")
     private String content;
+
+    /**
+     * 대표 이미지 한 장. {@code null} 이면 없습니다.
+     *
+     * <p><b>우리 스토리지 주소만 들어갑니다.</b> 그 판정은 서비스가 합니다
+     * ({@code FileStorage.objectKeyOf}) — 엔티티가 스토리지를 알면 안 되고,
+     * 무엇보다 남의 주소를 받으면 <b>삭제 보호가 조용히 적용되지 않습니다.</b>
+     *
+     * <p><b>{@code attachments} 를 쓰지 않는 이유</b> — 그 테이블은 {@code article_id} 가
+     * {@code NOT NULL} 이라 공지를 넣을 자리가 없습니다. 필요한 것도 한 장이라
+     * 목록 구조가 필요 없습니다.
+     *
+     * <p>⚠ <b>이 값이 가리키는 객체는 {@code DELETE /admin/files} 로부터 보호돼야 합니다.</b>
+     * 그 API 는 "공지에 연결됐는가" 를 {@code AttachmentQueryRepository.findLinkedUrls} 로
+     * 판정하는데, 거기에 이 컬럼이 들어가 있어야 합니다. 빠지면 운영 중인 팝업의 이미지를
+     * 지울 수 있고 — 오류도 404 도 없이 <b>이미지만 안 뜹니다.</b>
+     */
+    @Column(name = "image_url", length = IMAGE_URL_MAX_LENGTH)
+    private String imageUrl;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -99,12 +121,13 @@ public class Announcement extends BaseTimeEntity {
     // 생성
     // ─────────────────────────────────────────────────────────────────────────
 
-    private Announcement(AnnouncementType type, String title, String content,
+    private Announcement(AnnouncementType type, String title, String content, String imageUrl,
                          AnnouncementStatus status, boolean popup,
                          LocalDate startsOn, LocalDate endsOn, Long createdBy) {
         this.type = requireType(type);
         this.title = requireTitle(title);
         this.content = requireContent(content);
+        this.imageUrl = normalizeImageUrl(imageUrl);
         this.status = status;
         this.popup = popup;
         validatePeriod(startsOn, endsOn);
@@ -126,6 +149,7 @@ public class Announcement extends BaseTimeEntity {
      * 어기는 게 아닙니다 — 생성이지 전이가 아닙니다. {@code published_at} 은 여기서 찍습니다.
      */
     public static Announcement create(AnnouncementType type, String title, String content,
+                                      String imageUrl,
                                       AnnouncementStatus initialStatus, boolean popup,
                                       LocalDate startsOn, LocalDate endsOn, Long createdBy) {
         AnnouncementStatus status = initialStatus == null ? AnnouncementStatus.DRAFT : initialStatus;
@@ -133,7 +157,8 @@ public class Announcement extends BaseTimeEntity {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE,
                     "보관 상태로는 작성할 수 없습니다. 임시저장(DRAFT) 또는 발행(PUBLISHED)만 됩니다.");
         }
-        return new Announcement(type, title, content, status, popup, startsOn, endsOn, createdBy);
+        return new Announcement(type, title, content, imageUrl,
+                status, popup, startsOn, endsOn, createdBy);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -151,6 +176,19 @@ public class Announcement extends BaseTimeEntity {
 
     public void changeContent(String newContent) {
         this.content = requireContent(newContent);
+    }
+
+    /**
+     * 대표 이미지 교체 · 제거. {@code null} 이면 제거입니다.
+     *
+     * <p><b>옛 객체를 스토리지에서 지우지 않습니다.</b> 공지 첨부와 같은 규칙입니다
+     * ({@code AdminArticleWriteService} 도 교체 시 지우지 않고, 영구삭제·병합에서만 지웁니다).
+     * 서버가 교체 시 지우면 <b>같은 이미지를 다른 공지가 쓰고 있을 때 그쪽이 깨지고</b>,
+     * S3 삭제는 되돌릴 수 없습니다. 쌓인 것은 {@code DELETE /admin/files} 로 치웁니다 —
+     * 그쪽은 아직 아무 공지에도 안 붙은 것만 지웁니다.
+     */
+    public void changeImageUrl(String newImageUrl) {
+        this.imageUrl = normalizeImageUrl(newImageUrl);
     }
 
     /**
@@ -261,6 +299,21 @@ public class Announcement extends BaseTimeEntity {
         String trimmed = trimToNull(value);
         if (trimmed == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "내용을 입력해 주세요.");
+        }
+        return trimmed;
+    }
+
+    /**
+     * 빈 문자열을 {@code null} 로 접고 길이만 봅니다.
+     *
+     * <p>빈 문자열을 그대로 두면 화면이 "이미지 있음" 으로 읽어 <b>깨진 이미지를 그립니다.</b>
+     * 주소가 우리 스토리지인지는 여기서 보지 않습니다 — 서비스가 봅니다.
+     */
+    private static String normalizeImageUrl(String value) {
+        String trimmed = trimToNull(value);
+        if (trimmed != null && trimmed.length() > IMAGE_URL_MAX_LENGTH) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE,
+                    "이미지 주소는 " + IMAGE_URL_MAX_LENGTH + "자를 넘을 수 없습니다.");
         }
         return trimmed;
     }

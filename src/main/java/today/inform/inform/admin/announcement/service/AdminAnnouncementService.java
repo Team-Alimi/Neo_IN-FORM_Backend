@@ -20,6 +20,7 @@ import today.inform.inform.announcement.entity.AnnouncementType;
 import today.inform.inform.announcement.repository.AnnouncementRepository;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
+import today.inform.inform.storage.FileStorage;
 
 /**
  * 서비스 공지 관리. {@code /admin/**} 전체가 {@code hasRole("ADMIN")} 입니다({@code SecurityConfig}).
@@ -47,6 +48,14 @@ public class AdminAnnouncementService {
 
     private final AnnouncementRepository announcementRepository;
 
+    /**
+     * 이미지 주소가 <b>우리 스토리지 것인지</b> 판정하는 데만 씁니다. 업로드·삭제는 하지 않습니다.
+     *
+     * <p>남의 주소를 받으면 {@code DELETE /admin/files} 의 삭제 보호가 조용히 적용되지 않고,
+     * 그 사이트가 이미지를 내리면 팝업이 깨집니다. 둘 다 오류 없이 일어납니다.
+     */
+    private final FileStorage fileStorage;
+
     @PersistenceContext
     private EntityManager em;
 
@@ -71,6 +80,7 @@ public class AdminAnnouncementService {
                 request.type(),
                 request.title(),
                 request.content(),
+                requireStorageUrl(request.imageUrl()),
                 request.status(),
                 request.popupOrDefault(),
                 request.startsOn(),
@@ -97,6 +107,9 @@ public class AdminAnnouncementService {
         }
         if (request.content() != null) {
             announcement.changeContent(request.content());
+        }
+        if (request.touchesImage()) {
+            announcement.changeImageUrl(resolveImageUrl(request));
         }
         if (request.isPopup() != null) {
             announcement.changePopup(request.isPopup());
@@ -132,6 +145,49 @@ public class AdminAnnouncementService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 이미지 교체({@code image_url})인지 제거({@code clear_image})인지 정합니다.
+     *
+     * <p><b>둘을 함께 보내면 거부합니다.</b> 기간처럼 "먼저 지우고 덮어쓰기" 로 해석할 수도
+     * 있지만, 이미지는 값이 하나뿐이라 그 해석이 곧 "그냥 교체" 와 같아집니다.
+     * 같은 뜻을 두 가지로 쓸 수 있게 두면 호출하는 쪽이 어느 쪽이 맞는지 매번 고민하고,
+     * 나중에 해석을 바꿀 때 조용히 동작이 달라집니다.
+     */
+    private String resolveImageUrl(UpdateAnnouncementRequest request) {
+        if (request.shouldClearImage() && request.imageUrl() != null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE,
+                    "image_url 과 clear_image 를 함께 보낼 수 없습니다. "
+                            + "교체는 image_url 만, 제거는 clear_image 만 보내세요.");
+        }
+        return request.shouldClearImage() ? null : requireStorageUrl(request.imageUrl());
+    }
+
+    /**
+     * 우리 스토리지가 만든 주소만 통과시킵니다. {@code null} 은 그대로 통과합니다(이미지 없음).
+     *
+     * <p><b>왜 막는가</b> — 남의 주소를 받으면 두 가지가 조용히 깨집니다.
+     * <ul>
+     *   <li>{@code DELETE /admin/files} 의 삭제 보호가 적용되지 않습니다.
+     *       그 API 는 우리 버킷 키로 되짚을 수 있는 주소만 다루기 때문입니다.</li>
+     *   <li>그 사이트가 이미지를 내리거나 핫링크를 막으면 팝업 이미지가 깨집니다.
+     *       우리 쪽에는 아무 오류도 남지 않습니다.</li>
+     * </ul>
+     *
+     * <p>프론트는 {@code POST /admin/files} 응답의 {@code file_url} 을 그대로 넘기면 됩니다.
+     */
+    private String requireStorageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return null;
+        }
+        String trimmed = imageUrl.trim();
+        if (fileStorage.objectKeyOf(trimmed).isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE,
+                    "우리 스토리지에 올린 이미지만 쓸 수 있습니다. "
+                            + "POST /admin/files 로 먼저 올리고 그 file_url 을 보내세요.");
+        }
+        return trimmed;
+    }
 
     /**
      * {@code clear_period} 를 반영해 기간 한쪽 값을 정합니다.

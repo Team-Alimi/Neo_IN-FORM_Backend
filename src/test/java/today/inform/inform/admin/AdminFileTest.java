@@ -146,6 +146,29 @@ class AdminFileTest extends IntegrationTest {
     }
 
     @Test
+    @DisplayName("★ 서비스 공지 대표 이미지도 거부한다 — 이 보호가 빠지면 운영 중인 팝업 이미지가 지워진다")
+    void refusesToDeleteAnnouncementImage() {
+        // 삭제 보호가 attachments 만 보던 시절에는 이 파일이 "연결 안 됨" 으로 통과했습니다.
+        // S3 삭제는 되돌릴 수 없고, 오류도 404 도 나지 않아 팝업 이미지만 조용히 사라집니다.
+        String url = fileService.upload(List.of(image("popup.png"))).get(0).fileUrl();
+        em.createNativeQuery("""
+                        INSERT INTO announcements (type, title, content, image_url, status,
+                                                   is_popup, published_at)
+                        VALUES ('MAINTENANCE', '점검 안내', '본문', :url, 'PUBLISHED', true, now())
+                        """)
+                .setParameter("url", url)
+                .executeUpdate();
+        em.flush();
+
+        assertThatThrownBy(() -> fileService.deleteUnlinked(List.of(url)))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(storage.deletedKeys())
+                .as("거부했으면 아무것도 지우지 않아야 합니다")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("★ 연결된 파일이 하나라도 섞이면 나머지도 지우지 않는다")
     void mixedBatchIsRejectedEntirely() {
         String linked = fileService.upload(List.of(image("linked.png"))).get(0).fileUrl();

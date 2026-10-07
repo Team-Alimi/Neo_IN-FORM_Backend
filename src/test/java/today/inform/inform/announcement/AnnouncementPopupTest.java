@@ -40,6 +40,10 @@ class AnnouncementPopupTest extends IntegrationTest {
 
     private static final LocalDate TODAY = LocalDate.now();
 
+    /** 우리 스토리지가 만든 모양의 주소. 엔티티를 직접 만들 때는 검증을 타지 않습니다. */
+    private static final String IMAGE_URL =
+            "https://fake-bucket.s3.test.amazonaws.com/2026/10/popup.png";
+
     @Autowired
     private AnnouncementQueryService announcementService;
 
@@ -116,6 +120,29 @@ class AnnouncementPopupTest extends IntegrationTest {
                             .as("프론트가 \"다시 보지 않기\" 키로 씁니다")
                             .isNotNull();
                 });
+    }
+
+    @Test
+    @DisplayName("★ 팝업 응답에 대표 이미지가 실린다 — 상세와 모양이 같아 한 번에 따라온다")
+    void popupCarriesImage() {
+        announcementRepository.save(newAnnouncement(
+                "이미지 있는 팝업", AnnouncementStatus.PUBLISHED, true, null, null, IMAGE_URL));
+
+        assertThat(announcementService.popups())
+                .singleElement()
+                .extracting(AnnouncementDetail::imageUrl)
+                .isEqualTo(IMAGE_URL);
+    }
+
+    @Test
+    @DisplayName("이미지가 없으면 image_url 이 null 이다 — 빈 문자열이면 화면이 깨진 이미지를 그린다")
+    void missingImageIsNullNotBlank() {
+        save("이미지 없는 팝업", AnnouncementStatus.PUBLISHED, true, null, null);
+
+        assertThat(announcementService.popups())
+                .singleElement()
+                .extracting(AnnouncementDetail::imageUrl)
+                .isNull();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -261,8 +288,14 @@ class AnnouncementPopupTest extends IntegrationTest {
 
     private static Announcement newAnnouncement(String title, AnnouncementStatus status,
                                                 boolean popup, LocalDate startsOn, LocalDate endsOn) {
+        return newAnnouncement(title, status, popup, startsOn, endsOn, null);
+    }
+
+    private static Announcement newAnnouncement(String title, AnnouncementStatus status,
+                                                boolean popup, LocalDate startsOn, LocalDate endsOn,
+                                                String imageUrl) {
         Announcement announcement = Announcement.create(
-                AnnouncementType.GENERAL, title, title + " 본문",
+                AnnouncementType.GENERAL, title, title + " 본문", imageUrl,
                 status == AnnouncementStatus.ARCHIVED ? AnnouncementStatus.PUBLISHED : status,
                 popup, startsOn, endsOn, null);
         if (status == AnnouncementStatus.ARCHIVED) {

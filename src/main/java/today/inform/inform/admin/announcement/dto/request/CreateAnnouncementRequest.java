@@ -15,6 +15,9 @@ import today.inform.inform.announcement.entity.AnnouncementType;
  *                 {@code PUBLISHED} 로 보내면 바로 발행됩니다 — 쓰고 바로 올리는 경우가
  *                 대부분이라 등록 후 발행을 두 번 부르지 않아도 되게 열어 둡니다.
  *                 {@code ARCHIVED} 는 400 입니다
+ * @param imageUrl 대표 이미지. {@code POST /admin/files} 가 돌려준 {@code file_url} 을 그대로 넣습니다.
+ *                 <b>우리 스토리지 주소만 받습니다</b> — 다른 주소는 400 입니다.
+ *                 생략하면 이미지 없음
  * @param isPopup  앱 진입 시 팝업으로 띄울지. 생략하면 {@code false}.
  *                 <b>임시저장 상태에서 켜 두어도 됩니다</b> — 발행될 때부터 뜹니다
  * @param startsOn 노출 시작일. 생략하면 "발행 즉시". 미래로 두면 예약이 됩니다
@@ -30,6 +33,9 @@ public record CreateAnnouncementRequest(
 
         @NotBlank(message = "내용을 입력해 주세요.")
         String content,
+
+        @Size(max = Announcement.IMAGE_URL_MAX_LENGTH, message = "이미지 주소가 너무 깁니다.")
+        String imageUrl,
 
         AnnouncementStatus status,
 

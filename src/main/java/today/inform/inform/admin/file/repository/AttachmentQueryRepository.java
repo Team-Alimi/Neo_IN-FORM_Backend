@@ -14,10 +14,25 @@ public class AttachmentQueryRepository {
     private EntityManager em;
 
     /**
-     * 이미 공지에 연결된 주소만 골라 냅니다.
+     * 이미 <b>어딘가에 연결된</b> 주소만 골라 냅니다. {@code DELETE /admin/files}(FIL-02)가
+     * "지워도 되는 파일인가" 를 이걸로 판정합니다.
+     *
+     * <h2>★ 보는 곳이 두 군데입니다</h2>
+     * <ul>
+     *   <li>{@code attachments.file_url} — 공지(article) 첨부</li>
+     *   <li>{@code announcements.image_url} — 서비스 공지 대표 이미지 (V17)</li>
+     * </ul>
+     *
+     * <p><b>파일을 참조하는 테이블이 새로 생기면 반드시 여기에 추가해야 합니다.</b>
+     * 빠뜨리면 그 테이블이 쓰고 있는 객체를 이 API 가 "연결 안 됨" 으로 보고 지웁니다.
+     * S3 삭제는 되돌릴 수 없고, <b>오류도 404 도 나지 않습니다</b> — 운영 화면에서
+     * 이미지만 안 뜨는 상태가 되어 아무도 눈치채지 못합니다.
+     * 서비스 공지 이미지를 붙일 때 실제로 이 구멍이 열렸고, 그래서 UNION 을 추가했습니다.
      *
      * <p>대상이 최대 100건이라 {@code IN} 으로 충분합니다.
      * {@code uk_attachments_article_file} 은 공지 단위 유니크라 여기서는 쓸 수 없습니다.
+     *
+     * <p>{@code UNION} 이 {@code DISTINCT} 를 겸합니다 — 같은 주소가 양쪽에 다 있어도 한 번만 옵니다.
      */
     @Transactional(readOnly = true)
     public List<String> findLinkedUrls(List<String> fileUrls) {
@@ -25,8 +40,11 @@ public class AttachmentQueryRepository {
             return List.of();
         }
         @SuppressWarnings("unchecked")
-        List<String> rows = em.createNativeQuery(
-                        "SELECT DISTINCT file_url FROM attachments WHERE file_url IN (:urls)")
+        List<String> rows = em.createNativeQuery("""
+                        SELECT file_url FROM attachments WHERE file_url IN (:urls)
+                         UNION
+                        SELECT image_url FROM announcements WHERE image_url IN (:urls)
+                        """)
                 .setParameter("urls", fileUrls)
                 .getResultList();
         return rows;

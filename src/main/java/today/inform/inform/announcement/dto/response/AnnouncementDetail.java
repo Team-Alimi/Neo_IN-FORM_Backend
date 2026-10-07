@@ -19,12 +19,17 @@ import today.inform.inform.announcement.entity.AnnouncementType;
  * <p>⚠ 그래서 <b>발행된 공지의 내용을 크게 고치면 안 됩니다.</b> 이미 닫은 사용자는
  * 같은 번호를 숨긴 상태라 바뀐 내용을 영원히 못 봅니다. 오타 수정은 괜찮지만
  * 내용이 달라지면 새로 작성해야 합니다.
+ *
+ * @param imageUrl 대표 이미지. 없으면 <b>필드 자체가 빠집니다</b>
+ *                 ({@code default-property-inclusion: non_null}).
+ *                 {@code null} 검사 대신 필드 존재 여부로 분기해도 됩니다
  */
 public record AnnouncementDetail(
         Long id,
         AnnouncementType type,
         String title,
         String content,
+        String imageUrl,
         OffsetDateTime publishedAt) {
 
     public static AnnouncementDetail from(Announcement announcement) {
@@ -33,6 +38,7 @@ public record AnnouncementDetail(
                 announcement.getType(),
                 announcement.getTitle(),
                 announcement.getContent(),
+                announcement.getImageUrl(),
                 announcement.getPublishedAt());
     }
 }

@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform.admin.announcement.dto.request.CreateAnnouncementRequest;
@@ -21,6 +22,7 @@ import today.inform.inform.announcement.entity.AnnouncementType;
 import today.inform.inform.announcement.service.AnnouncementQueryService;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
+import today.inform.inform.support.FakeFileStorage;
 import today.inform.inform.support.IntegrationTest;
 
 /**
@@ -37,12 +39,20 @@ import today.inform.inform.support.IntegrationTest;
  * {@code clear_period} 가 없으면 되살릴 방법이 아예 없습니다.
  */
 @Transactional
+@Import(FakeFileStorage.Config.class)
 class AdminAnnouncementTest extends IntegrationTest {
 
     private static final LocalDate TODAY = LocalDate.now();
 
+    /** {@link FakeFileStorage} 가 우리 것으로 인정하는 모양의 주소. */
+    private static final String IMAGE_URL = FakeFileStorage.BASE_URL + "2026/10/popup.png";
+    private static final String OTHER_IMAGE_URL = FakeFileStorage.BASE_URL + "2026/10/popup-v2.png";
+
     @Autowired
     private AdminAnnouncementService adminService;
+
+    @Autowired
+    private FakeFileStorage storage;
 
     @Autowired
     private AnnouncementQueryService userService;
@@ -92,7 +102,7 @@ class AdminAnnouncementTest extends IntegrationTest {
     @DisplayName("★ 공백만 보낸 본문은 거부된다 — 제목만 있는 팝업이 뜨는 것을 막는다")
     void blankContentIsRejected() {
         assertThatThrownBy(() -> adminService.create(new CreateAnnouncementRequest(
-                AnnouncementType.GENERAL, "제목만 있음", "   ",
+                AnnouncementType.GENERAL, "제목만 있음", "   ", null,
                 AnnouncementStatus.PUBLISHED, true, null, null), null))
                 .as("content 가 NOT NULL 이라 빈 문자열은 DB 를 그냥 통과합니다")
                 .isInstanceOf(BusinessException.class);
@@ -293,6 +303,80 @@ class AdminAnnouncementTest extends IntegrationTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // 대표 이미지
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("등록할 때 대표 이미지를 붙일 수 있다")
+    void createCanAttachImage() {
+        AdminAnnouncementResponse created =
+                create("이미지 공지", AnnouncementStatus.PUBLISHED, true, null, null, IMAGE_URL);
+
+        assertThat(created.imageUrl()).isEqualTo(IMAGE_URL);
+        em.flush();
+        assertThat(userService.popups())
+                .singleElement()
+                .satisfies(popup -> assertThat(popup.imageUrl()).isEqualTo(IMAGE_URL));
+    }
+
+    @Test
+    @DisplayName("★ 우리 스토리지 주소가 아니면 거부한다 — 받아 두면 삭제 보호가 조용히 안 걸린다")
+    void foreignImageUrlIsRejected() {
+        assertThatThrownBy(() -> create("남의 이미지", null, false, null, null,
+                "https://example.com/someone-elses.png"))
+                .as("그 사이트가 이미지를 내리면 팝업이 깨지는데 우리 쪽엔 아무 오류도 안 남습니다")
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    @Test
+    @DisplayName("★ 이미지를 교체해도 옛 객체는 스토리지에 남는다 — 다른 공지가 쓰고 있을 수 있다")
+    void replacingImageKeepsTheOldObject() {
+        Long id = create("교체할 공지", AnnouncementStatus.PUBLISHED, true, null, null, IMAGE_URL).id();
+
+        AdminAnnouncementResponse updated =
+                adminService.update(id, patch().imageUrl(OTHER_IMAGE_URL).req());
+
+        assertThat(updated.imageUrl()).isEqualTo(OTHER_IMAGE_URL);
+        assertThat(storage.deletedKeys())
+                .as("S3 삭제는 되돌릴 수 없습니다. 치우는 건 DELETE /admin/files 가 할 일입니다")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("★ clear_image 로 이미지를 제거한다 — null 은 \"그대로\" 라 이것 없이는 못 지운다")
+    void clearImageRemovesIt() {
+        Long id = create("이미지 지울 공지", AnnouncementStatus.PUBLISHED, true, null, null, IMAGE_URL).id();
+
+        AdminAnnouncementResponse cleared = adminService.update(id, patch().clearImage().req());
+
+        assertThat(cleared.imageUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("image_url 과 clear_image 를 함께 보내면 400 이다 — 뜻이 모순이다")
+    void imageUrlAndClearImageTogetherIsRejected() {
+        Long id = create("모순 요청", null, false, null, null, IMAGE_URL).id();
+
+        assertThatThrownBy(() ->
+                adminService.update(id, patch().imageUrl(OTHER_IMAGE_URL).clearImage().req()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    @Test
+    @DisplayName("이미지 필드를 안 보내면 이미지를 건드리지 않는다")
+    void untouchedImageStays() {
+        Long id = create("이미지 유지", null, false, null, null, IMAGE_URL).id();
+
+        AdminAnnouncementResponse updated = adminService.update(id, patch().title("제목만").req());
+
+        assertThat(updated.imageUrl()).isEqualTo(IMAGE_URL);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // 목록 · 응답
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -351,8 +435,13 @@ class AdminAnnouncementTest extends IntegrationTest {
 
     private AdminAnnouncementResponse create(String title, AnnouncementStatus status, Boolean popup,
                                              LocalDate startsOn, LocalDate endsOn) {
+        return create(title, status, popup, startsOn, endsOn, null);
+    }
+
+    private AdminAnnouncementResponse create(String title, AnnouncementStatus status, Boolean popup,
+                                             LocalDate startsOn, LocalDate endsOn, String imageUrl) {
         return adminService.create(new CreateAnnouncementRequest(
-                AnnouncementType.GENERAL, title, title + " 본문",
+                AnnouncementType.GENERAL, title, title + " 본문", imageUrl,
                 status, popup, startsOn, endsOn), null);
     }
 
@@ -370,6 +459,8 @@ class AdminAnnouncementTest extends IntegrationTest {
         private LocalDate startsOn;
         private LocalDate endsOn;
         private Boolean clearPeriod;
+        private String imageUrl;
+        private Boolean clearImage;
 
         Patch title(String value) {
             this.title = value;
@@ -396,9 +487,19 @@ class AdminAnnouncementTest extends IntegrationTest {
             return this;
         }
 
+        Patch imageUrl(String value) {
+            this.imageUrl = value;
+            return this;
+        }
+
+        Patch clearImage() {
+            this.clearImage = true;
+            return this;
+        }
+
         UpdateAnnouncementRequest req() {
-            return new UpdateAnnouncementRequest(null, title, null, popup,
-                    startsOn, endsOn, clearPeriod);
+            return new UpdateAnnouncementRequest(null, title, null, imageUrl, clearImage,
+                    popup, startsOn, endsOn, clearPeriod);
         }
     }
 }
