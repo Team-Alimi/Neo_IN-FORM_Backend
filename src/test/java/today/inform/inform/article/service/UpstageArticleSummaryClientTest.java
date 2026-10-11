@@ -30,6 +30,8 @@ class UpstageArticleSummaryClientTest {
                 builder.build(), "unit-test-placeholder", SummaryTestFixtures.properties());
         server.expect(requestTo("https://api.upstage.ai/v1/chat/completions"))
                 .andExpect(header("Authorization", "Bearer unit-test-placeholder"))
+                .andExpect(jsonPath("$.messages[0].content",
+                        org.hamcrest.Matchers.containsString("세 문장 모두 격식 있는 경어체(합쇼체)로 통일합니다.")))
                 .andExpect(jsonPath("$.messages[1].content",
                         org.hamcrest.Matchers.containsString("\"starts_on\":\"2026-10-11\"")))
                 .andExpect(jsonPath("$.messages[1].content",
