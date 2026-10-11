@@ -100,11 +100,28 @@ jobs:
           #
           # git pull 을 먼저 따로 도는 이유: 그래야 이번 배포가
           # 방금 받은 최신 deploy.sh 로 실행됩니다.
+          #
+          # ★ 첫 줄이 "set -e" 인 것이 핵심입니다.
+          #   AWS-RunShellScript 는 commands 배열을 한 셸 스크립트로 이어 붙여 실행하고,
+          #   스크립트의 종료 코드는 마지막 줄의 것이 됩니다. 그래서 set -e 가 없으면
+          #   git pull 이 실패해도 다음 줄이 그대로 돌고, deploy.sh 가 성공하는 한
+          #   SSM 은 Success 를 보고합니다 — 배포는 초록불인데 서버는 낡은 설정으로 돕니다.
+          #
+          #   실제로 그 일이 있었습니다. 서버에 docker-compose.prod.yml 손 편집이 남아
+          #   pull 이 한 달 넘게 거부당하는 동안 배포는 매번 성공으로 떴습니다.
+          #   앱 코드는 CI 이미지에서 와서 멀쩡했지만 compose 변경은 하나도 반영되지
+          #   않았고, 아무도 알아채지 못했습니다.
+          #
+          #   ⚠ 이 가드가 켜진 뒤로는 서버에 로컬 수정이 남아 있으면 배포가 멈춥니다.
+          #     의도된 동작입니다 — 조용히 낡은 설정으로 도는 것보다 낫습니다.
+          #     막히면 아래 "오류 출력" 에 git 메시지가 그대로 나오므로,
+          #     서버의 로컬 수정을 정리한 뒤 다시 돌리면 됩니다.
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name AWS-RunShellScript \
             --comment "deploy $IMAGE" \
             --parameters commands="[
+              \"set -e\",
               \"sudo -u ssm-user git -C $REPO_DIR pull --ff-only\",
               \"sudo -u ssm-user bash $REPO_DIR/scripts/deploy.sh $IMAGE\"
             ]" \
