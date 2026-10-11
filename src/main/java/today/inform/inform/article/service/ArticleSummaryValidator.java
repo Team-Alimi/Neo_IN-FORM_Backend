@@ -24,7 +24,7 @@ public class ArticleSummaryValidator {
     private final JsonMapper mapper = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
 
-    /** 형식과 명시적 날짜를 검증합니다. 일반적인 사실성 전체의 자동 판정은 아닙니다. */
+    /** 형식·경어체 종결·명시적 날짜를 검증합니다. 일반적인 사실성 전체의 자동 판정은 아닙니다. */
     public String validate(String content, ArticleSummarySource source) {
         try {
             JsonNode root = mapper.readTree(content);
@@ -55,6 +55,7 @@ public class ArticleSummaryValidator {
                 if (line.isBlank() || LINE_BREAK.matcher(original).find()
                         || BULLET.matcher(line).find() || count != 1
                         || !line.matches("(?s).*[.!?。]$")
+                        || !endsWithFormalPoliteEnding(line)
                         || !sourceDates.containsAll(dates(line))) {
                     throw new ArticleSummaryClient.Failure(true);
                 }
@@ -66,6 +67,18 @@ public class ArticleSummaryValidator {
         } catch (RuntimeException e) {
             throw new ArticleSummaryClient.Failure(true);
         }
+    }
+
+    private static boolean endsWithFormalPoliteEnding(String line) {
+        if (line.endsWith("습니다.")) {
+            return true;
+        }
+        if (!line.endsWith("니다.") || line.length() < 4) {
+            return false;
+        }
+        char syllable = line.charAt(line.length() - 4);
+        // 한글 완성형의 종성은 28개이며 ㅂ 은 index 17 입니다. '아니다.' 와 구분합니다.
+        return syllable >= '가' && syllable <= '힣' && (syllable - '가') % 28 == 17;
     }
 
     private static Set<String> dates(String text) {
