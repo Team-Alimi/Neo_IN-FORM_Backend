@@ -49,8 +49,14 @@ public class CommentController {
     /**
      * CMT-01 작성.
      *
-     * <p>{@code parent_id} 를 주면 답글입니다. <b>답글에 답글은 달 수 없고</b>
-     * 그 판정은 DB 트리거가 합니다 — 위반하면 {@code COMMENT_DEPTH_EXCEEDED}(400).
+     * <p><b>답글(대댓글)은 없습니다.</b> 댓글은 공지 하나에 달리는 평면 목록이고,
+     * 요청에 {@code parent_id} 를 받지 않습니다 — 보내도 무시됩니다
+     * ({@code CreateCommentRequest}).
+     *
+     * <p>스키마에는 {@code comments.parent_id} 와 깊이 제한 트리거가 아직 남아 있지만
+     * 앱이 채우지 않아 늘 {@code null} 입니다. 답글은 <b>되살리지 않기로 결정됐습니다</b>
+     * (2026-10-12). 그래서 {@code COMMENT_DEPTH_EXCEEDED}·{@code INVALID_COMMENT_PARENT} 는
+     * 발생하지 않습니다 — SQLSTATE 매핑은 안전망으로만 남겨 둡니다.
      */
     @PostMapping("/articles/{articleId}/comments")
     public ApiResponse<CommentResponse> create(

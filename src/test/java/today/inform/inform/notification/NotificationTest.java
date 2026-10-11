@@ -12,11 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
-import today.inform.inform.article.entity.Article;
-import today.inform.inform.article.entity.ArticleStatus;
-import today.inform.inform.article.repository.ArticleRepository;
-import today.inform.inform.comment.dto.response.CommentResponse;
-import today.inform.inform.comment.service.CommentService;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.notification.dto.response.NotificationResponse;
 import today.inform.inform.notification.entity.NotificationType;
@@ -35,36 +30,21 @@ class NotificationTest extends IntegrationTest {
     @Autowired
     private NotificationService notificationService;
 
-    @Autowired
-    private CommentService commentService;
-
-    @Autowired
-    private ArticleRepository articleRepository;
-
     @PersistenceContext
     private EntityManager em;
 
-    private Long authorId;
-    private Long replierId;
-    private Long articleId;
+    /** 알림을 받는 사용자. */
+    private Long ownerId;
+
+    /** 남의 알림을 건드리지 못하는지 확인할 다른 사용자. */
+    private Long otherUserId;
 
     @BeforeEach
     void setUp() {
-        authorId = insertUser("ntf-author@inha.ac.kr", "원댓글쓴이");
-        replierId = insertUser("ntf-replier@inha.ac.kr", "답글쓴이");
-        articleId = publish("알림 테스트 공지").getId();
+        ownerId = insertUser("ntf-owner@inha.ac.kr", "알림받는사람");
+        otherUserId = insertUser("ntf-other@inha.ac.kr", "다른사용자");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // CMT-05 답글 알림
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * 미리보기를 UTF-16 코드 단위로 자르면 이모지가 두 조각으로 갈라집니다.
-     *
-     * <p>짝을 잃은 조각은 UTF-8 로 인코딩할 수 없어 <b>드라이버가 조용히 {@code '?'} 로 바꿉니다.</b>
-     * 예외가 나지 않아서 깨진 글자가 그대로 저장되고, 로그에도 아무것도 남지 않습니다.
-     */
     // ─────────────────────────────────────────────────────────────────────────
     // NTF-01 ~ 04
     // ─────────────────────────────────────────────────────────────────────────
@@ -74,24 +54,24 @@ class NotificationTest extends IntegrationTest {
     void unreadCount() {
         givenTwoNotifications();
 
-        assertThat(notificationService.unreadCount(authorId)).isEqualTo(2);
+        assertThat(notificationService.unreadCount(ownerId)).isEqualTo(2);
 
-        Long first = list(authorId).get(0).id();
-        notificationService.markRead(authorId, first);
+        Long first = list(ownerId).get(0).id();
+        notificationService.markRead(ownerId, first);
         em.flush();
 
-        assertThat(notificationService.unreadCount(authorId)).isEqualTo(1);
+        assertThat(notificationService.unreadCount(ownerId)).isEqualTo(1);
     }
 
     @Test
     @DisplayName("★ 남의 알림은 읽음 처리할 수 없다")
     void cannotReadOthersNotification() {
         givenTwoNotifications();
-        Long othersNotification = list(authorId).get(0).id();
+        Long othersNotification = list(ownerId).get(0).id();
 
-        assertThatThrownBy(() -> notificationService.markRead(replierId, othersNotification))
+        assertThatThrownBy(() -> notificationService.markRead(otherUserId, othersNotification))
                 .isInstanceOf(BusinessException.class);
-        assertThat(notificationService.unreadCount(authorId))
+        assertThat(notificationService.unreadCount(ownerId))
                 .as("남이 대신 읽어 준 것이 되면 안 됩니다")
                 .isEqualTo(2);
     }
@@ -110,9 +90,9 @@ class NotificationTest extends IntegrationTest {
     @DisplayName("이미 읽은 알림을 다시 읽어도 최초 읽은 시각이 유지된다")
     void markReadPreservesFirstReadTime() {
         givenTwoNotifications();
-        Long id = list(authorId).get(0).id();
+        Long id = list(ownerId).get(0).id();
 
-        notificationService.markRead(authorId, id);
+        notificationService.markRead(ownerId, id);
         em.flush();
 
         em.createNativeQuery(
@@ -120,7 +100,7 @@ class NotificationTest extends IntegrationTest {
                 .setParameter("id", id).executeUpdate();
         Object backdated = readAt(id);
 
-        notificationService.markRead(authorId, id);
+        notificationService.markRead(ownerId, id);
         em.flush();
 
         assertThat(readAt(id))
@@ -133,40 +113,40 @@ class NotificationTest extends IntegrationTest {
     void markAllRead() {
         givenTwoNotifications();
 
-        assertThat(notificationService.markAllRead(authorId)).isEqualTo(2);
+        assertThat(notificationService.markAllRead(ownerId)).isEqualTo(2);
         em.flush();
-        assertThat(notificationService.markAllRead(authorId)).isZero();
-        assertThat(notificationService.unreadCount(authorId)).isZero();
+        assertThat(notificationService.markAllRead(ownerId)).isZero();
+        assertThat(notificationService.unreadCount(ownerId)).isZero();
     }
 
     @Test
     @DisplayName("전체 읽음이 남의 알림까지 건드리지 않는다")
     void markAllReadTouchesOnlyMine() {
         givenTwoNotifications();
-        insertNotification(replierId, "남의 알림");
+        insertNotification(otherUserId, "남의 알림");
 
-        notificationService.markAllRead(authorId);
+        notificationService.markAllRead(ownerId);
         em.flush();
 
-        assertThat(notificationService.unreadCount(replierId)).isEqualTo(1);
+        assertThat(notificationService.unreadCount(otherUserId)).isEqualTo(1);
     }
 
     @Test
     @DisplayName("목록은 최신순이다")
     void listIsNewestFirst() {
-        insertNotification(authorId, "먼저 온 알림");
-        insertNotification(authorId, "나중에 온 알림");
+        insertNotification(ownerId, "먼저 온 알림");
+        insertNotification(ownerId, "나중에 온 알림");
 
         // created_at 은 트랜잭션 고정이라 같은 값입니다. id DESC tie-breaker 가 순서를 정합니다.
-        assertThat(list(authorId)).extracting(NotificationResponse::title)
+        assertThat(list(ownerId)).extracting(NotificationResponse::title)
                 .containsExactly("나중에 온 알림", "먼저 온 알림");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
 
     private void givenTwoNotifications() {
-        insertNotification(authorId, "알림 1");
-        insertNotification(authorId, "알림 2");
+        insertNotification(ownerId, "알림 1");
+        insertNotification(ownerId, "알림 2");
     }
 
     private List<NotificationResponse> list(Long userId) {
@@ -194,14 +174,6 @@ class NotificationTest extends IntegrationTest {
                 .setParameter("id", notificationId).getSingleResult();
     }
 
-    private Article publish(String title) {
-        Article article = articleRepository.saveAndFlush(
-                Article.createSchoolArticle(title, "내용", null, null, null));
-        article.changeStatus(ArticleStatus.READY_TO_PUBLISH);
-        article.changeStatus(ArticleStatus.PUBLISHED);
-        em.flush();
-        return article;
-    }
 
     private Long insertUser(String email, String name) {
         em.createNativeQuery("INSERT INTO users (email, name, role, status) "

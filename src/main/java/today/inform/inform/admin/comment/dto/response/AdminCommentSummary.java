@@ -11,9 +11,9 @@ import java.time.OffsetDateTime;
  *
  * @param content   삭제된 댓글이면 빈 문자열입니다. 지울 때 본문까지 비우기 때문에
  *                  <b>관리자도 내용을 되살릴 수 없습니다</b>({@code Comment#softDelete})
- * @param isReply   답글이면 {@code true}. 원댓글을 지우면 자리만 남고,
- *                  답글을 지우면 행이 사라지는 차이가 있어 화면이 미리 알려 줘야 합니다
- * @param replyCount 이 댓글에 달린 답글 수. 0 이 아니면 삭제해도 자리가 남습니다
+ *
+ * <p>{@code isReply}·{@code replyCount} 는 없습니다. 답글 기능과 함께 제거됐고
+ * 되살리지 않기로 결정됐습니다(2026-10-12) — 모든 댓글이 원댓글입니다.
  */
 public record AdminCommentSummary(
         Long id,

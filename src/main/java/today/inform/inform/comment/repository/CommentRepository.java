@@ -46,7 +46,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
      */
     @Query("""
             SELECT new today.inform.inform.comment.repository.CommentRow(
-                       c.id, c.parentId, c.content, c.deletedAt, c.createdAt, c.updatedAt,
+                       c.id, c.content, c.deletedAt, c.createdAt, c.updatedAt,
                        u.id, u.name, u.status)
               FROM Comment c
               JOIN today.inform.inform.user.entity.User u ON u.id = c.userId
@@ -65,7 +65,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
      */
     @Query("""
             SELECT new today.inform.inform.comment.repository.CommentRow(
-                       c.id, c.parentId, c.content, c.deletedAt, c.createdAt, c.updatedAt,
+                       c.id, c.content, c.deletedAt, c.createdAt, c.updatedAt,
                        u.id, u.name, u.status)
               FROM Comment c
               JOIN today.inform.inform.user.entity.User u ON u.id = c.userId

@@ -13,7 +13,6 @@ import today.inform.inform.user.entity.UserStatus;
  */
 public record CommentRow(
         Long id,
-        Long parentId,
         String content,
         OffsetDateTime deletedAt,
         OffsetDateTime createdAt,

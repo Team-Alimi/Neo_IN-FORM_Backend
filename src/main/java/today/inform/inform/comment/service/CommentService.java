@@ -17,7 +17,6 @@ import today.inform.inform.comment.repository.CommentRepository;
 import today.inform.inform.comment.repository.CommentRow;
 import today.inform.inform.global.exception.BusinessException;
 import today.inform.inform.global.exception.ErrorCode;
-import today.inform.inform.notification.service.NotificationService;
 
 /**
  * CMT-01 ~ CMT-04.
@@ -32,7 +31,6 @@ public class CommentService {
 
     private final CommentRepository commentRepository;
     private final ArticleReadableChecker readableChecker;
-    private final NotificationService notificationService;
 
     /**
      * CMT-02 목록. 시간순 평면 목록입니다.

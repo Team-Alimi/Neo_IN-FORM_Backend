@@ -59,7 +59,16 @@ public class Comment extends BaseTimeEntity {
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
 
-    /** null 이면 원댓글. 값이 있으면 답글이고, 그 대상은 반드시 원댓글이어야 합니다(IN004). */
+    /**
+     * <b>늘 {@code null} 입니다.</b> 답글(대댓글) 기능과 함께 제거됐고,
+     * 되살리지 않기로 결정됐습니다(2026-10-12).
+     *
+     * <p>컬럼과 깊이 제한 트리거는 스키마에 남아 있어 매핑만 유지합니다 —
+     * 지우려면 마이그레이션이 필요하고, 그건 되돌릴 수 없는데 얻는 것이 없습니다.
+     * {@code ArticleMergeRepository#moveComments} 가 이 컬럼을 네이티브로 읽습니다.
+     *
+     * <p>읽는 코드를 두지 마세요. 늘 {@code null} 이라 어떤 분기도 의미가 없습니다.
+     */
     @Column(name = "parent_id", updatable = false)
     private Long parentId;
 
@@ -78,16 +87,11 @@ public class Comment extends BaseTimeEntity {
         validateContent(content);
         this.articleId = articleId;
         this.userId = userId;
-        this.parentId = parentId;
         this.content = content;
     }
 
     public static Comment create(Long articleId, Long userId, String content) {
         return new Comment(articleId, userId, content);
-    }
-
-    public boolean isReply() {
-        return parentId != null;
     }
 
     public boolean isDeleted() {
