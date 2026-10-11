@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import today.inform.inform.article.dto.request.ArticleSearchCondition;
 import today.inform.inform.article.dto.response.ArticleDetailResponse;
+import today.inform.inform.article.dto.response.SummaryStatus;
 import today.inform.inform.article.repository.ArticleQueryRepository;
 import today.inform.inform.global.security.AuthPrincipal;
 import today.inform.inform.user.entity.UserRole;
@@ -25,7 +26,9 @@ class ArticleSummaryRequestTest {
     private final ArticleQueryValidator validator = mock(ArticleQueryValidator.class);
     private final ArticleViewCounter views = mock(ArticleViewCounter.class);
     private final ArticleSummaryGenerator generator = mock(ArticleSummaryGenerator.class);
-    private final ArticleService service = new ArticleService(queries, validator, views, generator);
+    private final ArticleSummaryClient client = mock(ArticleSummaryClient.class);
+    private final ArticleService service =
+            new ArticleService(queries, validator, views, generator, client);
     private final AuthPrincipal principal = new AuthPrincipal(7L, UserRole.USER);
 
     @Test
@@ -33,9 +36,19 @@ class ArticleSummaryRequestTest {
     void failedSubmissionDoesNotFailDetail() {
         ArticleDetailResponse detail = detail(null);
         when(queries.findDetail(1L, 7L)).thenReturn(Optional.of(detail));
+        when(client.isEnabled()).thenReturn(true);
         doThrow(new IllegalStateException("submission failed"))
                 .when(generator).requestSummary(anyLong(), any());
-        assertThat(service.getDetail(1L, principal)).isSameAs(detail);
+
+        // summary_status 가 생기면서 응답이 사본으로 바뀝니다(record 는 불변).
+        // 그래서 동일 객체(isSameAs)가 아니라 내용 보존으로 판정합니다.
+        ArticleDetailResponse result = service.getDetail(1L, principal);
+        assertThat(result.title()).isEqualTo(detail.title());
+        assertThat(result.content()).isEqualTo(detail.content());
+        assertThat(result.summary()).isNull();
+        assertThat(result.summaryStatus())
+                .as("등록 자체가 거부됐으면 기다려도 안 생기므로 재조회하지 말라고 알려야 합니다")
+                .isEqualTo(SummaryStatus.NONE);
     }
 
     @Test
@@ -43,7 +56,9 @@ class ArticleSummaryRequestTest {
     void cachedSummaryIsReused() {
         ArticleDetailResponse detail = detail("기존 요약");
         when(queries.findDetail(1L, 7L)).thenReturn(Optional.of(detail));
-        assertThat(service.getDetail(1L, principal).summary()).isEqualTo("기존 요약");
+        ArticleDetailResponse result = service.getDetail(1L, principal);
+        assertThat(result.summary()).isEqualTo("기존 요약");
+        assertThat(result.summaryStatus()).isEqualTo(SummaryStatus.READY);
         verifyNoInteractions(generator);
     }
 
@@ -61,7 +76,7 @@ class ArticleSummaryRequestTest {
 
     private ArticleDetailResponse detail(String summary) {
         return new ArticleDetailResponse(1L, null, "제목", "본문", summary,
-                null, null, null, null, 0, 0, 0, false, false,
+                null, null, null, null, null, 0, 0, 0, false, false,
                 List.of(), List.of(), List.of());
     }
 }

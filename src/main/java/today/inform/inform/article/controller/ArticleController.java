@@ -16,6 +16,7 @@ import today.inform.inform.article.dto.request.ArticleSearchCondition;
 import today.inform.inform.article.dto.response.DeadlineStatus;
 import today.inform.inform.article.dto.response.ArticleDetailResponse;
 import today.inform.inform.article.dto.response.ArticleSummaryResponse;
+import today.inform.inform.article.dto.response.ArticleSummaryStatusResponse;
 import today.inform.inform.article.entity.SourceType;
 import today.inform.inform.article.service.ArticleService;
 import today.inform.inform.global.response.ApiResponse;
@@ -90,5 +91,25 @@ public class ArticleController {
             @AuthenticationPrincipal AuthPrincipal principal,
             @PathVariable Long articleId) {
         return ApiResponse.success(articleService.getDetail(articleId, principal));
+    }
+
+    /**
+     * ART-07 AI 요약만 조회. <b>"생성 중" 을 띄운 화면이 재조회할 때 쓰는 경로입니다.</b>
+     *
+     * <p>상세 응답의 {@code summary_status} 가 {@code PENDING} 일 때만 부르세요.
+     * {@code NONE} 이면 기다려도 안 생깁니다.
+     *
+     * <p><b>상세 조회로 폴링하면 안 됩니다.</b> 그쪽은 요약이 빌 때마다 생성 요청을
+     * 다시 던져서 작업 큐를 폴링으로 채우고, 분류·출처·첨부까지 조인한 큰 응답을 돌려줍니다.
+     * 이 경로는 읽기만 하고 조회수도 세지 않습니다.
+     *
+     * <p><b>무한 폴링은 금지입니다.</b> {@code PENDING} 은 "요청이 걸렸다" 까지만 뜻하고,
+     * 생성이 실패했거나 쿨다운 중인 경우도 같은 값으로 나옵니다.
+     * 2초 간격 4회 정도면 성공 케이스는 거의 잡히고, 그 뒤에는 요약 박스를 접으세요.
+     * 사용자가 나중에 다시 들어오면 그때는 채워져 있을 가능성이 높습니다.
+     */
+    @GetMapping("/{articleId}/summary")
+    public ApiResponse<ArticleSummaryStatusResponse> summary(@PathVariable Long articleId) {
+        return ApiResponse.success(articleService.getSummary(articleId));
     }
 }

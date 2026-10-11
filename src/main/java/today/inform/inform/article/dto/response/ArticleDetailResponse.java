@@ -10,8 +10,13 @@ import today.inform.inform.article.entity.SourceType;
 /**
  * ART-02 상세.
  *
- * @param summary      ART-07. <b>null 일 수 있습니다.</b> 프론트는 요약 박스를 생략하고,
- *                     서버가 뒤에서 생성을 시작합니다. 다음 진입 때 채워집니다.
+ * @param summary      ART-07. <b>null 일 수 있습니다.</b> 비어 있는 이유는
+ *                     {@code summaryStatus} 가 알려 줍니다 — 그걸 보고 분기하세요.
+ * @param summaryStatus {@code summary} 가 왜 비었는지. {@link SummaryStatus} 참고.
+ *                     {@code PENDING} 이면 "생성 중" 을 띄우고
+ *                     {@code GET /articles/{id}/summary} 로 몇 번 다시 보면 채워집니다.
+ *                     <b>상세 조회로 폴링하지 마세요</b> — 이 API 는 요약이 비어 있을 때마다
+ *                     생성 요청을 다시 던져서 작업 큐를 폴링으로 채웁니다
  * @param underReview  크롤러가 본문 변경을 감지해 재검수 중인 상태.
  *                     북마크에서 들어온 사용자에게 "검수 중" 배지를 띄우기 위한 값입니다.
  * @param deadlineStatus 마감 기준 파생값. DB 컬럼이 아니라 조회 시각에 계산합니다
@@ -26,6 +31,7 @@ public record ArticleDetailResponse(
         String title,
         String content,
         String summary,
+        SummaryStatus summaryStatus,
         OffsetDateTime publishedAt,
         LocalDate startsOn,
         LocalDate endsOn,
@@ -38,6 +44,23 @@ public record ArticleDetailResponse(
         List<NamedRef> categories,
         List<Source> vendors,
         List<Attachment> attachments) {
+
+    /**
+     * {@code summaryStatus} 만 바꾼 사본.
+     *
+     * <p><b>상태는 조회 계층이 정할 수 없습니다.</b> 요약이 비었을 때 생성 요청이 실제로
+     * 등록됐는지(→ {@code PENDING}) 아니면 기능이 꺼져 있는지(→ {@code NONE}) 는
+     * 서비스만 압니다. 그래서 레포지토리는 {@code null} 로 두고 서비스가 여기서 채웁니다.
+     *
+     * <p>레코드라 수정이 안 되므로 사본을 만듭니다. 필드가 많아 번거롭지만,
+     * 응답 객체를 가변으로 바꾸면 "어디서 채워졌는지" 를 추적할 수 없게 됩니다.
+     */
+    public ArticleDetailResponse withSummaryStatus(SummaryStatus status) {
+        return new ArticleDetailResponse(
+                id, sourceType, title, content, summary, status, publishedAt,
+                startsOn, endsOn, deadlineStatus, bookmarkCount, commentCount, viewCount,
+                isBookmarked, underReview, categories, vendors, attachments);
+    }
 
     /**
      * 제공처 + 그 제공처의 원본 URL (명세 4.3).

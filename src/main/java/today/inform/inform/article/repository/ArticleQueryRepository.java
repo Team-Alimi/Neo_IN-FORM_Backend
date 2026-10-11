@@ -298,6 +298,9 @@ public class ArticleQueryRepository {
                 (String) row[2],
                 (String) row[12],                       // content
                 (String) row[3],                        // summary — null 일 수 있습니다
+                // ★ 상태는 여기서 못 정합니다. 요약이 비었을 때 생성 요청이 실제로 등록됐는지는
+                //   서비스만 알아서, ArticleService 가 withSummaryStatus 로 채웁니다.
+                null,
                 (OffsetDateTime) row[4],
                 (LocalDate) row[5],
                 (LocalDate) row[6],
@@ -310,6 +313,33 @@ public class ArticleQueryRepository {
                 findCategories(List.of(articleId)).getOrDefault(articleId, List.of()),
                 findSources(articleId),
                 findAttachments(articleId)));
+    }
+
+    /**
+     * 요약 한 칸만 읽습니다. "생성 중" 을 띄운 화면이 재조회할 때 쓰는 경로입니다.
+     *
+     * <p><b>가시성은 상세와 똑같이 봅니다</b>({@code VISIBLE_OR_UNDER_REVIEW}).
+     * 여기만 느슨하게 두면 상세로는 404 인 공지의 요약이 이쪽으로 새어 나갑니다.
+     *
+     * <p><b>빈 {@code Optional} 과 {@code summary == null} 은 다른 뜻입니다.</b>
+     * 빈 것은 "볼 수 없는 공지"(→ 404), 안에 {@code null} 이 든 것은
+     * "공지는 있는데 요약이 아직 없음" 입니다. {@code Optional<String>} 으로 합치면
+     * 그 둘이 구분되지 않아 없는 공지가 "요약 없음" 으로 보입니다.
+     */
+    public Optional<SummaryRow> findSummaryRow(Long articleId) {
+        List<?> rows = em.createNativeQuery(
+                        "SELECT a.summary FROM articles a WHERE a.id = :articleId AND "
+                                + VISIBLE_OR_UNDER_REVIEW)
+                .setParameter("articleId", articleId)
+                .getResultList();
+        if (rows.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new SummaryRow((String) rows.get(0)));
+    }
+
+    /** {@link #findSummaryRow} 의 결과. {@code summary} 는 {@code null} 일 수 있습니다. */
+    public record SummaryRow(String summary) {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
