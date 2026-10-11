@@ -246,8 +246,8 @@ public class AdminArticleController {
     /**
      * SYS-07 AI 요약 재생성.
      *
-     * <p>요약을 <b>지우기만</b> 합니다. 실제 생성은 주기 배치가 맡으므로 즉시 반영되지 않습니다.
-     * 요약을 직접 고치려면 {@code PATCH /admin/articles/{id}} 를 쓰세요.
+     * <p>요약을 지운 뒤 커밋 이후 비동기 생성을 요청합니다.
+     * AI 완료를 기다리지 않으며 생성된 요약은 이후 상세 재조회에서 받습니다.
      */
     @PostMapping("/{articleId}/summary/regenerate")
     public ApiResponse<Void> regenerateSummary(@PathVariable Long articleId) {

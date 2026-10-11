@@ -110,7 +110,7 @@ class ArticleMappingTest extends IntegrationTest {
         Article article = save(Article.createSchoolArticle("원래 제목", "내용", null, null, null));
 
         int applied = articleRepository.updateSummary(
-                article.getId(), "AI 가 만든 요약", article.getUpdatedAt());
+                article.getId(), "AI 가 만든 요약", article.getUpdatedAt(), article.getVersion());
         assertThat(applied).isEqualTo(1);
 
         Article reloaded = articleRepository.findById(article.getId()).orElseThrow();
@@ -142,7 +142,7 @@ class ArticleMappingTest extends IntegrationTest {
                 .setParameter("id", id).executeUpdate();
         em.clear();
 
-        int applied = articleRepository.updateSummary(id, "옛 내용의 요약", snapshot);
+        int applied = articleRepository.updateSummary(id, "옛 내용의 요약", snapshot, article.getVersion());
 
         assertThat(applied)
                 .as("가드가 없으면 옛 본문의 요약이 새 본문에 영구히 붙습니다")
@@ -158,7 +158,7 @@ class ArticleMappingTest extends IntegrationTest {
         Long versionBefore = article.getVersion();
         OffsetDateTime updatedBefore = article.getUpdatedAt();
 
-        articleRepository.updateSummary(id, "요약", updatedBefore);
+        articleRepository.updateSummary(id, "요약", updatedBefore, versionBefore);
         articleRepository.addViewCount(id, 42);
 
         Article reloaded = articleRepository.findById(id).orElseThrow();

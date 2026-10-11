@@ -16,9 +16,11 @@ public interface ArticleSummaryGenerator {
     /**
      * 요약 생성을 <b>시작만</b> 합니다. 결과를 기다리지 않습니다.
      *
-     * @param sourceUpdatedAt 요약 대상 본문의 {@code updated_at}.
-     *                        생성이 끝나 저장할 때 이 값으로 가드해야
-     *                        그 사이 본문이 바뀐 경우 옛 요약이 붙지 않습니다.
+     * <p>worker 는 lock 획득 후 원문과 version/updated_at 을 함께 읽고 저장을 보호합니다.
+     * 호출 트랜잭션이 있으면 커밋 후 작업을 등록하며 rollback 요청은 생성하지 않습니다.
+     *
+     * @param sourceUpdatedAt 호출자가 읽은 updated_at. 모르면 null 을 전달합니다.
+     *                        값이 있으면 worker snapshot 과도 일치해야 합니다.
      */
     void requestSummary(Long articleId, java.time.OffsetDateTime sourceUpdatedAt);
 }
