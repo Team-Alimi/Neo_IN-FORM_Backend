@@ -191,6 +191,53 @@ class NotificationGenerationTest extends IntegrationTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // 수동 실행 (관리자 테스트용)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("수동 실행은 기준 마감일과 생성 건수를 돌려준다 — created: 0 의 원인을 짚을 수 있어야 한다")
+    void manualRunReportsResult() {
+        Long articleId = publish("수동 실행 대상", tomorrow);
+        bookmark(userId, articleId);
+
+        NotificationScheduler.DeadlineRun first = scheduler.runDeadlineNotifications();
+
+        assertThat(first.deadline())
+                .as("서버가 본 \"내일\" 을 호출한 쪽이 확인할 수 있어야 합니다")
+                .isEqualTo(tomorrow);
+        assertThat(first.created()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("★ 수동 실행을 여러 번 눌러도 안전하다 — 두 번째는 created: 0")
+    void manualRunIsSafeToRepeat() {
+        Long articleId = publish("여러 번 누를 공지", tomorrow);
+        bookmark(userId, articleId);
+
+        scheduler.runDeadlineNotifications();
+        NotificationScheduler.DeadlineRun second = scheduler.runDeadlineNotifications();
+
+        assertThat(second.created()).isZero();
+        assertThat(count(userId)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("수동 실행과 배치가 같은 결과를 낸다 — 코드 경로가 갈라지면 테스트가 운영을 대변하지 못한다")
+    void manualRunMatchesScheduledRun() {
+        Long articleId = publish("경로 비교용 공지", tomorrow);
+        bookmark(userId, articleId);
+
+        scheduler.createDeadlineNotifications();
+        int afterScheduled = count(userId);
+        NotificationScheduler.DeadlineRun manual = scheduler.runDeadlineNotifications();
+
+        assertThat(afterScheduled).isEqualTo(1);
+        assertThat(manual.created())
+                .as("배치가 이미 만들었으므로 수동 실행은 0건이어야 합니다")
+                .isZero();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // SYS-04 정리
     // ─────────────────────────────────────────────────────────────────────────
 

@@ -53,16 +53,44 @@ public class NotificationScheduler {
      * <p>비활성화하려면 설정값을 {@code -} 로 두세요(Spring 이 등록을 건너뜁니다).
      */
     @Scheduled(cron = "${inform.notification.deadline-cron:0 0 9 * * *}", zone = "Asia/Seoul")
-    @Transactional
     public void createDeadlineNotifications() {
-        LocalDate deadline = LocalDate.now().plusDays(1);
         try {
-            int created = notificationRepository.createDeadlineNotifications(deadline);
-            // 0 건도 정상입니다 — 내일 마감인 공지를 아무도 북마크하지 않은 날입니다.
-            log.info("마감 D-1 알림 생성 완료. 기준 마감일={}, 생성={}건", deadline, created);
+            runDeadlineNotifications();
         } catch (RuntimeException e) {
-            log.error("마감 D-1 알림 생성 실패. 기준 마감일={}", deadline, e);
+            log.error("마감 D-1 알림 생성 실패", e);
         }
+    }
+
+    /**
+     * 생성 본체. <b>실패를 감추지 않고 그대로 던집니다.</b>
+     *
+     * <p>배치 경로({@link #createDeadlineNotifications()})는 예외를 삼키지만 이쪽은 아닙니다 —
+     * 관리자가 손으로 돌렸을 때 조용히 0건으로 끝나면 "대상이 없는 것" 과 "실패한 것" 을
+     * 구분할 수 없습니다. 수동 실행은 호출한 사람이 결과를 봐야 합니다.
+     *
+     * <p>기준일은 <b>언제나 "내일"</b> 입니다. 날짜를 인자로 받지 않는 것이 중요합니다 —
+     * 임의 날짜를 허용하면 두 달 뒤 마감인 공지에 "마감이 하루 남았습니다" 를 보낼 수 있고,
+     * 그건 사용자에게 거짓을 알리는 것입니다. 문구가 날짜를 전제로 고정돼 있습니다.
+     *
+     * @return 실제로 만들어진 건수. 중복으로 건너뛴 것은 세지 않습니다
+     */
+    @Transactional
+    public DeadlineRun runDeadlineNotifications() {
+        LocalDate deadline = LocalDate.now().plusDays(1);
+        int created = notificationRepository.createDeadlineNotifications(deadline);
+        // 0 건도 정상입니다 — 내일 마감인 공지를 아무도 북마크하지 않은 날입니다.
+        log.info("마감 D-1 알림 생성 완료. 기준 마감일={}, 생성={}건", deadline, created);
+        return new DeadlineRun(deadline, created);
+    }
+
+    /**
+     * 생성 결과.
+     *
+     * @param deadline 이번 실행의 기준 마감일(= 내일)
+     * @param created  새로 만들어진 건수. <b>0 이 정상일 수 있습니다</b> —
+     *                 이미 만들어 둔 것은 중복으로 건너뛰고, 대상이 없어도 0 입니다
+     */
+    public record DeadlineRun(LocalDate deadline, int created) {
     }
 
     /**
