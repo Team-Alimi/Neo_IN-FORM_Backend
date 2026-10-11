@@ -2,6 +2,7 @@ package today.inform.inform.article.service;
 
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import today.inform.inform.user.entity.UserRole;
  * 그 분기 하나를 빠뜨리면 <b>미배포 공지가 사용자에게 새어 나갑니다.</b>
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class ArticleService {
 
@@ -73,7 +75,11 @@ public class ArticleService {
         // 요약이 없으면 생성을 시작만 하고 기다리지 않습니다.
         // 기다리면 첫 진입이 수 초 걸리고, 그 대기가 모든 사용자에게 반복됩니다.
         if (detail.summary() == null) {
-            summaryGenerator.requestSummary(articleId, null);
+            try {
+                summaryGenerator.requestSummary(articleId, null);
+            } catch (RuntimeException e) {
+                log.warn("요약 생성 요청 실패. articleId={}", articleId);
+            }
         }
         return detail;
     }

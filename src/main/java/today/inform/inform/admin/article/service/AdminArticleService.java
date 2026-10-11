@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ import today.inform.inform.global.support.AuditMemo;
  * 그건 스키마상 "크롤러/시스템이 한 변경" 의 정상값이라 <b>사후에 사고와 구분할 수 없습니다.</b>
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AdminArticleService {
 
@@ -219,8 +221,8 @@ public class AdminArticleService {
     /**
      * SYS-07 요약 재생성.
      *
-     * <p>요약을 직접 만들지 않고 <b>지우기만</b> 합니다. 생성은 {@code summary IS NULL} 을 훑는
-     * 주기 배치가 맡습니다 — 관리자를 LLM 응답만큼 기다리게 할 이유가 없습니다.
+     * <p>요약을 native UPDATE 로 지운 뒤 같은 비동기 생성기에 요청합니다.
+     * 생성기는 커밋 후 등록하므로 아직 지워지지 않은 캐시를 읽는 경합을 피합니다.
      *
      * <p><b>native UPDATE 여야 합니다.</b> {@code summary} 는 엔티티에서
      * {@code updatable = false} 라 JPA 로는 쓸 수 없고, 그렇게 둔 이유가 있습니다 —
@@ -228,8 +230,8 @@ public class AdminArticleService {
      * 이 UPDATE 는 <b>수정 시각도 version 도 건드리지 않습니다.</b>
      * 요약을 다시 만든 것이 "공지가 수정됨" 으로 보이면 안 됩니다.
      *
-     * <p>지운 뒤 생성기를 깨워 두지만 기다리지는 않습니다. 배치가 어차피 주워 가므로
-     * 이 호출이 실패해도 다음 주기에 만들어집니다.
+     * <p>진행 중인 같은 원문의 작업은 Redis lock 으로 재사용합니다.
+     * 등록·생성 실패 시 이후 상세 요청에서 다시 시도하며 전체 순회 배치는 두지 않습니다.
      */
     @Transactional
     public void regenerateSummary(Long articleId) {
@@ -240,7 +242,11 @@ public class AdminArticleService {
                 .setParameter("id", articleId)
                 .executeUpdate();
 
-        summaryGenerator.requestSummary(articleId, null);
+        try {
+            summaryGenerator.requestSummary(articleId, null);
+        } catch (RuntimeException e) {
+            log.warn("관리자 요약 생성 요청 실패. articleId={}", articleId);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
