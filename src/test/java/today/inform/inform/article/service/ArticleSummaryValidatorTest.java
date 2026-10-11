@@ -25,6 +25,27 @@ class ArticleSummaryValidatorTest {
     }
 
     @Test
+    @DisplayName("평서체·해요체·혼합 말투는 저장하지 않고 재생성 대상으로 분류한다")
+    void rejectsNonFormalOrMixedEndings() {
+        for (String ending : new String[] {"게시되었다.", "내용이다.", "진행한다.", "신청해요.", "아니다."}) {
+            String output = valid.replace("신청은 온라인으로 진행합니다.", "신청은 온라인으로 " + ending);
+            assertThatThrownBy(() -> validator.validate(output, source))
+                    .isInstanceOfSatisfying(ArticleSummaryClient.Failure.class,
+                            failure -> assertThat(failure.isRetryable()).isTrue());
+        }
+    }
+
+    @Test
+    @DisplayName("습니다·ㅂ니다 형태의 경어체 세 문장을 허용한다")
+    void acceptsFormalPoliteEndings() {
+        String output = """
+                {"lines":["신청할 수 있습니다.","신청은 온라인으로 진행됩니다.","신청 내용을 확인하시기 바랍니다."]}
+                """;
+        assertThat(validator.validate(output, source)).isEqualTo(
+                "신청할 수 있습니다.\n신청은 온라인으로 진행됩니다.\n신청 내용을 확인하시기 바랍니다.");
+    }
+
+    @Test
     @DisplayName("빈 줄·추가 문장·bullet·원문에 없는 날짜를 거부한다")
     void rejectsInvalidFormatAndInventedDates() {
         for (String invalid : new String[] {

@@ -20,6 +20,9 @@ public class UpstageArticleSummaryClient implements ArticleSummaryClient {
     private static final String PROMPT = """
             한국어 대학 공지를 정확히 세 줄로 요약하세요.
             각 줄은 마침표로 끝나는 한 문장이며 bullet, 번호, 빈 줄을 사용하지 않습니다.
+            세 문장 모두 격식 있는 경어체(합쇼체)로 통일합니다.
+            문장은 '~습니다.' 또는 '~ㅂ니다.' 형태로 끝냅니다.
+            '~이다.', '~한다.', '~되었다.' 같은 평서체나 '~해요.' 같은 해요체를 사용하지 않습니다.
             제목, 본문, starts_on, ends_on 에 명시된 사실만 사용합니다.
             원문에 없는 사실, 금액, 자격, 일정, 상대 날짜를 추정하지 않습니다.
             날짜가 충돌하거나 정보가 부족하면 추측해서 채우지 않습니다.
