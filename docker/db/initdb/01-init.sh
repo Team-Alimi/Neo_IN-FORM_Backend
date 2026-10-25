@@ -16,6 +16,14 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- 크롤러 전용 LOGIN 롤.
     -- 실제 테이블 권한은 Flyway V5에서 컬럼 단위로 부여합니다.
     -- "크롤러는 status/카운터를 수정할 수 없다"가 DB 레벨에서 강제됩니다.
+    --
+    -- ★ IF NOT EXISTS 라 비밀번호는 롤을 "처음 만들 때" 한 번만 설정됩니다.
+    --   이 스크립트 자체도 데이터 디렉토리가 빈 경우에만 실행되고, 저장소 어디에도
+    --   ALTER ROLE 경로가 없습니다. 그래서 CRAWLER_PASSWORD 를 나중에 고쳐도
+    --   살아 있는 롤에는 아무 영향이 없습니다 — .env 의 값은 "현재 비밀번호" 가 아니라
+    --   "볼륨 생성 시점의 값" 입니다. 둘은 조용히 어긋납니다.
+    --   바꾸려면 ALTER ROLE 을 직접 실행하고 .env·Secret 을 함께 맞춰야 합니다.
+    --   (docs/infra/CRAWLER_DB_CONNECTION.md §5 참조)
     DO \$\$
     BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'inform_crawler') THEN
