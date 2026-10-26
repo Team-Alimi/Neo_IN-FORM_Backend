@@ -63,6 +63,22 @@ public class Notification {
     @Column(name = "read_at")
     private OffsetDateTime readAt;
 
+    /**
+     * NTF-05 메일을 보낸 시각. NULL 이면 아직 안 보냈다는 뜻이고, 발송 배치가 그것만 고릅니다.
+     *
+     * <p><b>이 필드로 쓰지 않습니다.</b> 값을 찍는 것은 저장소의 벌크 UPDATE
+     * ({@code markEmailSent}) 입니다 — 메일을 보낸 직후 그 한 건만 즉시 커밋해야 하는데,
+     * 엔티티를 거치면 트랜잭션 경계가 발송 루프 전체로 번집니다.
+     *
+     * <p>필드를 둔 이유는 <b>읽기</b>입니다. 발송 대상 조회가 JPQL 생성자 표현식이라
+     * {@code n.emailSentAt IS NULL} 을 쓸 수 있어야 하고, 네이티브로 내리면
+     * 시작 시점 검증을 잃습니다.
+     *
+     * <p>응답에는 나가지 않습니다 — {@code NotificationResponse} 가 필드를 열거합니다.
+     */
+    @Column(name = "email_sent_at")
+    private OffsetDateTime emailSentAt;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;

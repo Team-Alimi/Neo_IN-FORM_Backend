@@ -20,8 +20,14 @@ import today.inform.inform.notification.service.NotificationService;
 /**
  * NTF-01 ~ NTF-04. 전부 로그인이 필요합니다.
  *
- * <p>메일 수신 여부는 여기가 아니라 {@code PATCH /users/me} 에서 켜고 끕니다 —
- * 설정 화면 하나로 끝나는 편이 낫다고 판단해, 메일 하단의 비로그인 수신거부 링크는 두지 않습니다.
+ * <p>메일 수신 여부를 켜고 끄는 경로는 <b>둘</b>입니다.
+ * <ul>
+ *   <li>{@code PATCH /users/me} — 설정 화면. 로그인 필요</li>
+ *   <li>{@code /notifications/email/unsubscribe} — 메일 하단의 수신거부 링크.
+ *       <b>로그인 없이</b> 동작합니다({@link EmailUnsubscribeController}).
+ *       메일이 싫어서 누른 사람에게 로그인을 다시 묻지 않으려는 것이고,
+ *       끄는 방향으로만 동작합니다 — 다시 켜는 것은 설정 화면에서만 됩니다</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/notifications")

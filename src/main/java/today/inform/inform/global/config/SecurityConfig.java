@@ -23,6 +23,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.AuthenticationEntryPoint;
 import today.inform.inform.global.exception.ErrorCode;
 import today.inform.inform.global.security.JwtAuthenticationFilter;
+import today.inform.inform.notification.service.NotificationEmailPaths;
 
 /**
  * 접근 권한 (POLICY 22장).
@@ -92,6 +93,20 @@ public class SecurityConfig {
                                 P + "/vendors",
                                 P + "/categories",
                                 P + "/club-types").permitAll()
+
+                        // ── 메일 수신거부 (NTF-05) ──────────────────────────
+                        // ★ 로그인을 요구하면 수신거부가 아닙니다. 메일이 싫어서 링크를
+                        //   누른 사람에게 로그인을 다시 묻는 셈이고, 다른 기기에서 열면
+                        //   아예 못 끕니다. 권한은 메일 링크에 담긴 HMAC 토큰이 들고 옵니다.
+                        //
+                        // ★ GET 과 POST 를 함께 엽니다. GET 은 확인 페이지만 그리고
+                        //   POST 가 실제로 끕니다 — 메일 클라이언트의 링크 프리페치는
+                        //   GET 만 하므로, 그 분리가 "도착만으로 알림이 꺼지는" 것을 막습니다.
+                        //   경로는 NotificationEmailPaths 가 메일 본문·컨트롤러와 공유합니다.
+                        .requestMatchers(HttpMethod.GET,
+                                P + NotificationEmailPaths.UNSUBSCRIBE_RELATIVE).permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                P + NotificationEmailPaths.UNSUBSCRIBE_RELATIVE).permitAll()
 
                         // ── 인프라 ──────────────────────────────────────────
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()

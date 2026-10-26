@@ -112,6 +112,24 @@ public abstract class IntegrationTest {
         registry.add("google.oauth.client-id", () -> "test-client-id");
         registry.add("aws.s3.bucket", () -> "test-bucket");
 
+        // ★ NTF-05 수신거부 토큰 서명 키. 비워 두면 서명기가 비활성이 되어
+        //   수신거부 테스트가 "링크를 사용할 수 없습니다" 만 보고 통과해 버립니다.
+        //   JWT_SECRET 과 다른 값이어야 한다는 운영 규칙을 테스트에서도 지킵니다.
+        registry.add("UNSUBSCRIBE_SECRET", () -> "test-only-unsubscribe-key-do-not-use-elsewhere");
+
+        // ★ MAIL_FROM 은 일부러 비워 둡니다. 메일을 쓰는 테스트는 FakeMailSender 를
+        //   @Primary 로 주입하므로 SesMailSender 가 활성일 필요가 없고,
+        //   활성이면 자격증명 없이 실제 SES 를 부르려 들게 됩니다.
+
+        // 발송 간격을 0 으로 둡니다. 운영 기본값(1100ms)은 SES 의 1통/초 제한 때문인데,
+        // 테스트에서 그대로 두면 여러 통을 보내는 검증 하나가 분 단위로 늘어집니다.
+        registry.add("inform.notification.email.send-interval", () -> "0s");
+
+        // ★ 발송 배치가 테스트와 겹치지 않게 첫 실행을 밖으로 밀어 둡니다.
+        //   fixedDelay 는 컨텍스트가 뜨는 즉시 한 번 도는데, 그러면 테스트가 집으려던
+        //   행을 배치가 먼저 보내 버려 "중복 발송 없음" 같은 검증이 엉뚱하게 깨집니다.
+        registry.add("inform.notification.email.initial-delay-ms", () -> "600000");
+
         // 매핑이 스키마와 어긋나면 컨텍스트 기동에서 바로 실패해야 합니다.
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
         // 쿼리 횟수를 세는 테스트가 있어서 켭니다.

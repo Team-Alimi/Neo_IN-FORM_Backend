@@ -61,6 +61,9 @@ dependencies {
 	implementation platform('software.amazon.awssdk:bom:2.50.2')
 	implementation 'software.amazon.awssdk:s3'
 
+	// AWS SES — NTF-05 마감 알림 메일. BOM 이 버전을 관리하므로 버전을 적지 않는다.
+	implementation 'software.amazon.awssdk:sesv2'
+
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'

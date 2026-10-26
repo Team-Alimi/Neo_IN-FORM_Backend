@@ -2,12 +2,14 @@ package today.inform.inform.notification.repository;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 import today.inform.inform.notification.entity.Notification;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
@@ -130,5 +132,76 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = "DELETE FROM notifications WHERE created_at < :cutoff", nativeQuery = true)
     int deleteCreatedBefore(@Param("cutoff") OffsetDateTime cutoff);
+
+    /**
+     * NTF-05 메일을 보내야 할 알림. <b>보낼 대상만 골라 옵니다 — 걸러내기는 SQL 에서 끝납니다.</b>
+     *
+     * <h2>★ 왜 기간을 자르는가</h2>
+     * 메일 수신을 꺼 둔 사용자의 알림은 {@code email_sent_at} 이 <b>영원히 NULL</b> 입니다.
+     * 조건에 기간이 없으면, 그 사용자가 나중에 설정에서 메일 수신을 켜는 순간
+     * 쌓여 있던 지난 30일치(SYS-04 보관 기간)가 한꺼번에 날아갑니다.
+     * V18 의 백필로 막은 것과 정확히 같은 종류의 소급 발송입니다.
+     *
+     * <p>창 밖으로 밀린 행은 보내지지도, 찍히지도 않은 채 남아 SYS-04 가 지울 때 사라집니다.
+     * "안 보냈다" 를 "보냈다" 로 거짓 기록하지 않으려고 일부러 그대로 둡니다.
+     *
+     * <h2>★ 제외 조건</h2>
+     * <ul>
+     *   <li>{@code u.emailNotificationEnabled = TRUE} — 설정에서 끈 사용자(NTF-05 토글)</li>
+     *   <li>{@code u.status = ACTIVE} — 탈퇴자. 주소가 남아 있어도 보내면 안 됩니다</li>
+     * </ul>
+     *
+     * <h2>★ 왜 JPQL 인가</h2>
+     * 생성·읽음 처리는 네이티브지만({@code ON CONFLICT} · 벌크 UPDATE 때문) 이쪽은
+     * 특별한 SQL 이 필요하지 않습니다. JPQL 로 두면 <b>기동 시점에 검증</b>되어
+     * 컬럼명을 틀렸을 때 운영이 아니라 실행 직후에 드러납니다.
+     *
+     * <p>{@code ORDER BY n.id} — 같은 배치에서 만들어진 알림은 {@code created_at} 이
+     * 전부 같습니다({@code now()} 가 트랜잭션 시작 시각으로 고정). 정렬이 불안정하면
+     * 한도에 걸려 잘린 뒤 다음 주기에 어떤 행이 올지 알 수 없습니다.
+     *
+     * @param createdAfter 이 시각 <b>이후</b>에 만들어진 알림만 대상입니다
+     * @param pageable     한 번에 가져올 최대 건수.
+     *                     SES 일일 한도를 한 번에 태우지 않으려는 상한입니다
+     */
+    @Query("""
+            SELECT new today.inform.inform.notification.repository.PendingEmail(
+                       n.id, u.id, u.email, n.title, n.message)
+              FROM Notification n
+              JOIN User u ON u.id = n.userId
+             WHERE n.emailSentAt IS NULL
+               AND n.createdAt > :createdAfter
+               AND u.emailNotificationEnabled = TRUE
+               AND u.status = today.inform.inform.user.entity.UserStatus.ACTIVE
+             ORDER BY n.id
+            """)
+    List<PendingEmail> findPendingEmails(
+            @Param("createdAfter") OffsetDateTime createdAfter, Pageable pageable);
+
+    /**
+     * NTF-05 발송 완료 기록. <b>메일 한 통을 보낸 직후 그 한 건만 즉시 커밋합니다.</b>
+     *
+     * <h2>★ 왜 메서드에 {@code @Transactional} 이 붙어 있는가</h2>
+     * 이 저장소의 다른 쓰기 메서드는 트랜잭션을 호출한 서비스에서 받습니다.
+     * 이것만 스스로 엽니다 — 발송 루프를 트랜잭션 안에 둘 수 없기 때문입니다.
+     * 루프 전체를 한 트랜잭션으로 묶으면 두 가지가 깨집니다.
+     * <ul>
+     *   <li><b>끝에서 롤백되면 메일은 이미 나갔는데 기록이 사라집니다.</b>
+     *       다음 주기가 같은 알림을 또 보냅니다. 메일은 되돌릴 수 없습니다</li>
+     *   <li>SES 호출 사이의 대기(1통/초 제한) 동안 DB 커넥션을 수십 초 잡습니다</li>
+     * </ul>
+     *
+     * <h2>★ 0 이 돌아오는 경우</h2>
+     * 조건에 {@code email_sent_at IS NULL} 이 들어가 있어, 그 사이 다른 실행이 같은 행을
+     * 이미 찍었으면 0 입니다. 그건 <b>같은 메일이 두 번 나갔다는 뜻</b>이므로 호출부가
+     * 로그로 남깁니다 — 배치 락이 제 역할을 못 하고 있다는 신호입니다.
+     *
+     * @return 1 이면 기록됨. 0 이면 이미 다른 실행이 보낸 뒤입니다
+     */
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "UPDATE notifications SET email_sent_at = now() "
+            + "WHERE id = :id AND email_sent_at IS NULL", nativeQuery = true)
+    int markEmailSent(@Param("id") Long id);
 
 }

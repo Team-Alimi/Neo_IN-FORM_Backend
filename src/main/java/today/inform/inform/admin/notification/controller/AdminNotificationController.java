@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import today.inform.inform.global.response.ApiResponse;
+import today.inform.inform.notification.service.NotificationEmailSender;
 import today.inform.inform.notification.service.NotificationScheduler;
 
 /**
@@ -23,6 +24,7 @@ import today.inform.inform.notification.service.NotificationScheduler;
 public class AdminNotificationController {
 
     private final NotificationScheduler notificationScheduler;
+    private final NotificationEmailSender notificationEmailSender;
 
     /**
      * 마감 D-1 알림 생성을 지금 한 번 돌립니다. 09:00 배치와 <b>완전히 같은 코드</b>입니다.
@@ -48,5 +50,36 @@ public class AdminNotificationController {
     @PostMapping("/deadline-run")
     public ApiResponse<NotificationScheduler.DeadlineRun> runDeadlineNotifications() {
         return ApiResponse.success(notificationScheduler.runDeadlineNotifications());
+    }
+
+    /**
+     * NTF-05 알림 메일 발송을 지금 한 번 돌립니다. 주기 배치와 <b>완전히 같은 코드</b>입니다.
+     *
+     * <p><b>실제로 메일이 나갑니다.</b> 되돌릴 수 없습니다 — 누르기 전에
+     * 대상이 누구인지 확인하세요. 대상은 "최근 {@code max-age} 안에 만들어졌고,
+     * 아직 메일을 안 보냈고, 메일 수신을 켜 둔 활성 사용자" 의 알림입니다.
+     *
+     * <p><b>여러 번 눌러도 같은 메일이 두 번 가지 않습니다.</b>
+     * 보낸 알림은 {@code email_sent_at} 이 찍혀 대상에서 빠집니다.
+     * 그래서 두 번째 호출은 보통 {@code sent: 0} 입니다.
+     *
+     * <p>응답을 읽는 법.
+     * <ul>
+     *   <li>{@code targeted: 0} — 보낼 것이 없었거나, {@code MAIL_FROM} 이 없어
+     *       발송이 비활성이거나, 다른 실행이 락을 들고 있었습니다.
+     *       <b>셋이 구분되지 않으므로 로그를 보세요</b></li>
+     *   <li>{@code failed > 0} — 그만큼은 {@code email_sent_at} 이 NULL 로 남아
+     *       다음 주기에 재시도됩니다</li>
+     *   <li>{@code duplicated > 0} — <b>같은 메일이 중복 발송됐을 수 있습니다.</b>
+     *       배치 락이 제 역할을 못 하고 있다는 신호입니다</li>
+     * </ul>
+     *
+     * <p>테스트 흐름은 {@code /deadline-run} 으로 알림을 만든 뒤 이것을 부르는 것입니다.
+     * 수신 주소가 SES 에서 검증된 identity 여야 한다는 점을 잊지 마세요 —
+     * 프로덕션 액세스가 승인되기 전에는 검증되지 않은 주소로 보낼 수 없습니다.
+     */
+    @PostMapping("/email-run")
+    public ApiResponse<NotificationEmailSender.EmailRun> runEmailNotifications() {
+        return ApiResponse.success(notificationEmailSender.sendPending());
     }
 }
