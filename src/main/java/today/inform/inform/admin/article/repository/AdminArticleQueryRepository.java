@@ -325,6 +325,10 @@ public class AdminArticleQueryRepository {
                                a.starts_on          AS starts_on,
                                a.ends_on            AS ends_on,
                                a.published_at       AS published_at,
+                               -- ★ 관리자에게는 COALESCE 하지 않고 따로 내보냅니다(V19).
+                               --   검수자는 "학교가 9월에 올린 것을 우리가 11월에 발행했다"
+                               --   를 구분해야 하고, 이 값이 비어 있다는 사실 자체가 신호입니다.
+                               a.source_published_at AS source_published_at,
                                a.similarity_score   AS similarity_score,
                                a.similar_article_id AS similar_article_id,
                                a.created_by         AS created_by,
@@ -346,6 +350,7 @@ public class AdminArticleQueryRepository {
                 .addScalar("starts_on", StandardBasicTypes.LOCAL_DATE)
                 .addScalar("ends_on", StandardBasicTypes.LOCAL_DATE)
                 .addScalar("published_at", StandardBasicTypes.OFFSET_DATE_TIME)
+                .addScalar("source_published_at", StandardBasicTypes.OFFSET_DATE_TIME)
                 .addScalar("similarity_score", StandardBasicTypes.BIG_DECIMAL)
                 .addScalar("similar_article_id", StandardBasicTypes.LONG)
                 .addScalar("created_by", StandardBasicTypes.LONG)
@@ -366,12 +371,13 @@ public class AdminArticleQueryRepository {
                 (String) row[5],
                 (LocalDate) row[6],
                 (LocalDate) row[7],
-                (OffsetDateTime) row[8],
-                (BigDecimal) row[9],
-                (Long) row[10],
+                (OffsetDateTime) row[8],                // published_at — 우리가 공개한 시각
+                (OffsetDateTime) row[9],                // source_published_at — 학교 원문 게시일
+                (BigDecimal) row[10],
                 (Long) row[11],
-                (OffsetDateTime) row[12],
+                (Long) row[12],
                 (OffsetDateTime) row[13],
+                (OffsetDateTime) row[14],
                 findDetailCategories(articleId),
                 findDetailVendors(articleId),
                 findDetailAttachments(articleId),

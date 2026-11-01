@@ -68,6 +68,18 @@ public class ArticleQueryRepository {
      * 목록 기준을 그대로 쓰면 <b>사용자가 저장해 둔 공지를 클릭했을 때 404</b> 가 납니다.
      * {@code published_at IS NOT NULL} 이 "한 번 배포된 적 있음" 표식이라
      * 아직 한 번도 배포된 적 없는 신규 수집분은 자동으로 걸러집니다.
+     *
+     * <h2>★ {@code source_published_at} 을 여기 넣지 마세요 (V19)</h2>
+     * 두 컬럼은 둘 다 날짜지만 뜻이 다릅니다.
+     * <ul>
+     *   <li>{@code published_at} — <b>우리가 공개한 시각.</b> 위 판정의 근거</li>
+     *   <li>{@code source_published_at} — <b>학교 원문의 게시일.</b> 표시 전용.
+     *       크롤러가 수집 즉시 채우므로 <b>검수 전 공지에도 값이 있습니다</b></li>
+     * </ul>
+     * 여기에 {@code COALESCE} 를 쓰거나 {@code source_published_at} 을 더하면
+     * 미검수 공지 약 2,000건의 상세·북마크·좋아요·댓글이 한 번에 열립니다.
+     * 목록에는 안 뜨지만 id 만 알면 열리는 상태가 됩니다.
+     * {@code COALESCE} 는 <b>표시 컬럼({@link #SUMMARY_COLUMNS})에서만</b> 씁니다.
      */
     private static final String VISIBLE_OR_UNDER_REVIEW =
             "(a.status = 'PUBLISHED' OR (a.status = 'PENDING_REVIEW' AND a.published_at IS NOT NULL))";
@@ -103,12 +115,26 @@ public class ArticleQueryRepository {
         }
     }
 
+    /**
+     * 목록·상세가 함께 쓰는 표시 컬럼.
+     *
+     * <h2>★ {@code published_at} 은 COALESCE 로 나갑니다 (V19)</h2>
+     * 사용자에게 보여 줄 날짜는 <b>학교가 올린 날</b>이지 우리가 검수를 끝낸 날이 아닙니다.
+     * 9월에 올라온 공지가 "오늘 공지" 로 보이면 안 됩니다.
+     *
+     * <p>그렇다고 두 컬럼을 하나로 합칠 수는 없습니다 — {@code published_at} 은
+     * {@link #VISIBLE_OR_UNDER_REVIEW} 의 <b>공개 승인 증거</b>를 겸하고 있어서,
+     * 거기에 원문 게시일이 섞이면 검수 전 공지가 열립니다.
+     * 그래서 <b>판정은 생 컬럼, 표시는 COALESCE</b> 로 갈라 둡니다.
+     *
+     * <p>응답 필드명은 {@code published_at} 그대로입니다. 프론트는 바꿀 것이 없습니다.
+     */
     private static final String SUMMARY_COLUMNS = """
             a.id                AS id,
             a.source_type       AS source_type,
             a.title             AS title,
             a.summary           AS summary,
-            a.published_at      AS published_at,
+            COALESCE(a.source_published_at, a.published_at) AS published_at,
             a.starts_on         AS starts_on,
             a.ends_on           AS ends_on,
             a.bookmark_count    AS bookmark_count,

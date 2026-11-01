@@ -113,6 +113,25 @@ public class Article extends BaseTimeEntity {
     private OffsetDateTime publishedAt;
 
     /**
+     * 학교 원문의 게시일. <b>표시 전용입니다</b>(V19).
+     *
+     * <h2>★ 가시성 판정에 절대 쓰지 마세요</h2>
+     * {@link #publishedAt} 은 날짜이면서 동시에 <b>"공개 승인 증거"</b> 로 쓰입니다 —
+     * {@code VISIBLE_OR_UNDER_REVIEW} 와 {@code ArticleReadableChecker} 가
+     * {@code PENDING_REVIEW 이면서 published_at 이 있는} 것을 "배포됐다가 재검수로
+     * 내려온 공지" 로 보고 상세·북마크·좋아요·댓글을 허용합니다.
+     *
+     * <p>그 판정이 성립하는 근거는 <b>"신규 수집분에는 published_at 이 없다"</b> 입니다.
+     * 원문 게시일을 거기에 넣으면 검수 전 공지 약 2,000건이 통째로 열립니다.
+     * 그래서 날짜를 이 컬럼으로 분리했습니다.
+     *
+     * <p>화면에 내보낼 때만 {@code COALESCE(source_published_at, published_at)} 로 씁니다.
+     * 크롤러가 채우고, 앱은 읽기만 합니다.
+     */
+    @Column(name = "source_published_at", insertable = false, updatable = false)
+    private OffsetDateTime sourcePublishedAt;
+
+    /**
      * 작성자. 연관관계로 매핑하지 않습니다.
      *
      * <p>{@code @ManyToOne} 이면 목록 조회마다 프록시가 생기고, 관리자 화면에서
